@@ -60,6 +60,8 @@ start_link(NameSpec, StateMod, WaitMod, Args, Options) ->
   start1(NameSpec, StateMod, WaitMod, Args, Options, true).
 
 start1(NameSpec, StateMod, WaitMod, Args, _Options, Link) ->
+  {A1,A2,A3} = erlang:now(),
+  random:seed(A1,A2,A3),
   ParentPid = self(),
   SpawnFun = if Link -> spawn_link; true -> spawn end,
   Pid =
