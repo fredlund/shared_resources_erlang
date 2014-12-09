@@ -5,7 +5,8 @@
 
 -module(resource).
 
--export([start/3,start_link/3,start/4,start_link/4,init/2,call/3]).
+-export([start/4,start_link/4,start/5,start_link/5]).
+-export([call/3]).
 
 -define(debug,true).
 -include("debug.hrl").
@@ -39,7 +40,8 @@
 	  state :: callstate(),
 	  waitstate :: waitstate(),
 	  calls :: [#call_waitinginfo{}],
-	  module :: atom(),
+	  state_module :: atom(),
+	  wait_module :: atom(),
 	  name :: atom() | pid()
 	}).
 
@@ -47,37 +49,48 @@
 
 -export_type([call/0]).
 
-start(Mod, Args, Options) ->
-  spawn(?MODULE, init, [self(),{Mod,Args,Options,void}]).
-start({local,Name}, Mod, Args, Options) ->
-  spawn(?MODULE, init, [self(),{Mod,Args,Options,{local,Name}}]).
-start_link(Mod, Args, Options) ->
-  {ok, spawn_link(?MODULE, init, [self(),{Mod,Args,Options,void}])}.
-start_link({local,Name}, Mod, Args, Options) ->
-  spawn_link(?MODULE, init, [self(),{Mod,Args,Options,{local,Name}}]).
 
--spec init(pid(),{atom(),[any()],any(),{local,atom()}|void}) -> no_return().
-init(ParentPid,{Mod,Args,_Options,NameSpec}) ->
-  {ok,State} = init_state(Mod,Args),
-  {ok,WaitState} = wait_init(Mod,Args),
-  Name = 
-    case NameSpec of
-      {local,N} ->
-	register(N,self()),
-	N;
-      _ ->
-	self()
-    end,
-  ParentPid!{ok,self()},
-  loop
-    (#state{module=Mod,state=State,waitstate=WaitState,calls=[],name=Name},
-     false).
+start(StateMod, WaitMod, Args, Options) ->
+  start1(false, StateMod, WaitMod, Args, Options, false).
+start(NameSpec, StateMod, WaitMod, Args, Options) ->
+  start1(NameSpec, StateMod, WaitMod, Args, Options, false).
+start_link(StateMod, WaitMod, Args, Options) ->
+  start1(false, StateMod, WaitMod, Args, Options, true).
+start_link(NameSpec, StateMod, WaitMod, Args, Options) ->
+  start1(NameSpec, StateMod, WaitMod, Args, Options, true).
+
+start1(NameSpec, StateMod, WaitMod, Args, _Options, Link) ->
+  ParentPid = self(),
+  SpawnFun = if Link -> spawn_link; true -> spawn end,
+  Pid =
+    erlang:SpawnFun
+      (fun () ->
+	   Name =
+	     case NameSpec of
+	       {local,N} ->
+		 register(N,self()),
+		 N;
+	       _ ->
+		 self()
+	     end,
+	   {ok,State} = state_init(StateMod,Args),
+	   {ok,WaitState} = wait_init(WaitMod,Args),
+	   ParentPid!ok,
+	   loop
+	     (#state
+	      {state_module=StateMod, wait_module=WaitMod,
+	       state=State, waitstate=WaitState,
+	       calls=[], name=Name},
+	      false)
+       end),
+  receive ok -> Pid end.
 
 -spec loop(#state{},boolean()) -> no_return().
 loop(State,NeedUpdate) ->
   case new_calls(State) of
     [] when not(NeedUpdate) ->
-      timer:sleep(1);
+      timer:sleep(1),
+      loop(State,NeedUpdate);
     CallRecords ->
       NewState =
 	lists:foldl
@@ -156,23 +169,23 @@ enabled_calls(State) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-init_state(Module,Arguments) ->
-  Result = apply(Module,init,Arguments),
+state_init(Module,Arguments) ->
+  Result = apply(Module,init,[Arguments]),
   ?LOG
      ("~s -> ~p~n",
       [print_call(init,Arguments),Result]),
   Result.
 
 wait_init(Module,Arguments) ->
-  Result = apply(Module,wait_init,Arguments),
+  Result = apply(Module,init,[Arguments]),
   ?LOG
      ("~s -> ~p~n",
-      [print_call(wait_init,Arguments),Result]),
+      [print_call(init,Arguments),Result]),
   Result.
 
 -spec pre(#call{},#state{}) -> boolean().
 pre(Call,State) ->
-  Result = apply(State#state.module,pre,[symbolic(Call),State#state.state]),
+  Result = apply(State#state.state_module,pre,[symbolic(Call),State#state.state]),
   ?LOG
      ("~p: pre(~s) -> ~p~n",
       [State#state.name,print_call(Call),Result]),
@@ -180,7 +193,7 @@ pre(Call,State) ->
   
 -spec cpre(#call{},#state{}) -> boolean().
 cpre(Call,State) ->
-  Result = apply(State#state.module,cpre,[symbolic(Call),State#state.state]),
+  Result = apply(State#state.state_module,cpre,[symbolic(Call),State#state.state]),
   ?LOG
      ("~p: cpre(~s) -> ~p~n",
       [State#state.name,print_call(Call),Result]),
@@ -188,7 +201,7 @@ cpre(Call,State) ->
 
 -spec post(#call{},#state{}) -> {any(),any()}.
 post(Call,State) ->
-  Result = apply(State#state.module,post,[symbolic(Call),State#state.state]),
+  Result = apply(State#state.state_module,post,[symbolic(Call),State#state.state]),
   ?LOG
      ("~p: post(~s) -> ~p~n",
       [State#state.name,print_call(Call),Result]),
@@ -196,7 +209,7 @@ post(Call,State) ->
 
 new_waiting(Call,State) ->
   Result =
-    apply(State#state.module,
+    apply(State#state.wait_module,
 	  new_waiting,
 	  [symbolic(Call),
 	   State#state.waitstate,
@@ -209,7 +222,7 @@ new_waiting(Call,State) ->
 -spec priority_enabled(#call{},any(),#state{}) -> boolean().
 priority_enabled(Call,Info,State) ->
   Result =
-    apply(State#state.module,priority_enabled,
+    apply(State#state.wait_module,priority_enabled,
 	  [symbolic(Call),Info,State#state.waitstate,State#state.state]),
   ?LOG
      ("~p: priority_enabled(~s,~p) -> ~p~n",
@@ -219,7 +232,7 @@ priority_enabled(Call,Info,State) ->
 -spec post_waiting(#call{},#state{}) -> waitstate().
 post_waiting(Call,State) ->
   Result =
-    apply(State#state.module,post_waiting,
+    apply(State#state.wait_module,post_waiting,
 	  [symbolic(Call),State#state.waitstate,State#state.state]),
   ?LOG
      ("~p: post_waiting(~s) -> ~p~n",

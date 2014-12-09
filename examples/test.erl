@@ -3,12 +3,18 @@
 -compile(export_all).
 
 test() ->
-  R = resource:start(robots_fcfs,[3,1000],[]),
+  R = resource:start_link(robots,fcfs,[3,1000],[]),
   ParentPid = self(),
   spawn(
     fun () ->
 	resource:call(R,enter,[0,0,900]),
 	resource:call(R,exit,[0,0,900]),
+	ParentPid!ok
+    end),
+  spawn(
+    fun () ->
+	resource:call(R,enter,[2,0,1200]),
+	resource:call(R,exit,[2,0,1200]),
 	ParentPid!ok
     end),
   spawn(

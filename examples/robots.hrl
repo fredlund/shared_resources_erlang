@@ -1,0 +1,1 @@
+-record(robots,{n,max_weight,corridors,warehouses}).

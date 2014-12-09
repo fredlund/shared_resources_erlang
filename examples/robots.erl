@@ -1,13 +1,12 @@
--module(robots_fcfs).
+-module(robots).
 
--export([init/2, pre/2,cpre/2,post/2]).
--export([wait_init/2,new_waiting/3,priority_enabled/4,post_waiting/3]).
+-behaviour(resource_data_implementation).
 
--behaviour(resource_implementation).
+-export([init/1,pre/2,cpre/2,post/2]).
 
--record(robots,{n,max_weight,corridors,warehouses}).
+-include("robots.hrl").
 
-init(N,MaxWeight) ->
+init([N,MaxWeight]) ->
   {ok,
    #robots
    {n=N,
@@ -63,18 +62,4 @@ occupied(N,State) ->
   {_,Occupied} = lists:keyfind(N,1,State#robots.corridors),
   Occupied.
 
-wait_init(_N,_MaxWeight) ->
-  {ok,{0,0}}.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
-
-new_waiting(_Call,{Counter,Current},_) ->
-  {Counter,{Counter+1,Current}}.
-
-priority_enabled(_Call,CallCounter,{_Counter,Current},_) ->
-  CallCounter==Current.
-
-post_waiting(_Call,{Counter,Current},_) ->
-  {Counter,Current+1}.
-    
 
