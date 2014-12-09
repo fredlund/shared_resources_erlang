@@ -117,12 +117,6 @@ new_calls(State) ->
 -spec new_waiting(#call_record{},#state{}) -> #state{}.
 new_waiting(CallRecord,State) ->
   Call = CallRecord#call_record.call,
-  {CallInfo,NewWaitState} =
-    apply(State#state.module,
-	  new_waiting,
-	  [Call,
-	   State#state.waitstate,
-	   State#state.state]),
   true = is_record(CallInfo,call_waitinginfo),
   State#state{waitstate=NewWaitState,calls=[CallInfo|State#state.calls]}.
 
@@ -150,6 +144,15 @@ cpre(Call,State) ->
 -spec post(#call{},#state{}) -> {any(),any()}.
 post(Call,State) ->
   apply(State#state.module,post,[Call,State#state.state]).
+
+new_waiting(Call,State) ->
+  {CallInfo,NewWaitState} =
+    apply(State#state.module,
+	  new_waiting,
+	  [Call,
+	   State#state.waitstate,
+	   State#state.state]).
+  
 
 -spec priority_enabled(#call{},#state{}) -> boolean().
 priority_enabled(Call,State) ->
