@@ -49,6 +49,7 @@ start_link(Mod, Args, Options) ->
 start_link({local,Name}, Mod, Args, Options) ->
   spawn_link(?MODULE, init, [self(),{Mod,Args,Options,{local,Name}}]).
 
+-spec init(pid(),{atom(),[any()],any(),{local,atom()}|void}) -> no_return().
 init(ParentPid,{Mod,Args,_Options,NameSpec}) ->
   {ok, {State,WaitState}} = Mod:init(Args),
   Name = 
@@ -62,6 +63,7 @@ init(ParentPid,{Mod,Args,_Options,NameSpec}) ->
   ParentPid!{ok,self()},
   loop(#state{module=Mod,state=State,waitstate=WaitState,calls=[],name=Name}).
 
+-spec loop(#state{}) -> no_return().
 loop(State) ->
   CallRecords = new_calls(State),
   NewState =
@@ -69,10 +71,10 @@ loop(State) ->
       (fun (CallRecord,S) -> 
 	   new_waiting(CallRecord,S)
        end, State, CallRecords),
-  case enabled_calls(State) of
+  case enabled_calls(NewState) of
     [] ->
       timer:sleep(1),
-      loop(State);
+      loop(NewState);
     EnabledCalls ->
       CallInfo =
 	pick_call(EnabledCalls),
@@ -80,19 +82,23 @@ loop(State) ->
 	CallInfo#call_waitinginfo.callrec,
       CallToExecute =
 	CallRecordToExecute#call_record.call,
-      {Result,NewState} =
-	post(CallToExecute,State),
+      {Result,PostState} =
+	post(CallToExecute,NewState),
       NewWaitState =
-	post_waiting(CallToExecute,State),
+	post_waiting(CallToExecute,NewState),
       RemainingCalls =
-	State#state.calls -- {CallInfo},
+	NewState#state.calls -- [CallInfo],
       return_to_caller
 	(Result,
 	 CallRecordToExecute),
-      loop(#state{state=NewState,waitstate=NewWaitState,calls=RemainingCalls})
+      loop
+	(NewState#state
+	 {state=PostState,
+	  waitstate=NewWaitState,
+	  calls=RemainingCalls})
   end.
 
--spec new_calls(atom()) -> [#call_record{}].
+-spec new_calls(#state{}) -> [#call_record{}].
 new_calls(State) ->
   receive
     {call,CallRecord} when is_record(CallRecord,call_record) ->
@@ -108,7 +114,7 @@ new_calls(State) ->
       new_calls(State)
   after 0 -> [] end.
 
--spec new_waiting(#call{},#state{}) -> #state{}.
+-spec new_waiting(#call_record{},#state{}) -> #state{}.
 new_waiting(CallRecord,State) ->
   Call = CallRecord#call_record.call,
   {CallInfo,NewWaitState} =
@@ -130,7 +136,7 @@ enabled_calls(State) ->
   lists:filter
     (fun (CallInfo) ->
 	 Call = (CallInfo#call_waitinginfo.callrec)#call_record.call,
-	 cpre(Call,State) andalso enabled(Call,State)
+	 cpre(Call,State) andalso priority_enabled(Call,State)
      end, State#state.calls).
 
 -spec pre(#call{},#state{}) -> boolean().
@@ -145,11 +151,11 @@ cpre(Call,State) ->
 post(Call,State) ->
   apply(State#state.module,post,[Call,State#state.state]).
 
--spec enabled(#call{},#state{}) -> boolean().
-enabled(Call,State) ->
-  apply(State#state.module,enabled,[Call,State#state.state]).
+-spec priority_enabled(#call{},#state{}) -> boolean().
+priority_enabled(Call,State) ->
+  apply(State#state.module,priority_enabled,[Call,State#state.waitstate,State#state.state]).
 
--spec post_waiting(#call{},#state{}) -> boolean().
+-spec post_waiting(#call{},#state{}) -> waitstate().
 post_waiting(Call,State) ->
   apply(State#state.module,enabled,[Call,State#state.waitstate,State#state.state]).
 
