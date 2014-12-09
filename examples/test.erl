@@ -2,8 +2,14 @@
 
 -compile(export_all).
 
-test() ->
-  R = resource:start_link(robots,fcfs,[3,1000],[]),
+test1() ->
+  test(fcfs).
+
+test2() ->
+  test(always).
+
+test(PriorityModule) ->
+  R = resource:start_link(robots,PriorityModule,[3,1000],[]),
   ParentPid = self(),
   spawn(
     fun () ->

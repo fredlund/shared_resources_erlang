@@ -110,8 +110,10 @@ loop(State,NeedUpdate) ->
 	    CallRecordToExecute#call_record.call,
 	  {Result,PostState} =
 	    post(CallToExecute,NewState),
+	  Info =
+	    CallInfo#call_waitinginfo.waitinfo,
 	  NewWaitState =
-	    post_waiting(CallToExecute,NewState),
+	    post_waiting(CallToExecute,Info,NewState),
 	  RemainingCalls =
 	    NewState#state.calls -- [CallInfo],
 	  return_to_caller
@@ -229,11 +231,11 @@ priority_enabled(Call,Info,State) ->
       [State#state.name,print_call(Call),Info,Result]),
   Result.
 
--spec post_waiting(#call{},#state{}) -> waitstate().
-post_waiting(Call,State) ->
+-spec post_waiting(#call{},any(),#state{}) -> waitstate().
+post_waiting(Call,Info,State) ->
   Result =
     apply(State#state.wait_module,post_waiting,
-	  [symbolic(Call),State#state.waitstate,State#state.state]),
+	  [symbolic(Call),Info,State#state.waitstate,State#state.state]),
   ?LOG
      ("~p: post_waiting(~s) -> ~p~n",
       [State#state.name,print_call(Call),Result]),
