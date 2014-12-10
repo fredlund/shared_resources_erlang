@@ -6,7 +6,7 @@
 
 -export([init/1,new_waiting/3,priority_enabled/4,post_waiting/4]).
 
-init([N,_MaxWeight]) ->
+init([_,N,_MaxWeight]) ->
   {ok,{N,lists:map(fun (I) -> {I,[]} end, lists:seq(0,N-1))}}.
 
 new_waiting(_Call,WS,_DS) ->

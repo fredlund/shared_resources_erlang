@@ -6,7 +6,7 @@
 
 -export([init/1,new_waiting/3,priority_enabled/4,post_waiting/4]).
 
-init([_N,_MaxWeight]) -> {ok,{0,0}}.
+init([_,_N,_MaxWeight]) -> {ok,{0,0}}.
 
 new_waiting(_Call,{Counter,Current},_) ->
   {Counter,{Counter+1,Current}}.

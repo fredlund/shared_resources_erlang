@@ -76,7 +76,7 @@ start1(NameSpec, StateMod, WaitMod, Args, _Options, Link) ->
 		 self()
 	     end,
 	   {ok,State} = state_init(StateMod,Args),
-	   {ok,WaitState} = wait_init(WaitMod,Args),
+	   {ok,WaitState} = wait_init(WaitMod,[StateMod|Args]),
 	   ParentPid!ok,
 	   loop
 	     (#state
@@ -115,18 +115,13 @@ loop(State,NeedUpdate) ->
 	  Info =
 	    CallInfo#call_waitinginfo.waitinfo,
 	  NewWaitState =
-	    post_waiting(CallToExecute,Info,NewState),
+	    post_waiting(CallToExecute,Info,PostState),
 	  RemainingCalls =
-	    NewState#state.calls -- [CallInfo],
+	    NewWaitState#state.calls -- [CallInfo],
 	  return_to_caller
 	    (Result,
 	     CallRecordToExecute),
-	  loop
-	    (NewState#state
-	     {state=PostState,
-	      waitstate=NewWaitState,
-	      calls=RemainingCalls},
-	    true)
+	  loop(NewWaitState#state{calls=RemainingCalls},true)
       end
   end.
 
@@ -203,21 +198,24 @@ cpre(Call,State) ->
       [State#state.name,print_call(Call),Result]),
   Result.
 
--spec post(#call{},#state{}) -> {any(),any()}.
+-spec post(#call{},#state{}) -> {any(),#state{}}.
 post(Call,State) ->
-  Result = apply(State#state.state_module,post,[symbolic(Call),State#state.state]),
+  Result
+    = {ReturnValue,NewDataState}
+    = apply(State#state.state_module,post,[symbolic(Call),State#state.state]),
   ?LOG
      ("~p: post(~s) -> ~p~n",
       [State#state.name,print_call(Call),Result]),
-  Result.
+  {ReturnValue,State#state{state=NewDataState}}.
 
+-spec new_waiting(#call{},#state{}) -> {any(),waitstate()}.
 new_waiting(Call,State) ->
-  Result =
-    apply(State#state.wait_module,
-	  new_waiting,
-	  [symbolic(Call),
-	   State#state.waitstate,
-	   State#state.state]),
+  Result
+    = apply(State#state.wait_module,
+	    new_waiting,
+	    [symbolic(Call),
+	     State#state.waitstate,
+	     State#state.state]),
   ?LOG
      ("~p: new_waiting(~s) -> ~p~n",
       [State#state.name,print_call(Call),Result]),
@@ -233,7 +231,7 @@ priority_enabled(Call,Info,State) ->
       [State#state.name,print_call(Call),Info,Result]),
   Result.
 
--spec post_waiting(#call{},any(),#state{}) -> waitstate().
+-spec post_waiting(#call{},any(),#state{}) -> #state{}.
 post_waiting(Call,Info,State) ->
   Result =
     apply(State#state.wait_module,post_waiting,
@@ -241,7 +239,7 @@ post_waiting(Call,Info,State) ->
   ?LOG
      ("~p: post_waiting(~s) -> ~p~n",
       [State#state.name,print_call(Call),Result]),
-  Result.
+  State#state{waitstate=Result}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

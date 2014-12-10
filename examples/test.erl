@@ -11,6 +11,9 @@ test1a() ->
 test1w() ->
   test(robots_wsef,example1).
 
+test1q() ->
+  test(queue_sched,example1).
+
 test2f() ->
   test(fcfs,example2).
 
@@ -19,6 +22,9 @@ test2a() ->
 
 test2w() ->
   test(robots_wsef,example2).
+
+test2q() ->
+  test(queue_sched,example2).
 
 test(PriorityModule,Example) ->
   R = resource:start_link(robots,PriorityModule,[3,1000],[]),
