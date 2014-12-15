@@ -6,7 +6,7 @@
 -include_lib("eqc/include/eqc_component.hrl").
 -include_lib("eqc/include/eqc_dynamic_cluster.hrl").
 
--record(onestate,{jobs,data,wait,blocked}).
+-record(onestate,{incoming,waiting,sdata,swait}).
 -record(state,{started,states,dataSpec,waitSpec,glue}).
 -record(job,{pid,call}).
 
