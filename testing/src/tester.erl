@@ -16,23 +16,29 @@ api_spec() ->
 callouts(_,_) ->
   ?EMPTY.
 
-init_state(DataSpec,WaitSpec,TestingSpec) ->
-  #state
-    {
-     started=false,
-     states=
-       [
-	#onestate
-	{
-	  incoming=[],
-	  waiting=[],
-	  sdata=DataSpec:init(),
-	  swait=WaitSpec:init()}
-       ],
-     dataSpec=DataSpec,
-     waitSpec=WaitSpec,
-     testingSpec=TestingSpec
-    }.
+initial_state() ->
+  io:format("~p:initial_state~n",[?MODULE]),
+  #state{}.
+
+init_state(DataSpec,WaitSpec,TestingSpec,Init) ->
+  io:format("~p:init_state~n",[?MODULE]),
+  TestingSpec:initial_state
+    (#state
+     {
+       started=false,
+       states=
+	 [
+	  #onestate
+	  {
+	    incoming=[],
+	    waiting=[],
+	    sdata=DataSpec:init(Init),
+	    swait=WaitSpec:init(Init)}
+	 ],
+       dataSpec=DataSpec,
+       waitSpec=WaitSpec,
+       testingSpec=TestingSpec
+     }).
 
 command(State) ->
   if
@@ -310,38 +316,26 @@ wait_forever() ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-test(CP,Id,DataSpec,WaitSpec,TestingSpec) ->
+test(CP,Id,DataSpec,WaitSpec,TestingSpec,Init) ->
   init_table(CP,Id),
-  check_prop(DataSpec,WaitSpec,TestingSpec).
+  check_prop(DataSpec,WaitSpec,TestingSpec,Init).
 
-check_prop(DataSpec,WaitSpec,TestingSpec) ->
-  case eqc:quickcheck(eqc:on_output(fun eqc_printer/2,prop_ok(DataSpec,WaitSpec,TestingSpec))) of
+check_prop(DataSpec,WaitSpec,TestingSpec,Init) ->
+  case eqc:quickcheck(eqc:on_output(fun eqc_printer/2,prop_ok(DataSpec,WaitSpec,TestingSpec,Init))) of
     false ->
       io:format("~n~n***FAILED~n");
     true ->
       io:format("~n~nPASSED~n",[])
   end.
 
-prop_ok(DataSpec,WaitSpec,TestingSpec) ->
+prop_ok(DataSpec,WaitSpec,TestingSpec,Init) ->
   ?FORALL
-     (Cmds, eqc_dynamic_cluster:dynamic_commands(?MODULE,init_state(DataSpec,WaitSpec,TestingSpec)),
+     (Cmds, eqc_dynamic_cluster:dynamic_commands(?MODULE,init_state(DataSpec,WaitSpec,TestingSpec,Init)),
       ?CHECK_COMMANDS
 	 ({H, DS, Res},
 	  ?MODULE,
 	  Cmds,
 	  begin
-	    case ets:lookup(?MODULE,controller) of
-	      [{controller,Controller}] ->
-		spawn
-		  (fun () ->
-		       timer:sleep(5000),
-		       try java:terminate(java:node_id(Controller))
-		       catch _:_ -> ok end
-		   end);
-	      _ ->
-		io:format("*** Warning: controller missing?~n"),
-		ok
-	    end,
 	    if
 	      Res == ok ->
 		true;

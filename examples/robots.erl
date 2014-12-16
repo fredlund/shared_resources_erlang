@@ -3,18 +3,29 @@
 -behaviour(resource_data_implementation).
 
 -export([init/1,pre/2,cpre/2,post/2]).
+-export([n/1,num_naves/1,max_weight/1]).
 -export([corridor/2,warehouse/2]).
 
 -include("robots.hrl").
 
 init([N,NumNaves,MaxWeight]) ->
-  {ok,
-   #robots
-   {n=N,
-    num_naves=NumNaves,
-    max_weight=MaxWeight,
-    warehouses=lists:map(fun (I) -> {I,0} end, lists:seq(0,N-1)),
-    corridors=lists:map(fun (I) -> {I,false} end, lists:seq(1,N-1))}}.
+  #robots
+    {
+     n=N,
+     num_naves=NumNaves,
+     max_weight=MaxWeight,
+     warehouses=lists:map(fun (I) -> {I,0} end, lists:seq(0,N-1)),
+     corridors=lists:map(fun (I) -> {I,false} end, lists:seq(1,N-1))
+    }.
+
+num_naves(State) ->
+  State#robots.num_naves.
+
+n(State) ->
+  State#robots.n.
+
+max_weight(State) ->
+  State#robots.max_weight.
 
 pre({call,enter,[_R,N,W]},State) ->
   is_integer(N) andalso (N>=0) andalso (N<State#robots.n)
@@ -65,9 +76,13 @@ occupied(N,State) ->
   Occupied.
 
 corridor(N,State) ->
-  element(N+1,State#robots.corridors).
+  Result=lists:nth(N+1,State#robots.corridors),
+  io:format("corridor(~p,~p) -> ~p~n",[N,State,Result]),
+  Result.
 
 warehouse(N,State) ->
-  element(N+1,State#robots.warehouses).
+  Result=lists:nth(N+1,State#robots.warehouses),
+  io:format("warehouses(~p,~p) -> ~p~n",[N,State,Result]),
+  Result.
 
 

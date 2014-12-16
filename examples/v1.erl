@@ -8,6 +8,8 @@ test() ->
   DataSpec = robots,
   WaitSpec = fcfs,
   TestingSpec = robot_commands,
-  tester:test(CP,Id,DataSpec,WaitSpec,TestingSpec).
+  [_N,_NumNave,_MaxWeight] = Init = [10,3,1000],
+  tester:test(CP,Id,DataSpec,WaitSpec,TestingSpec,Init).
+  
 
 
