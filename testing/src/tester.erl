@@ -45,8 +45,8 @@ init_state(DataSpec,WaitSpec,TestingSpec) ->
 	{
 	  incoming=[],
 	  waiting=[],
-	  data=DataSpec:init(),
-	  wait=WaitSpec:init()}
+	  sdata=DataSpec:init(),
+	  swait=WaitSpec:init()}
        ],
      dataSpec=DataSpec,
      waitSpec=WaitSpec,
@@ -54,18 +54,10 @@ init_state(DataSpec,WaitSpec,TestingSpec) ->
     }.
 
 command(State) ->
-  Alternatives =
-    [{call,?MODULE,start,[]} ||
-      (not(started))]
-    ++
-    TestingSpec:alternatives(State),
   if
-    Alternatives==[] ->
-      io:format("No alternatives in state~n~p~n",[State]);
-    true ->
-      ok
-  end,
-  eqc_gen:oneof(Alternatives).
+    not(State#state.started) -> {call,?MODULE,start,[]};
+    true -> (State#state.testingSpec):command(State)
+  end.
 
 start() ->
   [{cp,CP}] =
@@ -81,7 +73,12 @@ start() ->
 do_cmds(PreCommands) ->
   Commands =
     lists:filter
-      (fun (Command) -> calltype_in_call(Command)=/=void end,
+      (fun (Command) ->
+	   case Command of
+	     {call,?MODULE,void,[],_} -> true;
+	     _ -> false
+	   end
+       end,
        PreCommands),
   ParentPid =
     self(),
@@ -124,12 +121,12 @@ precondition(State,Call) ->
 precondition_ind(IndState,State,Call) ->
   case Call of
     {_,_,start,_,_} ->
-      started(State)=/=true;
+      not(State#state.started);
     {_,_,void,_,_} ->
       true;
     {_,_,do_job,Job,_} ->
-      started(State)
-	andalso (State#state.testSpec):precondition(Job,IndState#onestate.sdate)
+      State#state.started
+	andalso (State#state.testingSpec):precondition(Job,IndState#onestate.sdata)
   end.
 
 next_state(State,Result,Call) ->
@@ -138,10 +135,9 @@ next_state(State,Result,Call) ->
       State#state{started=true};
     {_,_,void,_,_} ->
       State;
-    {_,_,do_cmds,[PreCommands],_} ->
-      {NewJobs,FinishedJobs} = 
-	Result,
-      viable_orderings(add_new_jobs(NewJobs,State),FinishedJobs)
+    {_,_,do_cmds,[_],_} ->
+      {NewJobs,FinishedJobs} = Result,
+      calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs)
   end.
 
 postcondition(State,Call,Result) ->
@@ -153,7 +149,8 @@ postcondition(State,Call,Result) ->
 	true ->
 	  java_exception;
 	false ->
-	  viable_orderings(add_new_jobs(NewJobs,State),FinishedJobs)
+	  calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs),
+	  true
       end;
     _ -> true
   end.
@@ -164,13 +161,13 @@ job_finished_with_exception({_,Result}) ->
     _ -> false
   end.
 
-viable_orderings(State,FinishedJobs) ->
+calculate_next_state(State,FinishedJobs) ->
   if
     FinishedJobs==[] ->
       State;
     true ->
       FirstStatesAndJobs = accept_one_incoming(State,FinishedJobs),
-      FinalStates = finish_jobs(State,FirstStateAndJobs,[]),
+      FinalStates = finish_jobs(State,FirstStatesAndJobs,[]),
       check_remaining_jobs(State,FinalStates),
       State#state{states=FinalStates}
   end.
@@ -180,33 +177,21 @@ accept_one_incoming(State,FinishedJobs) ->
     lists:flatmap
       (fun (IndState) ->
 	   lists:map
-	     (fun (IncomingJob) ->
-		  case job_precondition_is_true(Job,IndState,State) of
-		    true -> [job_new_waiting(Job,IndState,State)];
-		    false -> []
-		  end
-	      end, 
+	     (fun (Job) -> [job_new_waiting(Job,IndState,State)] end,
 	      IndState#onestate.incoming)
        end, State#state.states),
   merge_jobs_and_states
     (lists:map(fun (NewState) -> {NewState,FinishedJobs} end, NewStates)).
     
-finish_jobs(State,[],FinishedJobs) ->
-  lists:usort(lists:map(fun ({S,_}) -> S end, Finished));
+finish_jobs(_,[],FinishedJobs) ->
+  lists:usort(lists:map(fun ({S,_}) -> S end,FinishedJobs));
 finish_jobs(State,StatesAndJobs,FinishedJobs) ->
   NewStatesAndJobs =
     lists:flatmap
       (fun ({IndState,FJobs}) ->
 	   NewAcceptStates =
 	     lists:map
-	       (fun (Job) ->
-		    case job_pre_is_true(Job,IndState,State) of
-		      true ->
-			[{job_new_waiting(Job,IndState,State),FJobs}];
-		      false ->
-			[{job_no_longer_waiting(Job,IndState,State),FJobs}]
-		    end
-		end, 
+	       (fun (Job) -> [{job_new_waiting(Job,IndState,State),FJobs}] end,
 		IndState#onestate.incoming),
 	   NewFinishStates =
 	     lists:map
@@ -221,7 +206,7 @@ finish_jobs(State,StatesAndJobs,FinishedJobs) ->
 		end,
 		IndState#onestate.incoming),
 	   NewAcceptStates++NewFinishStates
-       end, ActiveStatesAndJobs),
+       end, StatesAndJobs),
   case NewStatesAndJobs of
     [] ->
       io:format
@@ -233,7 +218,7 @@ finish_jobs(State,StatesAndJobs,FinishedJobs) ->
 	lists:foldl
 	  (fun (SJ={S,Jobs},{A,F}) ->
 	       if
-		 (Jobs=/=[]) orelse (S#indstate.waiting=/=[])->
+		 (Jobs=/=[]) orelse (S#onestate.waiting=/=[])->
 		   {[SJ|A],F};
 		 true ->
 		   {A,[S|F]}
@@ -250,63 +235,60 @@ finish_jobs(State,StatesAndJobs,FinishedJobs) ->
 merge_jobs_and_states(JobsAndStates) ->
   lists:usort(JobsAndStates).
 
-run_jobs(JobAlternatives,State) ->
-  lists:foldl
-    (fun (Jobs,Acc) ->
-	 [Job|RestJobs] = Jobs,
-	 case job_precondition_is_true(Job,State) of
-	   true ->
-	     State1 = remove_from_blocked(robot(Job),State),
-	     [{RestJobs,job_next_state(Job,State1)}|Acc];
-	   false ->
-	     Acc
-	 end
-     end, [], JobAlternatives).
-
+check_remaining_jobs(State,FinalStates) ->
+  ok.
 job_cpre_is_true(Job,IndState,State) ->
-  (State#state.dataSpec):cpre(IncomingJob#job.call,IndState#onestate.sdata).
+  (State#state.dataSpec):cpre(Job#job.call,IndState#onestate.sdata).
 
 job_pre_is_true(Job,IndState,State) ->
-  (State#state.dataSpec):pre(IncomingJob#job.call,IndState#onestate.sdata).
+  (State#state.dataSpec):pre(Job#job.call,IndState#onestate.sdata).
 
 job_priority_enabled_is_true(Job,IndState,State) ->
-  (State#state.dataSpec):pre(IncomingJob#job.call,IndState#onestate.wdata,IndState#onestate.sdata).
+  (State#state.dataSpec):pre(Job#job.call,IndState#onestate.swait,IndState#onestate.sdata).
 
 job_new_waiting(Job,IndState,State) ->
   NewWaitState = 
     (State#state.waitSpec):new_waiting
       (Job#job.call,
-       Incoming#onestate.wdata,
-       Incoming#onestate.sdata),
+       IndState#onestate.swait,
+       IndState#onestate.sdata),
   IndState#onestate
     {
-    wdata=NewWaitState,
-    incoming=State#state.incoming--[Job],
+    swait=NewWaitState,
+    incoming=IndState#onestate.incoming--[Job],
     waiting=lists:usort([Job|IndState#onestate.waiting])
    }.
 
-job_no_longer_waiting(Job,IndState,State) ->
-  IndState#onestate
-    {
-    incoming=Incoming--[Job]
-   }.
-
-job_new_waiting(Job,IndState,State) ->
+job_next_state(Job,IndState,State) ->
   NewDataState =
     (State#state.dataSpec):post
       (Job#job.call,
-       Incoming#onestate.sdata),
+       IndState#onestate.sdata),
   NewWaitState = 
     (State#state.waitSpec):new_waiting
       (Job#job.call,
-       Incoming#onestate.wdata,
+       IndState#onestate.swait,
        NewDataState),
   IndState#onestate
     {
-    wdata=NewWaitState,
+    swait=NewWaitState,
     sdata=NewDataState,
-    incoming=State#state.incoming--[Job]
+    incoming=IndState#onestate.incoming--[Job]
    }.
+
+add_new_jobs(NewJobs,State) ->
+  [OneIndState|_] =
+    State#state.states,
+  ValidNewJobs =
+    lists:filter
+      (fun (Job) -> job_pre_is_true(Job,OneIndState,State) end,
+       NewJobs),
+  State#state
+    {states =
+       lists:map
+	 (fun (IndState) ->
+	      IndState#onestate{incoming=IndState#onestate.incoming++ValidNewJobs}
+	  end, State#state.states)}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -422,7 +404,7 @@ print_commands([{Call,Result}|Rest]) ->
 	UnblockStr =
 	  lists:foldl
 	    (fun ({UnblockedJob,_Res},Acc) ->
-		 io_lib:format("~sunblocks ~p,",[Acc,robot(UnblockedJob)])
+		 io_lib:format("~sunblocks ~p,",[Acc,UnblockedJob])
 	     end, " -- ",
 	     lists:filter
 	       (fun ({Job1,_}) -> Job=/=Job1 end, Unblocked)),
@@ -434,7 +416,7 @@ print_commands([{Call,Result}|Rest]) ->
 		     report_java_exception(Exc),
 		     io_lib:format
 		       ("~s ~p raised exception",
-			[Acc,robot(UnblockedJob)]);
+			[Acc,UnblockedJob]);
 		   _ ->
 		     Acc
 		 end
@@ -457,20 +439,3 @@ report_java_exception(Exception) ->
   Err = java:get_static(java:node_id(Exception),'java.lang.System',err),
   java:call(Exception,printStackTrace,[Err]).
 
-blocked(State) ->
-  State#state.blocked.
-
-add_to_blocked(Element,State) ->  
-  State#state
-    {blocked=lists:sort([Element|State#state.blocked])}.
-
-jobs(State) ->
-  State#state.jobs.
-
-set_jobs(Jobs,State) ->
-  State#state{jobs=lists:sort(Jobs)}.
-
-remove_from_blocked(Element,State) ->
-  State#state
-    {blocked=lists:delete(Element,State#state.blocked)}.
-  
