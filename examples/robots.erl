@@ -3,13 +3,15 @@
 -behaviour(resource_data_implementation).
 
 -export([init/1,pre/2,cpre/2,post/2]).
+-export([corridor/2,warehouse/2]).
 
 -include("robots.hrl").
 
-init([N,MaxWeight]) ->
+init([N,NumNaves,MaxWeight]) ->
   {ok,
    #robots
    {n=N,
+    num_naves=NumNaves,
     max_weight=MaxWeight,
     warehouses=lists:map(fun (I) -> {I,0} end, lists:seq(0,N-1)),
     corridors=lists:map(fun (I) -> {I,false} end, lists:seq(1,N-1))}}.
@@ -61,5 +63,11 @@ weight(N,State) ->
 occupied(N,State) ->
   {_,Occupied} = lists:keyfind(N,1,State#robots.corridors),
   Occupied.
+
+corridor(N,State) ->
+  element(N+1,State#robots.corridors).
+
+warehouse(N,State) ->
+  element(N+1,State#robots.warehouses).
 
 

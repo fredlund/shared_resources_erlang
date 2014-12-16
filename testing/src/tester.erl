@@ -8,26 +8,7 @@
 
 -define(COMPLETION_TIME,100).
 
--record(onestate,
-	{
-	  incoming,   %% Incoming jobs, not yet accepted
-	  waiting,    %% Accepted jobs, waiting to be executed
-	  sdata,      %% Data state
-	  swait       %% Priority state
-	}).
--record(state,
-	{
-	  started,    %% Started testing?
-	  states,     %% Set of possible (onestate) states
-	  dataSpec,   %% Module implementing the data specification
-	  waitSpec,   %% Module implementing the priority specification
-	  testingSpec %% Module implementing the testing specification
-	}).
--record(job,
-	{
-	  pid,        
-	  call        
-	}).
+-include("tester.hrl").
 
 api_spec() ->
   #api_spec{}.
@@ -55,8 +36,10 @@ init_state(DataSpec,WaitSpec,TestingSpec) ->
 
 command(State) ->
   if
-    not(State#state.started) -> {call,?MODULE,start,[]};
-    true -> (State#state.testingSpec):command(State)
+    not(State#state.started) ->
+      {call,?MODULE,start,[]};
+    true ->
+      (State#state.testingSpec):command(State)
   end.
 
 start() ->
@@ -137,7 +120,10 @@ next_state(State,Result,Call) ->
       State;
     {_,_,do_cmds,[_],_} ->
       {NewJobs,FinishedJobs} = Result,
-      calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs)
+      (State#state.testingSpec):next_state
+	(calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs),
+	 Result,
+	 Call)
   end.
 
 postcondition(State,Call,Result) ->

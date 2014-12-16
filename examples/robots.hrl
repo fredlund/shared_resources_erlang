@@ -1,1 +1,8 @@
--record(robots,{n,max_weight,corridors,warehouses}).
+-record(robots,
+	{
+	  n,          %% constant!
+	  num_naves,  %% constant!
+	  max_weight, %% constant!
+	  corridors,
+	  warehouses
+	}).
