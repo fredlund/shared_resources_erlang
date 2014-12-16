@@ -6,9 +6,28 @@
 -include_lib("eqc/include/eqc_component.hrl").
 -include_lib("eqc/include/eqc_dynamic_cluster.hrl").
 
--record(onestate,{incoming,waiting,sdata,swait}).
--record(state,{started,states,dataSpec,waitSpec,glue}).
--record(job,{pid,call}).
+-define(COMPLETION_TIME,100).
+
+-record(onestate,
+	{
+	  incoming,   %% Incoming jobs, not yet accepted
+	  waiting,    %% Accepted jobs, waiting to be executed
+	  sdata,      %% Data state
+	  swait       %% Priority state
+	}).
+-record(state,
+	{
+	  started,    %% Started testing?
+	  states,     %% Set of possible (onestate) states
+	  dataSpec,   %% Module implementing the data specification
+	  waitSpec,   %% Module implementing the priority specification
+	  testingSpec %% Module implementing the testing specification
+	}).
+-record(job,
+	{
+	  pid,        
+	  call        
+	}).
 
 api_spec() ->
   #api_spec{}.
@@ -16,22 +35,30 @@ api_spec() ->
 callouts(_,_) ->
   ?EMPTY.
 
-init_state(DataSpec,WaitSpec,Glue) ->
+init_state(DataSpec,WaitSpec,TestingSpec) ->
   #state
     {
      started=false,
-     states=[#onestate{jobs=[],blocked=[],data=DataSpec:init(),wait=WaitSpec:init()}],
+     states=
+       [
+	#onestate
+	{
+	  incoming=[],
+	  waiting=[],
+	  data=DataSpec:init(),
+	  wait=WaitSpec:init()}
+       ],
      dataSpec=DataSpec,
      waitSpec=WaitSpec,
-     glue=Glue
+     testingSpec=TestingSpec
     }.
 
 command(State) ->
   Alternatives =
     [{call,?MODULE,start,[]} ||
-      not(started(State))] 
+      (not(started))]
     ++
-    Glue:alternatives(State),
+    TestingSpec:alternatives(State),
   if
     Alternatives==[] ->
       io:format("No alternatives in state~n~p~n",[State]);
@@ -49,7 +76,7 @@ start() ->
 	{call_timeout,infinity},
 	{java_exception_as_value,true},
 	{add_to_java_classpath,CP}]),
-  ok.
+  NodeId.
 
 do_cmds(PreCommands) ->
   Commands =
@@ -91,18 +118,18 @@ void() ->
 
 precondition(State,Call) ->     
   lists:all
-    (fun (IndState) -> precondition_a(IndState,State,Call) end,
+    (fun (IndState) -> precondition_ind(IndState,State,Call) end,
      State#state.states).
 
-precondition_a(IndState,State,Call) ->
+precondition_ind(IndState,State,Call) ->
   case Call of
     {_,_,start,_,_} ->
-      not(started(State));
+      started(State)=/=true;
     {_,_,void,_,_} ->
       true;
     {_,_,do_job,Job,_} ->
       started(State)
-	andalso (State#state.waitSpec):precondition(Job,State#state
+	andalso (State#state.testSpec):precondition(Job,IndState#onestate.sdate)
   end.
 
 next_state(State,Result,Call) ->
@@ -114,13 +141,7 @@ next_state(State,Result,Call) ->
     {_,_,do_cmds,[PreCommands],_} ->
       {NewJobs,FinishedJobs} = 
 	Result,
-      RemainingJobs =
-	lists:filter
-	  (fun (Job) ->
-	       not(lists:any(fun ({Job1,_}) -> Job==Job1 end, FinishedJobs))
-	   end, lists:sort(NewJobs++jobs(State))),
-      viable_orderings
-	(State,NewJobs,FinishedJobs,set_jobs(RemainingJobs,State2))
+      viable_orderings(add_new_jobs(NewJobs,State),FinishedJobs)
   end.
 
 postcondition(State,Call,Result) ->
@@ -132,13 +153,8 @@ postcondition(State,Call,Result) ->
 	true ->
 	  java_exception;
 	false ->
-	  RemainingJobs =
-	    lists:filter
-	      (fun (Job) ->
-		   not(lists:any(fun ({Job1,_}) -> Job==Job1 end, FinishedJobs))
-	       end, lists:sort(NewJobs++jobs(State))),
-	  viable_orderings
-	    (NewJobs,FinishedJobs,set_jobs(RemainingJobs,State));
+	  viable_orderings(add_new_jobs(NewJobs,State),FinishedJobs)
+      end;
     _ -> true
   end.
 
@@ -148,91 +164,87 @@ job_finished_with_exception({_,Result}) ->
     _ -> false
   end.
 
-job_precondition_is_true(Job,State) ->
-  case Job of
-    #job{call={_,exit,[R,N,P]}} ->
-      if
-	N==(?NUM_NAVES-1) ->
-	  lists:member({R,P},warehouse(N,State));
-	true ->
-	  lists:member({R,P},warehouse(N,State))
-	    andalso ([] == corridor(N+1,State))
-      end;
-    #job{call={_,enter,[R,N,P]}} ->
-      PesoNave = peso_in_warehouse(N,State),
-      if
-	N==0 ->
-	  (P+PesoNave =< ?MAX_PESO_EN_NAVE);
-	true ->
-	  case corridor(N,State) of
-	    [{R1,P1}] ->
-	      (R1==R) andalso (P>=P1) andalso (P+PesoNave =< ?MAX_PESO_EN_NAVE);
-	    _ ->
-	      false
-	  end
-      end
+viable_orderings(State,FinishedJobs) ->
+  if
+    FinishedJobs==[] ->
+      State;
+    true ->
+      FirstStatesAndJobs = accept_one_incoming(State,FinishedJobs),
+      FinalStates = finish_jobs(State,FirstStateAndJobs,[]),
+      check_remaining_jobs(State,FinalStates),
+      State#state{states=FinalStates}
   end.
 
-job_next_state(Job,State) ->
-  case Job of
-    #job{call={_,exit,[R,N,P]}} ->
-      State1 = delete_from_warehouse({R,P},N,State),
-      if
-	N==(?NUM_NAVES-1) ->
-	  State1;
-	true ->
-	  add_to_corridor({R,P},N+1,State1)
-      end;
-    #job{call={_,enter,[R,N,P]}} ->
-      State1 = add_to_warehouse({R,P},N,State),
-      if
-	N==0 ->
-	  State1;
-	true ->
-	  delete_from_corridor({R,P},N,State1)
-      end
-  end.
-
-peso_in_warehouse(N,State) ->
-  lists:foldl(fun ({_,P},Peso) -> P+Peso end, 0, warehouse(N,State)).
-
-viable_orderings(State,FirstJobs,OtherFinishedJobs,RemainingJobs) ->
-  first_steps(State,FirstJobs,OtherFinishedJobs,RemainingJobs).
-
-first_steps(State,FirstJobs,OtherFinishedJobs,RemainingJobs) ->
-  {NewStates,FirstJobs} ->
-  lists:foldl
-    (fun (Jobs,Acc) ->
-	 [Job|RestJobs] = Jobs,
-	 case job_precondition_is_true(Job,State) of
-	   true ->
-	     State1 = remove_from_blocked(robot(Job),State),
-	     [{RestJobs,job_next_state(Job,State1)}|Acc];
-	   false ->
-	     Acc
-	 end
-     end, [], JobAlternatives).
-  
-  
-  viable_orderings([{lists:map(fun ({Job,_}) -> Job end, Jobs),State}]).
+accept_one_incoming(State,FinishedJobs) ->
+  NewStates =
+    lists:flatmap
+      (fun (IndState) ->
+	   lists:map
+	     (fun (IncomingJob) ->
+		  case job_precondition_is_true(Job,IndState,State) of
+		    true -> [job_new_waiting(Job,IndState,State)];
+		    false -> []
+		  end
+	      end, 
+	      IndState#onestate.incoming)
+       end, State#state.states),
+  merge_jobs_and_states
+    (lists:map(fun (NewState) -> {NewState,FinishedJobs} end, NewStates)).
     
-viable_orderings(JobsState) ->
-  case JobsState of
-    [] -> [];
-    [{_Jobs=[],State}] -> State;
-    Result=[{_Jobs=[],_}|_] -> 
+finish_jobs(State,[],FinishedJobs) ->
+  lists:usort(lists:map(fun ({S,_}) -> S end, Finished));
+finish_jobs(State,StatesAndJobs,FinishedJobs) ->
+  NewStatesAndJobs =
+    lists:flatmap
+      (fun ({IndState,FJobs}) ->
+	   NewAcceptStates =
+	     lists:map
+	       (fun (Job) ->
+		    case job_pre_is_true(Job,IndState,State) of
+		      true ->
+			[{job_new_waiting(Job,IndState,State),FJobs}];
+		      false ->
+			[{job_no_longer_waiting(Job,IndState,State),FJobs}]
+		    end
+		end, 
+		IndState#onestate.incoming),
+	   NewFinishStates =
+	     lists:map
+	       (fun (Job) ->
+		    case job_cpre_is_true(Job,IndState,State)
+		      andalso job_priority_enabled_is_true(Job,IndState,State) of
+		      true ->
+			[{job_next_state(Job,IndState,State),
+			  FJobs--[Job]}];
+		      false -> []
+		    end
+		end,
+		IndState#onestate.incoming),
+	   NewAcceptStates++NewFinishStates
+       end, ActiveStatesAndJobs),
+  case NewStatesAndJobs of
+    [] ->
       io:format
-	("*** Warning: result~n~p~nis not deterministic~n",[Result]),
+	("*** Error: remaining jobs cannot be executed by the model~n",
+	 []),
       throw(bad);
-    _ ->
-      Viables=
-	lists:flatmap
-	  (fun ({Jobs,State}) ->
-	       run_jobs(alternatives(Jobs),State)
+    _ -> 
+      {ActiveStatesAndJobs,Finished} = 
+	lists:foldl
+	  (fun (SJ={S,Jobs},{A,F}) ->
+	       if
+		 (Jobs=/=[]) orelse (S#indstate.waiting=/=[])->
+		   {[SJ|A],F};
+		 true ->
+		   {A,[S|F]}
+	       end
 	   end,
-	   JobsState),
-      Merged = merge_jobs_and_states(Viables),
-      viable_orderings(Merged)
+	   {[],[]},
+	   StatesAndJobs),
+      finish_jobs
+	(State,
+	 merge_jobs_and_states(ActiveStatesAndJobs),
+	 lists:usort(Finished++FinishedJobs))
   end.
 
 merge_jobs_and_states(JobsAndStates) ->
@@ -251,9 +263,50 @@ run_jobs(JobAlternatives,State) ->
 	 end
      end, [], JobAlternatives).
 
-alternatives(Jobs) ->
-  [ [FirstJob|lists:delete(FirstJob,Jobs)] ||
-    FirstJob <- Jobs ].
+job_cpre_is_true(Job,IndState,State) ->
+  (State#state.dataSpec):cpre(IncomingJob#job.call,IndState#onestate.sdata).
+
+job_pre_is_true(Job,IndState,State) ->
+  (State#state.dataSpec):pre(IncomingJob#job.call,IndState#onestate.sdata).
+
+job_priority_enabled_is_true(Job,IndState,State) ->
+  (State#state.dataSpec):pre(IncomingJob#job.call,IndState#onestate.wdata,IndState#onestate.sdata).
+
+job_new_waiting(Job,IndState,State) ->
+  NewWaitState = 
+    (State#state.waitSpec):new_waiting
+      (Job#job.call,
+       Incoming#onestate.wdata,
+       Incoming#onestate.sdata),
+  IndState#onestate
+    {
+    wdata=NewWaitState,
+    incoming=State#state.incoming--[Job],
+    waiting=lists:usort([Job|IndState#onestate.waiting])
+   }.
+
+job_no_longer_waiting(Job,IndState,State) ->
+  IndState#onestate
+    {
+    incoming=Incoming--[Job]
+   }.
+
+job_new_waiting(Job,IndState,State) ->
+  NewDataState =
+    (State#state.dataSpec):post
+      (Job#job.call,
+       Incoming#onestate.sdata),
+  NewWaitState = 
+    (State#state.waitSpec):new_waiting
+      (Job#job.call,
+       Incoming#onestate.wdata,
+       NewDataState),
+  IndState#onestate
+    {
+    wdata=NewWaitState,
+    sdata=NewDataState,
+    incoming=State#state.incoming--[Job]
+   }.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -289,21 +342,21 @@ wait_forever() ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-test(CP,Id,DataSpec,WaitSpec,Glue) ->
+test(CP,Id,DataSpec,WaitSpec,TestingSpec) ->
   init_table(CP,Id),
-  check_prop(DataSpec,WaitSpec,Glue).
+  check_prop(DataSpec,WaitSpec,TestingSpec).
 
-check_prop(DataSpec,WaitSpec,Glue) ->
-  case eqc:quickcheck(eqc:on_output(fun eqc_printer/2,prop_ok(DataSpec,WaitSpec,Glue))) of
+check_prop(DataSpec,WaitSpec,TestingSpec) ->
+  case eqc:quickcheck(eqc:on_output(fun eqc_printer/2,prop_ok(DataSpec,WaitSpec,TestingSpec))) of
     false ->
       io:format("~n~n***FAILED~n");
     true ->
       io:format("~n~nPASSED~n",[])
   end.
 
-prop_ok(DataSpec,WaitSpec,Glue) ->
+prop_ok(DataSpec,WaitSpec,TestingSpec) ->
   ?FORALL
-     (Cmds, eqc_dynamic_cluster:dynamic_commands(?MODULE,init_state(DataSpec,WaitSpec,Glue)),
+     (Cmds, eqc_dynamic_cluster:dynamic_commands(?MODULE,init_state(DataSpec,WaitSpec,TestingSpec)),
       ?CHECK_COMMANDS
 	 ({H, DS, Res},
 	  ?MODULE,
@@ -404,64 +457,8 @@ report_java_exception(Exception) ->
   Err = java:get_static(java:node_id(Exception),'java.lang.System',err),
   java:call(Exception,printStackTrace,[Err]).
 
-robot(Call) ->
-  case Call#job.call of
-    {_,exit,[R,_,_]} -> R;
-    {_,enter,[R,_,_]} -> R
-  end.
-
-robot_in_call(Call) ->
-  case Call of
-    [_,exit,[R,_,_]] -> R;
-    [_,enter,[R,_,_]] -> R
-  end.
-
-type_in_call(Call) ->
-  case Call of
-    [_,Type,_] -> Type
-  end.
-
-warehouse_in_call(Call) ->
-  case Call of
-    [_,exit,[_,N,_]] -> N;
-    [_,enter,[_,N,_]] -> N
-  end.
-  
-started(State) ->
-  State#state.started.
-
-corridor(N,State) ->
-  element(N+1,State#state.corridor).
-
-warehouse(N,State) ->
-  element(N+1,State#state.warehouses).
-
 blocked(State) ->
   State#state.blocked.
-
-delete_from_warehouse(Element,N,State) ->
-  State#state
-    {warehouses=
-       setelement
-	 (N+1,
-	  State#state.warehouses,
-	  lists:delete(Element,warehouse(N,State)))}.
-
-add_to_corridor(Element,N,State) ->
-  State#state
-    {corridor=setelement(N+1,State#state.corridor,[Element])}.
-  
-add_to_warehouse(Element,N,State) ->
-  State#state
-    {warehouses=
-       setelement
-	 (N+1,
-	  State#state.warehouses,
-	  lists:sort([Element|warehouse(N,State)]))}.
-
-delete_from_corridor(_Element,N,State) ->
-  State#state
-    {corridor=setelement(N+1,State#state.corridor,[])}.
 
 add_to_blocked(Element,State) ->  
   State#state
@@ -477,13 +474,3 @@ remove_from_blocked(Element,State) ->
   State#state
     {blocked=lists:delete(Element,State#state.blocked)}.
   
-inc_enters(State) ->  
-  State#state
-    {num_enters=State#state.num_enters+1}.
-
-num_enters(State) ->
-  State#state.num_enters.
-
-set_enters(N,State) ->  
-  State#state{num_enters=N}.
-
