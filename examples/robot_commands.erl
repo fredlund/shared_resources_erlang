@@ -19,7 +19,8 @@ init([N]) ->
      warehouses=lists:duplicate(N,[])
     }.
 
-command(TS,State) ->
+command(PreTS,State) ->
+  TS = PreTS#teststate{used=[]},
   ?LET
      (Command,
       job_cmd(TS,State),
@@ -48,11 +49,11 @@ command(TS,State) ->
 
 job_cmd(TS,State) ->
   Alternatives =
-    [{?MODULE,enter,[num_enters(State),0,peso()]} ||
-      num_enters(State) < TS#teststate.n-1]
+    [{?MODULE,enter,[num_enters(TS),0,peso()]} ||
+      num_enters(TS) < TS#teststate.n-1]
     ++
     [{tester,void,[]} ||
-      num_enters(State) >= TS#teststate.n-1]
+      num_enters(TS) >= TS#teststate.n-1]
     ++
     [{?MODULE,enter,[R,N,peso(P)]} ||
       N <- corridors(State),
@@ -76,19 +77,35 @@ job_cmd(TS,State) ->
 
 precondition(_State,TS,Call) -> 
   case Call of
-    {_,_,do_job,[_,enter,[R,0,_]],_} ->
-      (num_enters(TS) < TS#teststate.n)
-	andalso (R>=num_enters(TS));
-    {_,_,do_job,[_,enter,[R,N,P]],_} when N>0 ->
-      case corridor(N,TS) of
-	[{R1,P1}] -> (R==R1) andalso (P>=P1);
-	_ -> false
-      end;
-    {_,_,do_job,[_,exit,[R,N,P]],_} ->
-      lists:member({R,P},warehouse(N,TS));
-    {_,_,void,_,_} ->
+    {_,do_cmds,Commands,_} ->
+      do_preconditions(TS#teststate{used=[]},Commands);
+    _ ->
       true
   end.
+
+do_preconditions(_TS,[]) ->
+  true;
+do_preconditions(TS,[Call|NextCalls]) ->
+  Result =
+    case Call of
+      {_,enter,[R,0,_],_} ->
+	(not(lists:member(R,TS#teststate.used)))
+	  andalso (num_enters(TS) < TS#teststate.n)
+	  andalso (R>=num_enters(TS));
+      {_,enter,[R,N,P],_} when N>0 ->
+	(not(lists:member(R,TS#teststate.used)))
+	  andalso case corridor(N,TS) of
+		    [{R1,P1}] -> (R==R1) andalso (P>=P1);
+		    _ -> false
+		  end;
+      {_,exit,[R,N,P],_} ->
+	(not(lists:member(R,TS#teststate.used)))
+	  andalso lists:member({R,P},warehouse(N,TS))
+    end,
+  Result
+    andalso do_preconditions(TS#teststate
+			     {used=[robot_in_call(Call)|TS#teststate.used]},
+			     NextCalls).
 
 next_state(TS,State,Result,_) ->
   {NewJobs,FinishedJobs} = Result,
@@ -111,7 +128,7 @@ next_state(TS,State,Result,_) ->
 	 case Job#job.call of
 	   {_,exit,[R,N,P]} ->
 	     State1 = delete_from_warehouse({R,P},N,TSA),
-	     NUM_NAVES = robots:num_naves(State),
+	     NUM_NAVES = num_naves(State),
 	     if
 	       N==(NUM_NAVES-1) ->
 		 State1;
@@ -179,10 +196,10 @@ peso(P) ->
   ?LET(X,eqc_gen:choose(Pdiv,?PESO_FACTOR),X*100).
 
 corridors(State) ->
-  lists:seq(1,robots:num_naves(State)-1).
+  lists:seq(1,num_naves(State)-1).
 
 warehouses(State) ->
-  lists:seq(0,robots:num_naves(State)-1).
+  lists:seq(0,num_naves(State)-1).
 
 used(TS) ->
   TS#teststate.used.
@@ -217,4 +234,17 @@ delete_from_corridor(_Element,N,TS) ->
   TS#teststate
     {corridors=setelement(N+1,TS#teststate.corridors,[])}.
 
+num_naves(State) ->
+  OneState = hd(State#state.states),
+  robots:num_naves(OneState#onestate.sdata).
+
+enter(_R,N,P) ->
+  java:call(tester:get_data(controller),solicitarEntrar,[N,P]).
+
+exit(_R,N,P) ->
+  java:call(tester:get_data(controller),solicitarSalir,[N,P]).
+
+start(NodeId) ->  
+  Controller = java:new(NodeId,'ControlAccesoNavesMonitor',[]),
+  tester:store_data(controller,Controller).
 

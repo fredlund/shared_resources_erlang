@@ -22,26 +22,26 @@ num_naves(State) ->
 max_weight(State) ->
   State#robots.max_weight.
 
-pre({call,enter,[_R,N,W]},State) ->
+pre({enter,[_R,N,W]},State) ->
   is_integer(N) andalso (N>=0) andalso (N<State#robots.num_naves)
     andalso is_integer(W) andalso (W>=0);
-pre({call,exit,[_R,N,W]},State) ->
+pre({exit,[_R,N,W]},State) ->
   is_integer(N) andalso (N>=0) andalso (N<State#robots.num_naves)
     andalso is_integer(W) andalso (W>=0).
 
-cpre({call,enter,[_R,N,W]},State) ->
+cpre({enter,[_R,N,W]},State) ->
   (weight(N,State)+W) =< State#robots.max_weight;
-cpre({call,exit,[_R,N,_W]},State) ->
+cpre({exit,[_R,N,_W]},State) ->
   (N==State#robots.num_naves-1) orelse (not(occupied(N+1,State))).
 
-post({call,enter,[_R,N,W]},State) ->
+post({enter,[_R,N,W]},State) ->
   NewState =
     if
       N==0 -> add_weight(W,N,State);
       true -> add_weight(W,N,remove_robot(N,State))
     end,
   {void,NewState};
-post({call,exit,[_R,N,W]},State) ->
+post({exit,[_R,N,W]},State) ->
   NewState =
     if
       N==State#robots.num_naves-1 -> add_weight(-W,N,State);

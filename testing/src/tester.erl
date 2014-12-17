@@ -45,12 +45,13 @@ command(State) ->
     not(State#state.started) ->
       {call,?MODULE,start,[]};
     true ->
-      (State#state.testingSpec):command(State#state.test_state,State)
+      {call,?MODULE,do_cmds,[(State#state.testingSpec):command(State#state.test_state,State)]}
   end.
 
 start() ->
   [{cp,CP}] =
     ets:lookup(?MODULE,cp),
+  io:format("CP is ~p~n",[CP]),
   {ok,NodeId} =
     java:start_node
       ([{java_verbose,"SEVERE"},
@@ -59,16 +60,25 @@ start() ->
 	{add_to_java_classpath,CP}]),
   NodeId.
 
+store_data(Key,Value) ->
+  ets:insert(?MODULE,{Key,Value}).
+
+get_data(Key) ->
+  [{Key,Value}] = ets:lookup(?MODULE,Key),
+  Value.
+
 do_cmds(PreCommands) ->
+  io:format("PreCommands are ~p~n",[PreCommands]),
   Commands =
     lists:filter
       (fun (Command) ->
 	   case Command of
-	     {call,?MODULE,void,[],_} -> true;
-	     _ -> false
+	     {call,?MODULE,void,[],_} -> false;
+	     _ -> true
 	   end
        end,
        PreCommands),
+  io:format("Commands are ~p~n",[Commands]),
   ParentPid =
     self(),
   NewJobs =
@@ -82,6 +92,7 @@ do_cmds(PreCommands) ->
                      end),
                 call=Call}
        end, Commands),
+  io:format("New jobs are ~p~n",[NewJobs]),
   FinishedJobs = wait_for_jobs(),
   {NewJobs,FinishedJobs}.
 
@@ -108,7 +119,7 @@ precondition(State,Call) ->
       not(State#state.started);
     {_,_,void,_,_} ->
       true;
-    {_,_,do_job,_,_} ->
+    {_,_,do_cmds,_,_} ->
       State#state.started
 	andalso (State#state.testingSpec):precondition(State,State#state.test_state,Call)
   end.
@@ -116,11 +127,14 @@ precondition(State,Call) ->
 next_state(State,Result,Call) ->
   case Call of
     {_,_,start,_,_} ->
+      (State#state.testingSpec):start(Result),
       State#state{started=true};
     {_,_,void,_,_} ->
       State;
-    {_,_,do_cmds,[_],_} ->
+    {_,_,do_cmds,_,_} ->
       {NewJobs,FinishedJobs} = Result,
+      io:format
+	("Result=~p~n",[Result]),
       NewState = calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs),
       NewTestState =
 	(State#state.testingSpec):next_state
@@ -229,18 +243,18 @@ merge_jobs_and_states(JobsAndStates) ->
 check_remaining_jobs(State,FinalStates) ->
   ok.
 job_cpre_is_true(Job,IndState,State) ->
-  (State#state.dataSpec):cpre(Job#job.call,IndState#onestate.sdata).
+  (State#state.dataSpec):cpre(resource_call(Job#job.call),IndState#onestate.sdata).
 
 job_pre_is_true(Job,IndState,State) ->
-  (State#state.dataSpec):pre(Job#job.call,IndState#onestate.sdata).
+  (State#state.dataSpec):pre(resource_call(Job#job.call),IndState#onestate.sdata).
 
 job_priority_enabled_is_true(Job,IndState,State) ->
-  (State#state.dataSpec):pre(Job#job.call,IndState#onestate.swait,IndState#onestate.sdata).
+  (State#state.dataSpec):pre(resource_call(Job#job.call),IndState#onestate.swait,IndState#onestate.sdata).
 
 job_new_waiting(Job,IndState,State) ->
   NewWaitState = 
     (State#state.waitSpec):new_waiting
-      (Job#job.call,
+      (resource_call(Job#job.call),
        IndState#onestate.swait,
        IndState#onestate.sdata),
   IndState#onestate
@@ -253,11 +267,11 @@ job_new_waiting(Job,IndState,State) ->
 job_next_state(Job,IndState,State) ->
   NewDataState =
     (State#state.dataSpec):post
-      (Job#job.call,
+      (resource_call(Job#job.call),
        IndState#onestate.sdata),
   NewWaitState = 
-    (State#state.waitSpec):new_waiting
-      (Job#job.call,
+    (State#state.waitSpec):post_waiting
+      (resource_call(Job#job.call),
        IndState#onestate.swait,
        NewDataState),
   IndState#onestate
@@ -281,37 +295,8 @@ add_new_jobs(NewJobs,State) ->
 	      IndState#onestate{incoming=IndState#onestate.incoming++ValidNewJobs}
 	  end, State#state.states)}.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-init_table(CP,Id) ->
-  case ets:info(?MODULE) of
-    undefined ->
-      ok;
-    _ ->
-      [{pid,Pid}] = ets:lookup(?MODULE,pid),
-      erlang:exit(Pid,kill),
-      ets:delete(?MODULE)
-  end,
-  spawn
-    (fun () ->
-	 ets:new(?MODULE,[named_table,public]),
-	 ets:insert(?MODULE,{pid,self()}),
-	 wait_forever()
-     end),
-  wait_until_stable(),
-  ets:insert(?MODULE,{cp,CP}),
-  ets:insert(?MODULE,{id,Id}).
-
-wait_until_stable() ->
-  case ets:info(?MODULE) of
-    L when is_list(L) ->
-      ok;
-    _ ->
-      wait_until_stable()
-  end.
-
-wait_forever() ->
-  receive _ -> wait_forever() end.
+resource_call({_,Fun,Args}) ->
+  {Fun,Args}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -418,3 +403,35 @@ report_java_exception(Exception) ->
   Err = java:get_static(java:node_id(Exception),'java.lang.System',err),
   java:call(Exception,printStackTrace,[Err]).
 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+init_table(CP,Id) ->
+  case ets:info(?MODULE) of
+    undefined ->
+      ok;
+    _ ->
+      [{pid,Pid}] = ets:lookup(?MODULE,pid),
+      erlang:exit(Pid,kill),
+      ets:delete(?MODULE)
+  end,
+  spawn
+    (fun () ->
+	 ets:new(?MODULE,[named_table,public]),
+	 ets:insert(?MODULE,{pid,self()}),
+	 wait_forever()
+     end),
+  wait_until_stable(),
+  ets:insert(?MODULE,{cp,CP}),
+  ets:insert(?MODULE,{id,Id}).
+
+wait_until_stable() ->
+  case ets:info(?MODULE) of
+    L when is_list(L) ->
+      ok;
+    _ ->
+      wait_until_stable()
+  end.
+
+wait_forever() ->
+  receive _ -> wait_forever() end.
