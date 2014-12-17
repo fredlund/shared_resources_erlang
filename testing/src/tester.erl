@@ -20,32 +20,32 @@ initial_state() ->
   io:format("~p:initial_state~n",[?MODULE]),
   #state{}.
 
-init_state(DataSpec,WaitSpec,TestingSpec,Init) ->
+init_state({DataSpec,DI},{WaitSpec,WI},{TestingSpec,TI}) ->
   io:format("~p:init_state~n",[?MODULE]),
-  TestingSpec:initial_state
-    (#state
-     {
-       started=false,
-       states=
-	 [
-	  #onestate
-	  {
-	    incoming=[],
-	    waiting=[],
-	    sdata=DataSpec:init(Init),
-	    swait=WaitSpec:init(Init)}
-	 ],
-       dataSpec=DataSpec,
-       waitSpec=WaitSpec,
-       testingSpec=TestingSpec
-     }).
+  #state
+    {
+     started=false,
+     states=
+       [
+	#onestate
+	{
+	  incoming=[],
+	  waiting=[],
+	  sdata=DataSpec:init(DI),
+	  swait=WaitSpec:init(WI)}
+       ],
+     test_state=TestingSpec:init(TI),
+     dataSpec=DataSpec,
+     waitSpec=WaitSpec,
+     testingSpec=TestingSpec
+    }.
 
 command(State) ->
   if
     not(State#state.started) ->
       {call,?MODULE,start,[]};
     true ->
-      (State#state.testingSpec):command(State)
+      (State#state.testingSpec):command(State#state.test_state,State)
   end.
 
 start() ->
@@ -103,19 +103,14 @@ void() ->
   ok.
 
 precondition(State,Call) ->     
-  lists:all
-    (fun (IndState) -> precondition_ind(IndState,State,Call) end,
-     State#state.states).
-
-precondition_ind(IndState,State,Call) ->
   case Call of
     {_,_,start,_,_} ->
       not(State#state.started);
     {_,_,void,_,_} ->
       true;
-    {_,_,do_job,Job,_} ->
+    {_,_,do_job,_,_} ->
       State#state.started
-	andalso (State#state.testingSpec):precondition(Job,IndState#onestate.sdata)
+	andalso (State#state.testingSpec):precondition(State,State#state.test_state,Call)
   end.
 
 next_state(State,Result,Call) ->
@@ -126,10 +121,14 @@ next_state(State,Result,Call) ->
       State;
     {_,_,do_cmds,[_],_} ->
       {NewJobs,FinishedJobs} = Result,
-      (State#state.testingSpec):next_state
-	(calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs),
-	 Result,
-	 Call)
+      NewState = calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs),
+      NewTestState =
+	(State#state.testingSpec):next_state
+	  (NewState#state.test_state,
+	   NewState,
+	   Result,
+	   Call),
+      State#state{test_state=NewTestState}
   end.
 
 postcondition(State,Call,Result) ->
@@ -316,21 +315,21 @@ wait_forever() ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-test(CP,Id,DataSpec,WaitSpec,TestingSpec,Init) ->
+test(CP,Id,DataSpec,WaitSpec,TestingSpec) ->
   init_table(CP,Id),
-  check_prop(DataSpec,WaitSpec,TestingSpec,Init).
+  check_prop(DataSpec,WaitSpec,TestingSpec).
 
-check_prop(DataSpec,WaitSpec,TestingSpec,Init) ->
-  case eqc:quickcheck(eqc:on_output(fun eqc_printer/2,prop_ok(DataSpec,WaitSpec,TestingSpec,Init))) of
+check_prop(DataSpec,WaitSpec,TestingSpec) ->
+  case eqc:quickcheck(eqc:on_output(fun eqc_printer/2,prop_ok(DataSpec,WaitSpec,TestingSpec))) of
     false ->
       io:format("~n~n***FAILED~n");
     true ->
       io:format("~n~nPASSED~n",[])
   end.
 
-prop_ok(DataSpec,WaitSpec,TestingSpec,Init) ->
+prop_ok(DataSpec,WaitSpec,TestingSpec) ->
   ?FORALL
-     (Cmds, eqc_dynamic_cluster:dynamic_commands(?MODULE,init_state(DataSpec,WaitSpec,TestingSpec,Init)),
+     (Cmds, eqc_dynamic_cluster:dynamic_commands(?MODULE,init_state(DataSpec,WaitSpec,TestingSpec)),
       ?CHECK_COMMANDS
 	 ({H, DS, Res},
 	  ?MODULE,
