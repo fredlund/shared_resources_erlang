@@ -38,7 +38,8 @@ command(PreState) ->
 		  (begin
 		     State1 = 
 		       case calltype_in_call(Command) of
-			 void -> State;
+			 void ->
+			   State;
 			 _ ->
 			   State0 =
 			     case call_is_enter_in_warehouse0(Command) of
@@ -53,6 +54,7 @@ command(PreState) ->
 
 job_cmd(State) ->
   io:format("used=~p~n",[used(State)]),
+  TS = State#state.test_state,
   ?LET(IndState,
        eqc_gen:oneof(State#state.states),
        begin
@@ -64,15 +66,15 @@ job_cmd(State) ->
 	     num_enters(State) >= robots:n(IndState#onestate.sdata)-1]
 	   ++
 	   [{?MODULE,enter,[R,N,peso(P)]} ||
-	     N <- corridors(IndState),
-	     {R,P} <- corridor(N,IndState#onestate.sdata),
-	     not(lists:member(R,used(State)))
+	     N <- corridors(State),
+	     {R,P} <- corridor(N,TS),
+	     not(lists:member(R,used(TS)))
 	   ]
 	   ++
 	   [{?MODULE,exit,[R,N,P]} ||
-	     N <- warehouses(IndState),
-	     {R,P} <- warehouse(N,IndState#onestate.sdata),
-	     not(lists:member(R,used(State)))
+	     N <- warehouses(State),
+	     {R,P} <- warehouse(N,TS),
+	     not(lists:member(R,used(TS)))
 	   ],
 	 io:format("Alternatives=~p~n",[Alternatives]),
 	 if
@@ -85,40 +87,71 @@ job_cmd(State) ->
        end).
 
 precondition(State,Call) -> 
+  TS = State#state.test_state,
   lists:all
-    (fun (IndState) -> precondition_ind(State,IndState,Call) end,
+    (fun (IndState) -> precondition_ind(State,IndState,TS,Call) end,
      State#state.states).
 
-precondition_ind(State,IndState,Call) ->     
+precondition_ind(State,IndState,TS,Call) ->
   case Call of
     {_,_,do_job,[_,enter,[R,0,_]],_} ->
       (num_enters(State) < (robots:n(IndState#onestate.sdata)-1))
 	andalso (R>=num_enters(State));
     {_,_,do_job,[_,enter,[R,N,P]],_} when N>0 ->
-      case corridor(N,IndState#onestate.sdata) of
+      case corridor(N,TS) of
 	[{R1,P1}] -> (R==R1) andalso (P>=P1);
 	_ -> false
       end;
     {_,_,do_job,[_,exit,[R,N,P]],_} ->
-      lists:member({R,P},warehouse(N,IndState#onestate.sdata));
+      lists:member({R,P},warehouse(N,TS));
     {_,_,void,_,_} ->
       true
   end.
 
 next_state(State,Result,_) ->
   {NewJobs,FinishedJobs} = Result,
-  NewJobsTestState =
+  NewJobsState =
+    lists:foldl
+      (fun (Job,S) ->
+	   Call = Job#job.call,
+	   case {warehouse_in_call(Call),
+		 calltype_in_call(Call)} of
+	     {0,enter} ->
+	       set_enters(max(num_enters(S),robot_in_call(Call)+1),S);
+	     _ ->
+	       State
+	   end
+       end,
+       State,
+       NewJobs),
+  TestState = State#state.test_state,
+  NewTestState =
     lists:foldl
       (fun (Job,TS) ->
-	   TS1 = 
-	     case {warehouse_in_call(Job#job.call),
-		   calltype_in_call(Job#job.call)} of
-	       {0,enter} ->
-		 set_enters(max(num_enters(State),robot_in_call(Call)+1),State);
-	       _ ->
-		 State
-	     end
-  end.
+	   case Job#job.call of
+	     {_,exit,[R,N,P]} ->
+	       State1 = delete_from_warehouse({R,P},N,TS),
+	       NUM_NAVES = robots:n((one_state(State))#onestate.sdata),
+	       if
+		 N==(NUM_NAVES-1) ->
+		   State1;
+		 true ->
+		   add_to_corridor({R,P},N+1,State1)
+	       end;
+	     {_,enter,[R,N,P]} ->
+	       State1 = add_to_warehouse({R,P},N,TS),
+	       if
+		 N==0 ->
+		   State1;
+		 true ->
+		   delete_from_corridor({R,P},N,State1)
+	       end;
+	     _ -> State
+	   end
+       end, 
+       TestState,
+       FinishedJobs),
+  NewJobsState#state{test_state=NewTestState}.
 
 num_enters(State) ->
   (State#state.test_state)#genstate.num_enters.
@@ -170,10 +203,12 @@ peso(P) ->
   Pdiv = P div 100,
   ?LET(X,eqc_gen:choose(Pdiv,?PESO_FACTOR),X*100).
 
-corridors(IndState) ->
+corridors(State) ->
+  IndState = one_state(State),
   lists:seq(1,robots:num_naves(IndState#onestate.sdata)-1).
 
-warehouses(IndState) ->
+warehouses(State) ->
+  IndState = one_state(State),
   lists:seq(0,robots:num_naves(IndState#onestate.sdata)-1).
 
 used(State) ->
@@ -181,14 +216,34 @@ used(State) ->
   TestState#genstate.used.
 
 corridor(N,State) ->
-  Result=lists:nth(N+1,State#robots.corridors),
-  io:format("corridor(~p,~p) -> ~p~n",[N,State,Result]),
-  Result.
+  lists:nth(N+1,State#genstate.corridors).
 
 warehouse(N,State) ->
-  Result=lists:nth(N+1,State#robots.warehouses),
-  io:format("warehouses(~p,~p) -> ~p~n",[N,State,Result]),
-  Result.
+  lists:nth(N+1,State#genstate.warehouses).
+
+delete_from_warehouse(Element,N,State) ->
+  State#genstate
+    {warehouses=
+       setelement
+	 (N+1,
+	  State#genstate.warehouses,
+	  lists:delete(Element,warehouse(N,State)))}.
+
+add_to_corridor(Element,N,State) ->
+  State#genstate
+    {corridors=setelement(N+1,State#genstate.corridors,[Element])}.
+  
+add_to_warehouse(Element,N,State) ->
+  State#genstate
+    {warehouses=
+       setelement
+	 (N+1,
+	  State#genstate.warehouses,
+	  lists:sort([Element|warehouse(N,State)]))}.
+
+delete_from_corridor(_Element,N,State) ->
+  State#genstate
+    {corridors=setelement(N+1,State#genstate.corridors,[])}.
 
 one_state(State) ->
   hd(State#state.states).

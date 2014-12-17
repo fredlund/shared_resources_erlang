@@ -4,7 +4,6 @@
 
 -export([init/1,pre/2,cpre/2,post/2]).
 -export([n/1,num_naves/1,max_weight/1]).
--export([corridor/2,warehouse/2]).
 
 -include("robots.hrl").
 
