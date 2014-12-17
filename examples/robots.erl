@@ -75,14 +75,5 @@ occupied(N,State) ->
   {_,Occupied} = lists:keyfind(N,1,State#robots.corridors),
   Occupied.
 
-corridor(N,State) ->
-  Result=lists:nth(N+1,State#robots.corridors),
-  io:format("corridor(~p,~p) -> ~p~n",[N,State,Result]),
-  Result.
-
-warehouse(N,State) ->
-  Result=lists:nth(N+1,State#robots.warehouses),
-  io:format("warehouses(~p,~p) -> ~p~n",[N,State,Result]),
-  Result.
 
 

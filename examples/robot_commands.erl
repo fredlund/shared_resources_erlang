@@ -5,12 +5,22 @@
 
 -compile(export_all).
 
--record(genstate,{num_enters=0,used=[]}).
+-record(genstate,{num_enters,used,corridors,warehouses}).
 
 -define(PESO_FACTOR,10).
 
 initial_state(State) ->
-  State#state{test_state=#genstate{}}.
+  IndState = one_state(State),
+  N = robots:n(IndState#onestate.sdata),
+  GenState = 
+    #genstate
+    {
+    num_enters=0,
+    used=[],
+    corridors=lists:duplicate(N,[]),
+    warehouses=lists:duplicate(N,[])
+   },
+  State#state{test_state=GenState}.
 
 command(PreState) ->
   io:format("command(~p)~n",[PreState]),
@@ -55,13 +65,13 @@ job_cmd(State) ->
 	   ++
 	   [{?MODULE,enter,[R,N,peso(P)]} ||
 	     N <- corridors(IndState),
-	     {R,P} <- robots:corridor(N,IndState#onestate.sdata),
+	     {R,P} <- corridor(N,IndState#onestate.sdata),
 	     not(lists:member(R,used(State)))
 	   ]
 	   ++
 	   [{?MODULE,exit,[R,N,P]} ||
 	     N <- warehouses(IndState),
-	     {R,P} <- robots:warehouse(N,IndState#onestate.sdata),
+	     {R,P} <- warehouse(N,IndState#onestate.sdata),
 	     not(lists:member(R,used(State)))
 	   ],
 	 io:format("Alternatives=~p~n",[Alternatives]),
@@ -85,22 +95,29 @@ precondition_ind(State,IndState,Call) ->
       (num_enters(State) < (robots:n(IndState#onestate.sdata)-1))
 	andalso (R>=num_enters(State));
     {_,_,do_job,[_,enter,[R,N,P]],_} when N>0 ->
-      case robots:corridor(N,IndState#onestate.sdata) of
+      case corridor(N,IndState#onestate.sdata) of
 	[{R1,P1}] -> (R==R1) andalso (P>=P1);
 	_ -> false
       end;
     {_,_,do_job,[_,exit,[R,N,P]],_} ->
-      lists:member({R,P},robots:warehouse(N,IndState#onestate.sdata));
+      lists:member({R,P},warehouse(N,IndState#onestate.sdata));
     {_,_,void,_,_} ->
-      num_enters(State)>=robots:n(IndState#onestate.sdata)-1
+      true
   end.
 
-next_state(State,_,Call) ->
-  case {warehouse_in_call(Call),calltype_in_call(Call)} of
-    {0,enter} ->
-      set_enters(max(num_enters(State),robot_in_call(Call)+1),State);
-    _ ->
-      State
+next_state(State,Result,_) ->
+  {NewJobs,FinishedJobs} = Result,
+  NewJobsTestState =
+    lists:foldl
+      (fun (Job,TS) ->
+	   TS1 = 
+	     case {warehouse_in_call(Job#job.call),
+		   calltype_in_call(Job#job.call)} of
+	       {0,enter} ->
+		 set_enters(max(num_enters(State),robot_in_call(Call)+1),State);
+	       _ ->
+		 State
+	     end
   end.
 
 num_enters(State) ->
@@ -162,3 +179,17 @@ warehouses(IndState) ->
 used(State) ->
   TestState = State#state.test_state,
   TestState#genstate.used.
+
+corridor(N,State) ->
+  Result=lists:nth(N+1,State#robots.corridors),
+  io:format("corridor(~p,~p) -> ~p~n",[N,State,Result]),
+  Result.
+
+warehouse(N,State) ->
+  Result=lists:nth(N+1,State#robots.warehouses),
+  io:format("warehouses(~p,~p) -> ~p~n",[N,State,Result]),
+  Result.
+
+one_state(State) ->
+  hd(State#state.states).
+
