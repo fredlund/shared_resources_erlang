@@ -17,5 +17,6 @@
 -record(job,
 	{
 	  pid,        
-	  call        
+	  call,
+	  waitinfo
 	}).

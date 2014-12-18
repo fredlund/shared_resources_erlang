@@ -3,20 +3,23 @@
 -include_lib("eqc/include/eqc.hrl").
 -include("../testing/src/tester.hrl").
 
+-define(debug,true).
+-include("../src/debug.hrl").
+
 -compile(export_all).
 
 -record(teststate,{n,num_enters,used,corridors,warehouses}).
 
 -define(PESO_FACTOR,10).
 
-init([N]) ->
+init([N,NumNaves]) ->
   #teststate
     {
      n=N,
      num_enters=0,
      used=[],
-     corridors=lists:duplicate(N,[]),
-     warehouses=lists:duplicate(N,[])
+     corridors=lists:map(fun (I) -> {I,[]} end, lists:seq(0,NumNaves-1)),
+     warehouses=lists:map(fun (I) -> {I,[]} end, lists:seq(0,NumNaves-1))
     }.
 
 command(PreTS,State) ->
@@ -66,7 +69,7 @@ job_cmd(TS,State) ->
       {R,P} <- warehouse(N,TS),
       not(lists:member(R,used(TS)))
     ],
-  io:format("Alternatives=~p~n",[Alternatives]),
+  ?LOG("Alternatives=~p~n",[Alternatives]),
   if
     Alternatives==[] ->
       io:format("No alternatives in state~n~p~n",[State]);
@@ -78,7 +81,9 @@ job_cmd(TS,State) ->
 precondition(_State,TS,Call) -> 
   case Call of
     {_,do_cmds,Commands,_} ->
-      do_preconditions(TS#teststate{used=[]},Commands);
+      Result = do_preconditions(TS#teststate{used=[]},Commands),
+      io:format("pre(~p)=~p in ~p~n",[Call,Result,TS]),
+      Result;
     _ ->
       true
   end.
@@ -108,7 +113,8 @@ do_preconditions(TS,[Call|NextCalls]) ->
 			     NextCalls).
 
 next_state(TS,State,Result,_) ->
-  {NewJobs,FinishedJobs} = Result,
+  {NewJobs,FinishedJobsAndResults} = Result,
+  FinishedJobs = lists:map(fun ({Job,_}) -> Job end,FinishedJobsAndResults),
   NewTS =
     lists:foldl
       (fun (Job,TSA) ->
@@ -205,34 +211,36 @@ used(TS) ->
   TS#teststate.used.
 
 corridor(N,TS) ->
-  lists:nth(N+1,TS#teststate.corridors).
+  element(2,lists:nth(N+1,TS#teststate.corridors)).
 
 warehouse(N,TS) ->
-  lists:nth(N+1,TS#teststate.warehouses).
+  element(2,lists:nth(N+1,TS#teststate.warehouses)).
 
 delete_from_warehouse(Element,N,TS) ->
   TS#teststate
     {warehouses=
-       setelement
+       lists:keystore
 	 (N+1,
+	  1,
 	  TS#teststate.warehouses,
-	  lists:delete(Element,warehouse(N,TS)))}.
+	  {N+1,lists:delete(Element,warehouse(N,TS))})}.
 
 add_to_corridor(Element,N,TS) ->
   TS#teststate
-    {corridors=setelement(N+1,TS#teststate.corridors,[Element])}.
+    {corridors=lists:keystore(N+1,1,TS#teststate.corridors,{N+1,[Element]})}.
   
 add_to_warehouse(Element,N,TS) ->
   TS#teststate
     {warehouses=
-       setelement
+       lists:keystore
 	 (N+1,
+	  1,
 	  TS#teststate.warehouses,
-	  lists:sort([Element|warehouse(N,TS)]))}.
+	  {N+1,lists:sort([Element|warehouse(N,TS)])})}.
 
 delete_from_corridor(_Element,N,TS) ->
   TS#teststate
-    {corridors=setelement(N+1,TS#teststate.corridors,[])}.
+    {corridors=lists:keystore(N+1,1,TS#teststate.corridors,[])}.
 
 num_naves(State) ->
   OneState = hd(State#state.states),
@@ -245,6 +253,13 @@ exit(_R,N,P) ->
   java:call(tester:get_data(controller),solicitarSalir,[N,P]).
 
 start(NodeId) ->  
-  Controller = java:new(NodeId,'ControlAccesoNavesMonitor',[]),
-  tester:store_data(controller,Controller).
+  case java:new(NodeId,'ControlAccesoNavesMonitor',[]) of
+    Exc = {java_exception,_} -> 
+      java:report_java_exception(Exc),
+      throw(bad);
+    Controller ->
+      tester:store_data(controller,Controller)
+  end.
 
+print_unblocked_job_info(Job) ->
+  io_lib:format("~p",[robot_in_call(Job#job.call)]).

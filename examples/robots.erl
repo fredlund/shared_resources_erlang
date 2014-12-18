@@ -40,14 +40,14 @@ post({enter,[_R,N,W]},State) ->
       N==0 -> add_weight(W,N,State);
       true -> add_weight(W,N,remove_robot(N,State))
     end,
-  {void,NewState};
+  NewState;
 post({exit,[_R,N,W]},State) ->
   NewState =
     if
       N==State#robots.num_naves-1 -> add_weight(-W,N,State);
       true -> add_weight(-W,N,add_robot(N+1,State))
     end,
-  {void,NewState}.
+  NewState.
 
 add_weight(W,N,State) ->
   {_,OldWeight} = lists:keyfind(N,1,State#robots.warehouses),
