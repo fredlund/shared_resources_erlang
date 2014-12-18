@@ -6,7 +6,7 @@
 -include_lib("eqc/include/eqc_component.hrl").
 -include_lib("eqc/include/eqc_dynamic_cluster.hrl").
 
--define(debug,true).
+%% -define(debug,true).
 -include("../../src/debug.hrl").
 
 -define(COMPLETION_TIME,100).
@@ -69,7 +69,7 @@ filter_commands([],true,[]) ->
   {call,?MODULE,void,[]};
 filter_commands([First|Rest],HasVoid,L) ->
   case First of
-    {call,?MODULE,void,_} ->
+    {?MODULE,void,_} ->
       filter_commands(Rest,true,L);
     _ ->
       filter_commands(Rest,HasVoid,[First|L])
@@ -278,19 +278,17 @@ finish_jobs(State,StatesAndJobs,FinishedStates) ->
 	 lists:usort(Finished++FinishedStates))
   end.
 
+job_eq(Job1,Job2) ->
+  (Job1#job.pid==Job2#job.pid) andalso (Job1#job.call==Job2#job.call).
+
 job_exists(Job,JobList) ->
-  lists:any
-    (fun (ListJob) ->
-	 (Job#job.pid==ListJob#job.pid)
-	   andalso (Job#job.call==ListJob#job.call)
-     end, JobList).
+  lists:any(fun (ListJob) -> job_eq(Job,ListJob) end, JobList).
 
 delete_job(Job,JobList) ->
-  lists:filter
-    (fun (ListJob) ->
-	 (Job#job.pid=/=ListJob#job.pid)
-	   orelse (Job#job.call=/=ListJob#job.call)
-     end, JobList).
+  lists:filter(fun (ListJob) -> not(job_eq(ListJob,Job)) end, JobList).
+
+minus_jobs(JobList1,JobList2) ->
+  lists:foldl(fun (Job2,Acc) -> delete_job(Job2,Acc) end, JobList1, JobList2).
 
 merge_jobs_and_states(JobsAndStates) ->
   lists:usort(JobsAndStates).
@@ -460,8 +458,9 @@ print_cmds(Acc,[{_,Fun,Args}|Rest]) ->
   end.
 
 print_unblocked_job(Job,{TestModule,_}) ->
-  try TestModule:print_unblocked_job(Job)
-  catch _:_ -> io_lib:format("~p",[Job])
+  try TestModule:print_unblocked_job_info(Job)
+  catch _:Reason ->
+      io_lib:format("~p",[Job])
   end.
 
 report_java_exception(Exception) ->

@@ -6,7 +6,8 @@
 
 -export([init/1,new_waiting/3,priority_enabled/4,post_waiting/4]).
 
-init([_,_N,_MaxWeight]) -> {ok,void}.
+init(_) ->
+  {ok,void}.
 
 new_waiting(_Call,State,_DataState) ->
   {void,State}.
