@@ -203,10 +203,15 @@ calculate_next_state(State,FinishedJobs) ->
       ?LOG("after first:~n~p~n",[FirstStatesAndJobs]),
       case finish_jobs(State,FirstStatesAndJobs,[]) of
 	false -> false;
-	{ok,FinalStates} ->
-	  case check_remaining_jobs(State,FinalStates) of
+	{ok,FinishStates} ->
+	  RemainingJobs =
+	    case FinishStates of
+	      [IndState|_] -> IndState#onestate.waiting;
+	      _ -> []
+	    end,
+	  case check_remaining_jobs(State,FinishStates,RemainingJobs) of
 	    false -> false;
-	    true -> {ok,State#state{states=FinalStates}}
+	    {ok,FinalStates} -> {ok,State#state{states=FinalStates}}
 	  end
       end
   end.
@@ -278,6 +283,32 @@ finish_jobs(State,StatesAndJobs,FinishedStates) ->
 	 lists:usort(Finished++FinishedStates))
   end.
 
+check_remaining_jobs(State,FinalStates,RemainingJobs) ->
+  NumberOfStates =
+    length(FinalStates),
+  JobsPerstate =
+    lists:flatmap
+      (fun (FinalState) -> return_executable_job(Job,Indstate,State) end,
+       FinalStates),
+  NumberOfExecutableStates =
+    length(JobsPerState),
+  if
+    JobsPerState==NumberOfExecutableStates ->
+      io:format
+	("*** Error: at least one of the following calls are executable "++
+	   "even though they should not be:~n~p~n",
+	 JobsPerState),
+      false;
+    true ->
+      {ok,
+
+	   case lists:foldl(fun (Jo
+	     case  job_cpre_is_true(Job,IndState,State)
+		  andalso job_priority_enabled_is_true(Job,IndState,State) of
+		  true ->
+		    [{Job
+
+
 job_eq(Job1,Job2) ->
   (Job1#job.pid==Job2#job.pid) andalso (Job1#job.call==Job2#job.call).
 
@@ -293,8 +324,6 @@ minus_jobs(JobList1,JobList2) ->
 merge_jobs_and_states(JobsAndStates) ->
   lists:usort(JobsAndStates).
 
-check_remaining_jobs(State,FinalStates) ->
-  true.
 job_cpre_is_true(Job,IndState,State) ->
   (State#state.dataSpec):cpre(resource_call(Job#job.call),IndState#onestate.sdata).
 
