@@ -204,12 +204,7 @@ calculate_next_state(State,FinishedJobs) ->
       case finish_jobs(State,FirstStatesAndJobs,[]) of
 	false -> false;
 	{ok,FinishStates} ->
-	  RemainingJobs =
-	    case FinishStates of
-	      [IndState|_] -> IndState#onestate.waiting;
-	      _ -> []
-	    end,
-	  case check_remaining_jobs(State,FinishStates,RemainingJobs) of
+	  case check_remaining_jobs(State,FinishStates) of
 	    false -> false;
 	    {ok,FinalStates} -> {ok,State#state{states=FinalStates}}
 	  end
@@ -249,8 +244,7 @@ finish_jobs(State,StatesAndJobs,FinishedStates) ->
 		       [job_cpre_is_true(Job,IndState,State),
 			job_priority_enabled_is_true(Job,IndState,State)]),
 		    case job_exists(Job,FJobs)
-		      andalso job_cpre_is_true(Job,IndState,State)
-		      andalso job_priority_enabled_is_true(Job,IndState,State) of
+		      andalso job_is_executable(Job,IndState,State) of
 		      true ->
 			[{job_next_state(Job,IndState,State),
 			  delete_job(Job,FJobs)}];
@@ -283,31 +277,34 @@ finish_jobs(State,StatesAndJobs,FinishedStates) ->
 	 lists:usort(Finished++FinishedStates))
   end.
 
-check_remaining_jobs(State,FinalStates,RemainingJobs) ->
-  NumberOfStates =
-    length(FinalStates),
-  JobsPerstate =
-    lists:flatmap
-      (fun (FinalState) -> return_executable_job(Job,Indstate,State) end,
+check_remaining_jobs(State,FinalStates) ->
+  {SuccessStates,JobsPerFailedState} =
+    lists:foldl
+      (fun (IndState,{S,J}) ->
+	   case executable_jobs(IndState#onestate.waiting,IndState,State) of
+	     [] -> {[IndState|S],J};
+	     Jobs -> {S,[Jobs|J]}
+	   end
+       end, 
+       {[],[]},
        FinalStates),
-  NumberOfExecutableStates =
-    length(JobsPerState),
   if
-    JobsPerState==NumberOfExecutableStates ->
+    SuccessStates==[] -> 
       io:format
 	("*** Error: at least one of the following calls are executable "++
 	   "even though they should not be:~n~p~n",
-	 JobsPerState),
+	 [lists:usort
+	    (lists:flatmap
+	     (fun (Jobs) ->
+		  lists:map(fun (Job) -> Job#job.call end, Jobs)
+	      end, JobsPerFailedState))]),
       false;
     true ->
-      {ok,
+      {ok,SuccessStates}
+  end.
 
-	   case lists:foldl(fun (Jo
-	     case  job_cpre_is_true(Job,IndState,State)
-		  andalso job_priority_enabled_is_true(Job,IndState,State) of
-		  true ->
-		    [{Job
-
+executable_jobs(Jobs,IndState,State) ->
+  lists:filter(fun (Job) -> job_is_executable(Job,IndState,State) end, Jobs).
 
 job_eq(Job1,Job2) ->
   (Job1#job.pid==Job2#job.pid) andalso (Job1#job.call==Job2#job.call).
@@ -323,6 +320,10 @@ minus_jobs(JobList1,JobList2) ->
 
 merge_jobs_and_states(JobsAndStates) ->
   lists:usort(JobsAndStates).
+
+job_is_executable(Job,IndState,State) ->
+  job_cpre_is_true(Job,IndState,State)
+    andalso job_priority_enabled_is_true(Job,IndState,State).
 
 job_cpre_is_true(Job,IndState,State) ->
   (State#state.dataSpec):cpre(resource_call(Job#job.call),IndState#onestate.sdata).
