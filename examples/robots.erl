@@ -49,6 +49,9 @@ post({exit,[_R,N,W]},State) ->
     end,
   NewState.
 
+returns(_Call,_State,_Result) ->
+  true.
+
 add_weight(W,N,State) ->
   {_,OldWeight} = lists:keyfind(N,1,State#robots.warehouses),
   State#robots
