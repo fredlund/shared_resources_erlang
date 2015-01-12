@@ -1,0 +1,4 @@
+- Implement simulation mode; requires an example specific module for
+generating a (simulation) call.
+
+- Rewrite tester to use the group_commands Quickcheck style.
