@@ -3,23 +3,24 @@
 -include_lib("eqc/include/eqc.hrl").
 -include("../testing/src/tester.hrl").
 
-%% -define(debug,true).
+-define(debug,true).
 -include("../src/debug.hrl").
 
 -compile(export_all).
 
--record(teststate,{n,num_enters,blocked,corridors,warehouses}).
+-record(teststate,{n_robots,n_naves,num_enters,blocked,corridors,warehouses}).
 
 -define(PESO_FACTOR,10).
 
-init([N,NumNaves]) ->
+init([NumRobots,NumNaves]) ->
   #teststate
     {
-     n=N,
-     num_enters=0,
-     blocked=[],
-     corridors=lists:map(fun (I) -> {I,[]} end, lists:seq(0,NumNaves-1)),
-     warehouses=lists:map(fun (I) -> {I,[]} end, lists:seq(0,NumNaves-1))
+      n_robots=NumRobots,
+      n_naves=NumNaves,
+      num_enters=0,
+      blocked=[],
+      corridors=lists:map(fun (I) -> {I,[]} end, lists:seq(0,NumNaves-1)),
+      warehouses=lists:map(fun (I) -> {I,[]} end, lists:seq(0,NumNaves-1))
     }.
 
 command(TS,State) ->
@@ -50,21 +51,22 @@ command(TS,State) ->
 	  [Command|NextCommands])).
 
 job_cmd(TS,State) ->
+  ?LOG("job_cmd: TS=~p~nState=~p~n",[TS,State]),
   Alternatives =
     [{?MODULE,enter,[num_enters(TS),0,peso()]} ||
-      num_enters(TS) < TS#teststate.n-1]
+      num_enters(TS) < TS#teststate.n_robots-1]
     ++
     [{tester,void,[]} ||
-      num_enters(TS) >= TS#teststate.n-1]
+      num_enters(TS) >= TS#teststate.n_robots-1]
     ++
     [{?MODULE,enter,[R,N,peso(P)]} ||
-      N <- corridors(State),
+      N <- corridors(TS),
       {R,P} <- corridor(N,TS),
       not(lists:member(R,blocked(TS)))
     ]
     ++
     [{?MODULE,exit,[R,N,P]} ||
-      N <- warehouses(State),
+      N <- warehouses(TS),
       {R,P} <- warehouse(N,TS),
       not(lists:member(R,blocked(TS)))
     ],
@@ -94,7 +96,7 @@ do_preconditions(TS,[Call|NextCalls]) ->
     case Call of
       {_,enter,[R,0,_],_} ->
 	(not(lists:member(R,TS#teststate.blocked)))
-	  andalso (num_enters(TS) < TS#teststate.n)
+	  andalso (num_enters(TS) < TS#teststate.n_robots)
 	  andalso (R>=num_enters(TS));
       {_,enter,[R,N,P],_} when N>0 ->
 	(not(lists:member(R,TS#teststate.blocked)))
@@ -143,7 +145,7 @@ next_state(TS,State,Result,_) ->
 	 case Job#job.call of
 	   {_,exit,[R,N,P]} ->
 	     State1 = delete_from_warehouse({R,P},N,TSA),
-	     NUM_NAVES = num_naves(State),
+	     NUM_NAVES = num_naves(TS),
 	     if
 	       N==(NUM_NAVES-1) ->
 		 State1;
@@ -210,11 +212,11 @@ peso(P) ->
   Pdiv = P div 100,
   ?LET(X,eqc_gen:choose(Pdiv,?PESO_FACTOR),X*100).
 
-corridors(State) ->
-  lists:seq(1,num_naves(State)-1).
+corridors(TS) ->
+  lists:seq(1,num_naves(TS)-1).
 
-warehouses(State) ->
-  lists:seq(0,num_naves(State)-1).
+warehouses(TS) ->
+  lists:seq(0,num_naves(TS)-1).
 
 blocked(TS) ->
   TS#teststate.blocked.
@@ -251,9 +253,8 @@ delete_from_corridor(_Element,N,TS) ->
   TS#teststate
     {corridors=lists:keystore(N+1,1,TS#teststate.corridors,[])}.
 
-num_naves(State) ->
-  OneState = hd(State#state.states),
-  robots:num_naves(OneState#onestate.sdata).
+num_naves(TS) ->
+  TS#teststate.n_naves.
 
 enter(_R,N,P) ->
   java:call(tester:get_data(controller),solicitarEntrar,[N,P]).

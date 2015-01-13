@@ -6,7 +6,7 @@
 -include_lib("eqc/include/eqc_component.hrl").
 -include_lib("eqc/include/eqc_dynamic_cluster.hrl").
 
-%% -define(debug,true).
+ -define(debug,true).
 -include("../../src/debug.hrl").
 
 -define(COMPLETION_TIME,100).
@@ -15,9 +15,6 @@
 
 api_spec() ->
   #api_spec{}.
-
-callouts(_,_) ->
-  ?EMPTY.
 
 initial_state() ->
   ?LOG("~p:initial_state~n",[?MODULE]),
@@ -43,39 +40,15 @@ init_state({DataSpec,DI},{WaitSpec,WI},{TestingSpec,TI}) ->
      testingSpec=TestingSpec
     }.
 
--spec command(#state{}) -> any().
-command(State) ->
-  if
-    not(State#state.started) ->
-      {call,?MODULE,start,[]};
-    true ->
-      ?LET
-	(Commands,
-	 (State#state.testingSpec):command(State#state.test_state,State),
-	 case filter_commands(Commands) of
-	   Cmds when is_list(Cmds) ->
-	     {call,?MODULE,do_cmds,[Cmds]};
-	   VoidCall ->
-	     VoidCall
-	 end)
-  end.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-filter_commands(Commands) ->
-  filter_commands(Commands,false,[]).
+start_pre(State) ->
+  not(State#state.started).
 
-filter_commands([],_,L) when L=/=[] ->
-  L;
-filter_commands([],true,[]) ->
-  {call,?MODULE,void,[]};
-filter_commands([First|Rest],HasVoid,L) ->
-  case First of
-    {?MODULE,void,_} ->
-      filter_commands(Rest,true,L);
-    _ ->
-      filter_commands(Rest,HasVoid,[First|L])
-  end.
+start_args(State) ->
+  [State#state.testingSpec].
 
-start() ->
+start(TestSpec) ->
   [{cp,CP}] =
     ets:lookup(?MODULE,cp),
   ?LOG("CP is ~p~n",[CP]),
@@ -85,14 +58,28 @@ start() ->
 	{call_timeout,infinity},
 	{java_exception_as_value,true},
 	{add_to_java_classpath,CP}]),
+  TestSpec:start(NodeId),
   NodeId.
 
-store_data(Key,Value) ->
-  ets:insert(?MODULE,{Key,Value}).
+start_post(_State,_,_Result) ->
+  true.
 
-get_data(Key) ->
-  [{Key,Value}] = ets:lookup(?MODULE,Key),
-  Value.
+start_next(State,_Result,_) ->
+  State#state{started=true}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+do_cmds_pre(State) ->
+  State#state.started.
+
+do_cmds_args(State) ->
+  ?LET
+     (Commands,
+      (State#state.testingSpec):command(State#state.test_state,State),
+      [filter_commands(Commands)]).
+
+do_cmds_pre(State,Args) ->
+  (State#state.testingSpec):precondition(State,State#state.test_state,Args).
 
 do_cmds(Commands) ->
   ?LOG("Commands are ~p~n",[Commands]),
@@ -110,8 +97,70 @@ do_cmds(Commands) ->
                 call=Call}
        end, Commands),
   ?LOG("New jobs are ~p~n",[NewJobs]),
-  FinishedJobs = wait_for_jobs(),
-  {NewJobs,FinishedJobs}.
+  if
+    NewJobs==[] ->
+      {[],[]};
+    true ->
+      FinishedJobs = wait_for_jobs(),
+      {NewJobs,FinishedJobs}
+  end.
+
+do_cmds_post(State,_Args,Result) ->
+  {NewJobs,FinishedJobs} = 
+    Result,
+  ?LOG
+     ("Postcondition: result=~p~n",[Result]),
+  case lists:any(fun job_finished_with_exception/1,FinishedJobs) of
+    true ->
+      java_exception;
+    false ->
+      case calculate_next_state
+	(add_new_jobs(NewJobs,State),
+	 lists:map(fun ({Job,_}) -> Job end, FinishedJobs)) of
+	false -> false;
+	_ -> true
+      end
+  end.
+
+do_cmds_next(State,Result,Args) ->
+  {NewJobs,FinishedJobs} = Result,
+  ?LOG
+     ("Next_state: result=~p~n",[Result]),
+  {ok,NewState} =
+    calculate_next_state
+      (add_new_jobs(NewJobs,State),
+       lists:map(fun ({Job,_}) -> Job end, FinishedJobs)),
+  NewTestState =
+    (State#state.testingSpec):next_state
+      (NewState#state.test_state,
+       NewState,
+       Result,
+       Args),
+  NextState = NewState#state{test_state=NewTestState},
+  ?LOG("next_state: ~p~n",[NextState]),
+  NextState.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+filter_commands(Commands) ->
+  filter_commands(Commands,false,[]).
+
+filter_commands([],_,L) ->
+  L;
+filter_commands([First|Rest],HasVoid,L) ->
+  case First of
+    {?MODULE,void,_} ->
+      filter_commands(Rest,true,L);
+    _ ->
+      filter_commands(Rest,HasVoid,[First|L])
+  end.
+
+store_data(Key,Value) ->
+  ets:insert(?MODULE,{Key,Value}).
+
+get_data(Key) ->
+  [{Key,Value}] = ets:lookup(?MODULE,Key),
+  Value.
 
 wait_for_jobs() ->
   timer:sleep(?COMPLETION_TIME),
@@ -130,67 +179,10 @@ receive_completions() ->
 void() ->
   ok.
 
-precondition(State,Call) ->     
-  case Call of
-    {_,_,start,_,_} ->
-      not(State#state.started);
-    {_,_,void,_,_} ->
-      true;
-    {_,_,do_cmds,_,_} ->
-      State#state.started
-	andalso (State#state.testingSpec):precondition(State,State#state.test_state,Call)
-  end.
-
-next_state(State,Result,Call) ->
-  case Call of
-    {_,_,start,_,_} ->
-      (State#state.testingSpec):start(Result),
-      State#state{started=true};
-    {_,_,void,_,_} ->
-      State;
-    {_,_,do_cmds,_,_} ->
-      {NewJobs,FinishedJobs} = Result,
-      ?LOG
-	("Next_state: result=~p~n",[Result]),
-      {ok,NewState} =
-	calculate_next_state
-	  (add_new_jobs(NewJobs,State),
-	   lists:map(fun ({Job,_}) -> Job end, FinishedJobs)),
-      NewTestState =
-	(State#state.testingSpec):next_state
-	  (NewState#state.test_state,
-	   NewState,
-	   Result,
-	   Call),
-      NextState = NewState#state{test_state=NewTestState},
-      ?LOG("next_state: ~p~n",[NextState]),
-      NextState
-  end.
-
-postcondition(State,Call,Result) ->
-  case Call of
-    {_,_,do_cmds,_,_} ->
-      {NewJobs,FinishedJobs} = 
-	Result,
-      ?LOG
-	("Postcondition: result=~p~n",[Result]),
-      case lists:any(fun job_finished_with_exception/1,FinishedJobs) of
-	true ->
-	  java_exception;
-	false ->
-	  case calculate_next_state
-	    (add_new_jobs(NewJobs,State),
-	     lists:map(fun ({Job,_}) -> Job end, FinishedJobs)) of
-	    false -> false;
-	    _ -> true
-	  end
-      end;
-    _ -> true
-  end.
-
 job_finished_with_exception({_,Result}) ->
   case Result of
     {java_exception,_Exc} -> true;
+    {'EXIT',_,_} -> true;
     _ -> false
   end.
 
@@ -438,7 +430,7 @@ print_counterexample(Cmds,H,_DS,Reason,TestingSpec) ->
   print_commands(lists:zip(tl(FailingCommandSequence),ReturnValues),TestingSpec),
   io:format("~n~n").
 
-print_commands([],TestingSpec) ->
+print_commands([],_TestingSpec) ->
   ok;
 print_commands([{Call,Result}|Rest],TestingSpec) ->
   ResultString =
@@ -489,7 +481,7 @@ print_cmds(Acc,[{_,Fun,Args}|Rest]) ->
 
 print_unblocked_job(Job,{TestModule,_}) ->
   try TestModule:print_unblocked_job_info(Job)
-  catch _:Reason ->
+  catch _:_Reason ->
       io_lib:format("~p",[Job])
   end.
 
