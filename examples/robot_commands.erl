@@ -3,7 +3,7 @@
 -include_lib("eqc/include/eqc.hrl").
 -include("../testing/src/tester.hrl").
 
--define(debug,true).
+%%-define(debug,true).
 -include("../src/debug.hrl").
 
 -compile(export_all).
@@ -79,32 +79,25 @@ job_cmd(TS,State) ->
   end,
   eqc_gen:oneof(Alternatives).
 
-precondition(_State,TS,Call) -> 
-  case Call of
-    {_,do_cmds,Commands,_} ->
-      Result = do_preconditions(TS#teststate{blocked=[]},Commands),
-      io:format("pre(~p)=~p in ~p~n",[Call,Result,TS]),
-      Result;
-    _ ->
-      true
-  end.
+precondition(_State,TS,[Commands]) -> 
+  do_preconditions(TS#teststate{blocked=[]},Commands).
 
 do_preconditions(_TS,[]) ->
   true;
 do_preconditions(TS,[Call|NextCalls]) ->
   Result =
     case Call of
-      {_,enter,[R,0,_],_} ->
+      {_,enter,[R,0,_]} ->
 	(not(lists:member(R,TS#teststate.blocked)))
 	  andalso (num_enters(TS) < TS#teststate.n_robots)
 	  andalso (R>=num_enters(TS));
-      {_,enter,[R,N,P],_} when N>0 ->
+      {_,enter,[R,N,P]} when N>0 ->
 	(not(lists:member(R,TS#teststate.blocked)))
 	  andalso case corridor(N,TS) of
 		    [{R1,P1}] -> (R==R1) andalso (P>=P1);
 		    _ -> false
 		  end;
-      {_,exit,[R,N,P],_} ->
+      {_,exit,[R,N,P]} ->
 	(not(lists:member(R,TS#teststate.blocked)))
 	  andalso lists:member({R,P},warehouse(N,TS))
     end,
@@ -113,7 +106,7 @@ do_preconditions(TS,[Call|NextCalls]) ->
 			     {blocked=[robot_in_call(Call)|TS#teststate.blocked]},
 			     NextCalls).
 
-next_state(TS,State,Result,_) ->
+next_state(TS,_State,Result,_) ->
   {NewJobs,FinishedJobsAndResults} =
     Result,
   FinishedJobs =
@@ -144,23 +137,22 @@ next_state(TS,State,Result,_) ->
     (fun (Job,TSA) ->
 	 case Job#job.call of
 	   {_,exit,[R,N,P]} ->
-	     State1 = delete_from_warehouse({R,P},N,TSA),
-	     NUM_NAVES = num_naves(TS),
+	     TSState1 = delete_from_warehouse({R,P},N,TSA),
+	     NUM_NAVES = num_naves(TSA),
 	     if
 	       N==(NUM_NAVES-1) ->
-		 State1;
+		 TSState1;
 	       true ->
-		 add_to_corridor({R,P},N+1,State1)
+		 add_to_corridor({R,P},N+1,TSState1)
 	     end;
 	   {_,enter,[R,N,P]} ->
-	     State1 = add_to_warehouse({R,P},N,TSA),
+	     TSState1 = add_to_warehouse({R,P},N,TSA),
 	     if
 	       N==0 ->
-		 State1;
+		 TSState1;
 	       true ->
-		 delete_from_corridor({R,P},N,State1)
-	     end;
-	   _ -> State
+		 delete_from_corridor({R,P},N,TSState1)
+	     end
 	 end
      end, 
      NewTS,
@@ -231,27 +223,27 @@ delete_from_warehouse(Element,N,TS) ->
   TS#teststate
     {warehouses=
        lists:keystore
-	 (N+1,
+	 (N,
 	  1,
 	  TS#teststate.warehouses,
-	  {N+1,lists:delete(Element,warehouse(N,TS))})}.
+	  {N,lists:delete(Element,warehouse(N,TS))})}.
 
 add_to_corridor(Element,N,TS) ->
   TS#teststate
-    {corridors=lists:keystore(N+1,1,TS#teststate.corridors,{N+1,[Element]})}.
+    {corridors=lists:keystore(N,1,TS#teststate.corridors,{N,[Element]})}.
   
 add_to_warehouse(Element,N,TS) ->
   TS#teststate
     {warehouses=
        lists:keystore
-	 (N+1,
+	 (N,
 	  1,
 	  TS#teststate.warehouses,
-	  {N+1,lists:sort([Element|warehouse(N,TS)])})}.
+	  {N,lists:sort([Element|warehouse(N,TS)])})}.
 
 delete_from_corridor(_Element,N,TS) ->
   TS#teststate
-    {corridors=lists:keystore(N+1,1,TS#teststate.corridors,[])}.
+    {corridors=lists:keystore(N,1,TS#teststate.corridors,{N,[]})}.
 
 num_naves(TS) ->
   TS#teststate.n_naves.

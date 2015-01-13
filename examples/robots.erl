@@ -32,7 +32,7 @@ pre({exit,[_R,N,W]},State) ->
 cpre({enter,[_R,N,W]},State) ->
   (weight(N,State)+W) =< State#robots.max_weight;
 cpre({exit,[_R,N,_W]},State) ->
-  (N==State#robots.num_naves-1) orelse (not(occupied(N+1,State))).
+  (N==(State#robots.num_naves-1)) orelse (not(occupied(N+1,State))).
 
 post({enter,[_R,N,W]},State) ->
   NewState =
@@ -56,11 +56,11 @@ add_weight(W,N,State) ->
 
 remove_robot(N,State) ->
   State#robots
-    {corridors=lists:keystore(N,1,State#robots.warehouses,{N,false})}.
+    {corridors=lists:keystore(N,1,State#robots.corridors,{N,false})}.
 
 add_robot(N,State) ->
   State#robots
-    {corridors=lists:keystore(N,1,State#robots.warehouses,{N,true})}.
+    {corridors=lists:keystore(N,1,State#robots.corridors,{N,true})}.
 
 weight(N,State) ->
   {_,Weight} = lists:keyfind(N,1,State#robots.warehouses),

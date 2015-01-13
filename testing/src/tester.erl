@@ -6,7 +6,7 @@
 -include_lib("eqc/include/eqc_component.hrl").
 -include_lib("eqc/include/eqc_dynamic_cluster.hrl").
 
- -define(debug,true).
+%%-define(debug,true).
 -include("../../src/debug.hrl").
 
 -define(COMPLETION_TIME,100).
@@ -248,7 +248,7 @@ finish_jobs(State,StatesAndJobs,FinishedStates) ->
        end, StatesAndJobs),
   if
     NewStatesAndJobs==[], FinishedStates==[] ->
-      io:format("*** Error: remaining jobs cannot be executed by the model~n"),
+      io:format("*** Error: there are calls that have been completed by the implementation which cannot be completed by the model~n"),
       false;
     true -> 
       {ActiveStatesAndJobs,Finished} = 
@@ -283,8 +283,8 @@ check_remaining_jobs(State,FinalStates) ->
   if
     SuccessStates==[] -> 
       io:format
-	("*** Error: at least one of the following calls are executable "++
-	   "even though they should not be:~n~p~n",
+	("*** Error: at least one of the following calls can be completed by the model "++
+	   "but have not been completed:~n~p~n",
 	 [lists:usort
 	    (lists:flatmap
 	     (fun (Jobs) ->
