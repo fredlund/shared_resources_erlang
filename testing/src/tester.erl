@@ -52,14 +52,19 @@ start(TestSpec) ->
   [{cp,CP}] =
     ets:lookup(?MODULE,cp),
   ?LOG("CP is ~p~n",[CP]),
-  {ok,NodeId} =
+  try
     java:start_node
       ([{java_verbose,"SEVERE"},
 	{call_timeout,infinity},
 	{java_exception_as_value,true},
-	{add_to_java_classpath,CP}]),
-  TestSpec:start(NodeId),
-  NodeId.
+	{add_to_java_classpath,CP}]) of
+    {ok,NodeId} ->
+      TestSpec:start(NodeId),
+      NodeId
+  catch _:_ ->
+      io:format("*** Error: cannot start java. Is the javaerlang library installed?~n"),
+      throw(bad)
+  end.
 
 start_post(_State,_,_Result) ->
   true.
@@ -123,7 +128,8 @@ try
       end
   end of
   false ->
-    io:format("postcondition false for ~p~n",[Args]);
+    io:format("postcondition false for ~p~n",[Args]),
+    false;
   true ->
     true;
   Other ->
@@ -137,22 +143,27 @@ catch _:Reason ->
 end.
 
 do_cmds_next(State,Result,Args) ->
-  {NewJobs,FinishedJobs} = Result,
-  ?LOG
-     ("Next_state: result=~p~n",[Result]),
-  {ok,NewState} =
-    calculate_next_state
-      (add_new_jobs(NewJobs,State),
-       lists:map(fun ({Job,_}) -> Job end, FinishedJobs)),
-  NewTestState =
-    (State#state.testingSpec):next_state
-      (NewState#state.test_state,
-       NewState,
-       Result,
-       Args),
-  NextState = NewState#state{test_state=NewTestState},
-  ?LOG("next_state: ~p~n",[NextState]),
-  NextState.
+  try
+    {NewJobs,FinishedJobs} = Result,
+    ?LOG
+       ("Next_state: result=~p~n",[Result]),
+    {ok,NewState} =
+      calculate_next_state
+	(add_new_jobs(NewJobs,State),
+	 lists:map(fun ({Job,_}) -> Job end, FinishedJobs)),
+    NewTestState =
+      (State#state.testingSpec):next_state
+	(NewState#state.test_state,
+	 NewState,
+	 Result,
+	 Args),
+    NextState = NewState#state{test_state=NewTestState},
+    ?LOG("next_state: ~p~n",[NextState]),
+    NextState
+  catch _:_ ->
+      io:format("*** Warning: next raises exception~n"),
+      State
+  end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -492,20 +503,36 @@ eqc_printer(Format,String) ->
     _ -> io:format(Format,String)
   end.
 
-print_counterexample(Cmds,H,_DS,Reason,TestingSpec) ->
-  io:format("~n~nTest failed with reason ~p~n",[Reason]),
-  {FailingCommandSequence,_} = lists:split(length(H)+1,Cmds),
-  ReturnValues = 
-    case Reason of
-      {exception,_} ->
-	(lists:map(fun ({_,_,Result}) -> Result end, H))++[Reason];
-      _ ->
-	(lists:map(fun ({_,_,Result}) -> Result end, H))
-    end,
-  io:format("~nCommand sequence:~n"),
-  io:format("-----------------~n~n"),
-  print_commands(lists:zip(tl(FailingCommandSequence),ReturnValues),TestingSpec),
-  io:format("~n~n").
+print_counterexample(Cmds,H,FailingState,Reason,TestingSpec) ->
+  try
+    io:format
+      ("~n~nTest failed with reason ~p~n",
+       [Reason]),
+    {FailingCommandSequence,_} =
+      lists:split(length(H)+1,Cmds),
+    ReturnValues = 
+      case Reason of
+	{exception,_} ->
+	  (lists:map(fun result_value_from_history/1, H))++[Reason];
+	_ ->
+	  (lists:map(fun result_value_from_history/1, H))
+      end,
+    io:format("~nCommand sequence:~n"),
+    io:format("-----------------~n~n"),
+    print_commands(lists:zip(tl(FailingCommandSequence),ReturnValues),TestingSpec),
+    io:format("~n~n")
+  catch _:Exception ->
+      io:format
+	("*** Warning: print_counterexample raised an exception ~p~n"
+	 ++"Stacktrace:~n~p~n",
+	 [Exception,erlang:get_stacktrace()]),
+      ok
+  end.
+
+result_value_from_history({_,_,_,Result}) ->
+  Result;
+result_value_from_history({_,_,Result}) ->
+  Result.
 
 print_commands([],_TestingSpec) ->
   ok;

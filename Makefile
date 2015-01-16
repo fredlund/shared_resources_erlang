@@ -1,3 +1,5 @@
+COMPILER=/home/fred/tools_alter/bin/erlc
+
 vpath %.erl src examples testing/src
 
 BEAMS = $(patsubst src/%.erl,ebin/%.beam,$(wildcard src/*.erl))
@@ -13,7 +15,7 @@ ebin:
 	mkdir -p ebin
 
 ebin/%.beam: %.erl
-	erlc -pa ebin $(EFLAGS) -o ebin $<
+	$(COMPILER) -pa ebin $(EFLAGS) -o ebin $<
 
 dialyzer: ebin main
 	dialyzer ebin/*beam
