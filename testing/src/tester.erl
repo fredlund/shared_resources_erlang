@@ -105,7 +105,8 @@ do_cmds(Commands) ->
       {NewJobs,FinishedJobs}
   end.
 
-do_cmds_post(State,_Args,Result) ->
+do_cmds_post(State,Args,Result) ->
+try
   {NewJobs,FinishedJobs} = 
     Result,
   ?LOG
@@ -120,7 +121,20 @@ do_cmds_post(State,_Args,Result) ->
 	false -> false;
 	_ -> true
       end
-  end.
+  end of
+  false ->
+    io:format("postcondition false for ~p~n",[Args]);
+  true ->
+    true;
+  Other ->
+    io:format("strange postcondition ~p~n",[Other]),
+    false
+catch _:Reason ->
+    io:format("postcondition raises ~p~nStacktrace:~n~p~n",
+	      [Reason,
+	       erlang:get_stacktrace()]),
+    false
+end.
 
 do_cmds_next(State,Result,Args) ->
   {NewJobs,FinishedJobs} = Result,
@@ -392,7 +406,11 @@ check_prop(DataSpec,WaitSpec,TestingSpec) ->
 
 prop_ok(DataSpec,WaitSpec,TestingSpec) ->
   ?FORALL
-     (Cmds, eqc_dynamic_cluster:dynamic_commands(?MODULE,init_state(DataSpec,WaitSpec,TestingSpec)),
+     (Cmds,
+      ?LET
+	 (SCmds,
+	  eqc_dynamic_cluster:dynamic_commands(?MODULE,init_state(DataSpec,WaitSpec,TestingSpec)),
+	  custom_shrinking1(SCmds)),
       ?CHECK_COMMANDS
 	 ({H, DS, Res},
 	  ?MODULE,
@@ -406,6 +424,65 @@ prop_ok(DataSpec,WaitSpec,TestingSpec) ->
 		false
 	    end
 	  end)).
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+custom_shrinking1(Cmds) ->
+  %%io:format("custom_shrinking:~n~p~n",[Cmds]),
+  ?SHRINK
+     (Cmds,
+      [ custom_shrinking1(Shrunk) || Shrunk <- shrink_commands(Cmds) ]).
+
+shrink_commands(Cmds) ->
+  %%io:format("shrink_commands: ~p~n",[Cmds]),
+  %% [Cmds].
+  Result = lists:map(fun cleanup_commands/1, rewrite_pars(Cmds)),
+  io:format("shrink_commands on~n~p~nreturns~n~p~n",[Cmds,Result]),
+  Result.
+
+cleanup_commands(Cmds) ->
+  lists:foldr(fun (Cmd,Acc) -> 
+		case Cmd of
+		  {Call,Module,Fun,Args,_} ->
+		    [{Call,Module,Fun,Args,[]}|Acc];
+		  _ ->
+		    Acc
+		end
+	    end, [], Cmds).
+
+rewrite_pars(Cmds) ->
+  rewrite_pars(Cmds,[],[]).
+rewrite_pars([],_Prefix,Alternatives) ->
+  Alternatives;
+rewrite_pars([Command|Rest],Prefix,Alternatives) ->
+  case Command of
+    {call,Module,do_cmds,[L],_} when length(L)>1 ->
+      Sequentialisations = all_orderings(Prefix,L,Rest,Module,do_cmds),
+      rewrite_pars(Rest,Prefix++[Command],Sequentialisations++Alternatives);
+    _ ->
+      rewrite_pars(Rest,Prefix++[Command],Alternatives)
+  end.
+
+all_orderings(Prefix,Commands,Suffix,Module,Fun) ->
+  lists:map
+    (fun (Ordering) ->
+	 Prefix
+	   ++(lists:map(fun (MFA) -> [{call,Module,Fun,[MFA],[]}] end, Ordering))
+	   ++Suffix
+     end, all_orderings(Commands)).
+
+all_orderings(Elements) ->
+  all_orderings(Elements,Elements).
+all_orderings([],_) ->
+  [];
+all_orderings([First|Rest],Elements) ->
+  FirstOrderings = 
+    case all_orderings(Elements--[First]) of
+      [] -> [[First]];
+      Orderings -> lists:map(fun (Ordering) -> [First|Ordering] end, Orderings)
+    end,
+  FirstOrderings++all_orderings(Rest,Elements).
+  
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% To make eqc not print the horrible counterexample

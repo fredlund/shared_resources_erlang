@@ -2,3 +2,6 @@
 generating a (simulation) call.
 
 - Rewrite tester to use the group_commands Quickcheck style.
+
+- Maybe separate priority checking, and messaging, from safety checking,
+and messaging.
