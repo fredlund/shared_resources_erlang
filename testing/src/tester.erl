@@ -490,19 +490,9 @@ custom_shrinking1(Cmds) ->
 shrink_commands(Cmds) ->
   %%io:format("shrink_commands: ~p~n",[Cmds]),
   %% [Cmds].
-  Result = lists:map(fun cleanup_commands/1, rewrite_pars(Cmds)),
-  io:format("shrink_commands on~n~p~nreturns~n~p~n",[Cmds,Result]),
+  Result = rewrite_pars(Cmds),
+  %%io:format("shrink_commands on~n~p~nreturns~n~p~n",[Cmds,Result]),
   Result.
-
-cleanup_commands(Cmds) ->
-  lists:foldr(fun (Cmd,Acc) -> 
-		case Cmd of
-		  {Call,Module,Fun,Args,_} ->
-		    [{Call,Module,Fun,Args,[]}|Acc];
-		  _ ->
-		    Acc
-		end
-	    end, [], Cmds).
 
 rewrite_pars(Cmds) ->
   rewrite_pars(Cmds,[],[]).
@@ -521,7 +511,7 @@ all_orderings(Prefix,Commands,Suffix,Module,Fun) ->
   lists:map
     (fun (Ordering) ->
 	 Prefix
-	   ++(lists:map(fun (MFA) -> [{call,Module,Fun,[MFA],[]}] end, Ordering))
+	   ++(lists:map(fun (MFA) -> {call,Module,Fun,[[MFA]],[]} end, Ordering))
 	   ++Suffix
      end, all_orderings(Commands)).
 
