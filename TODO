@@ -5,3 +5,9 @@ generating a (simulation) call.
 
 - Maybe separate priority checking, and messaging, from safety checking,
 and messaging.
+
+- Implement function return specification; a property in the
+abstract specification and a concrete return value specification
+in the implementation module (see eqc_statem_sim).
+return_value it looks like.
+

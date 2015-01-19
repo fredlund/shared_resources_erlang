@@ -62,7 +62,7 @@ start(TestSpec) ->
       TestSpec:start(NodeId),
       NodeId
   catch _:_ ->
-      io:format("*** Error: cannot start java. Is the javaerlang library installed?~n"),
+      io:format("~n*** Error: cannot start java. Is the javaerlang library installed?~n"),
       throw(bad)
   end.
 
@@ -120,11 +120,13 @@ try
     true ->
       java_exception;
     false ->
-      case calculate_next_state
-	(add_new_jobs(NewJobs,State),
-	 lists:map(fun ({Job,_}) -> Job end, FinishedJobs)) of
+      FJobs = lists:map(fun ({Job,_}) -> Job end, FinishedJobs),
+      case calculate_next_state(add_new_jobs(NewJobs,State),FJobs,safety) of
 	false -> false;
-	_ -> true
+	_ -> case calculate_next_state(add_new_jobs(NewJobs,State),FJobs,both) of
+	       false -> false;
+	       _ -> true
+	     end
       end
   end of
   false ->
@@ -147,10 +149,10 @@ do_cmds_next(State,Result,Args) ->
     {NewJobs,FinishedJobs} = Result,
     ?LOG
        ("Next_state: result=~p~n",[Result]),
+    FJobs =
+      lists:map(fun ({Job,_}) -> Job end, FinishedJobs),
     {ok,NewState} =
-      calculate_next_state
-	(add_new_jobs(NewJobs,State),
-	 lists:map(fun ({Job,_}) -> Job end, FinishedJobs)),
+      calculate_next_state(add_new_jobs(NewJobs,State),FJobs,both),
     NewTestState =
       (State#state.testingSpec):next_state
 	(NewState#state.test_state,
@@ -161,7 +163,7 @@ do_cmds_next(State,Result,Args) ->
     ?LOG("next_state: ~p~n",[NextState]),
     NextState
   catch _:_ ->
-      io:format("*** Warning: next raises exception~n"),
+      io:format("~n*** Warning: next raises exception~n"),
       State
   end.
 
@@ -211,16 +213,42 @@ job_finished_with_exception({_,Result}) ->
     _ -> false
   end.
 
-calculate_next_state(State,FinishedJobs) ->
+%% Calculate the next model state (a set of possible states) given the
+%% set of finished jobs. Also checks that no remaining job (not finished) 
+%% is finishable in all the possible states.
+%%
+calculate_next_state(State,FinishedJobs,WhatToCheck) ->
   if
     FinishedJobs==[] ->
       {ok,State};
     true ->
-      FirstStatesAndJobs = accept_one_incoming(State,FinishedJobs),
-      ?LOG("after first:~n~p~n",[FirstStatesAndJobs]),
-      case finish_jobs(State,FirstStatesAndJobs,[]) of
+      %% First always "accept" an incoming new job
+      %% (since otherwise the execution would still be blocked)
+      FirstStatesAndJobs =
+	if
+	  WhatToCheck==both ->
+	    accept_one_incoming(State,FinishedJobs);
+	  true ->
+	    lists:map
+	      (fun (IndState) ->
+		   {IndState#onestate
+		    {waiting=lists:usort(IndState#onestate.waiting++IndState#onestate.incoming),
+		     incoming=[]},
+		    FinishedJobs}
+	       end, State#state.states)
+	end,
+      ?LOG("WC=~p after first:~n~p~n",[WhatToCheck,FirstStatesAndJobs]),
+
+      %% Now finish all remaining jobs, FirstStatesAndJobs is
+      %% a list of pairs (State,RemainingJobs) where State is
+      %% still a viable State, and RemainingJobs is the set of finished
+      %% jobs remaining to execute; once no jobs remain the state moves to
+      %% the third parameter.
+      case finish_jobs(State,FirstStatesAndJobs,[],WhatToCheck) of
 	false -> false;
 	{ok,FinishStates} ->
+	  %% Finally check whether some non-finished job is finishable in all
+	  %% possible model states
 	  case check_remaining_jobs(State,FinishStates) of
 	    false -> false;
 	    {ok,FinalStates} -> {ok,State#state{states=FinalStates}}
@@ -239,31 +267,30 @@ accept_one_incoming(State,FinishedJobs) ->
   merge_jobs_and_states
     (lists:map(fun (NewState) -> {NewState,FinishedJobs} end, NewStates)).
     
-finish_jobs(_,[],FinishedStates) ->
+finish_jobs(_,[],FinishedStates,WhatToCheck) ->
+  ?LOG("WC=~p Finished=~p~n",[WhatToCheck,FinishedStates]),
   {ok,lists:usort(FinishedStates)};
-finish_jobs(State,StatesAndJobs,FinishedStates) ->
+finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck) ->
+  ?LOG("WC=~p States:~n~p~nFinished=~p~n",[WhatToCheck,StatesAndJobs,FinishedStates]),
   NewStatesAndJobs =
     lists:flatmap
       (fun ({IndState,FJobs}) ->
-	   ?LOG("IndState is ~p~n;jobs=~p~n",[IndState,FJobs]),
 	   NewAcceptStates =
-	     lists:map
-	       (fun (Job) -> {job_new_waiting(Job,IndState,State),FJobs} end,
-		IndState#onestate.incoming),
+	     if
+	       WhatToCheck==both ->
+		 lists:map
+		   (fun (Job) -> {job_new_waiting(Job,IndState,State),FJobs} end,
+		    IndState#onestate.incoming);
+	       true ->
+		 []
+	     end,
 	   NewFinishStates =
 	     lists:flatmap
 	       (fun (Job) ->
-		    ?LOG
-		      ("for job ~p ",
-		       [Job]),
-		    ?LOG
-		      ("cpre is ~p and priority_enabled is ~p~n",
-		       [job_cpre_is_true(Job,IndState,State),
-			job_priority_enabled_is_true(Job,IndState,State)]),
 		    case job_exists(Job,FJobs)
-		      andalso job_is_executable(Job,IndState,State) of
+		      andalso job_is_executable(Job,IndState,State,WhatToCheck) of
 		      true ->
-			[{job_next_state(Job,IndState,State),
+			[{job_next_state(Job,IndState,State,WhatToCheck),
 			  delete_job(Job,FJobs)}];
 		      false -> []
 		    end
@@ -271,34 +298,50 @@ finish_jobs(State,StatesAndJobs,FinishedStates) ->
 		IndState#onestate.waiting),
 	   NewAcceptStates++NewFinishStates
        end, StatesAndJobs),
+
   if
+    %% Some finished jobs could not be completed by any possible state in the model
     NewStatesAndJobs==[], FinishedStates==[] ->
-      io:format("*** Error: there are calls that have been completed by the implementation which cannot be completed by the model~n"),
-      false;
-    true -> 
-      {ActiveStatesAndJobs,Finished} = 
-	lists:foldl
-	  (fun (SJ={S,Jobs},{A,F}) ->
-	       if
-		 (Jobs=/=[]) orelse (S#onestate.incoming=/=[]) ->
-		   {[SJ|A],F};
-		 true ->
-		   {A,[S|F]}
-	       end
-	   end,
-	   {[],[]},
-	   NewStatesAndJobs),
+      if 
+	WhatToCheck==safety ->
+	  io:format
+	    ("~n*** Error: there are calls that have been completed by the implementation "++
+	       "which cannot be completed by the model (without considering priority)~n"),
+	  false;
+	true -> 
+	  io:format
+	    ("~n*** Error: there are calls that have been completed by the implementation "++
+	       "which cannot be completed by the model (when considering priority)~n"),
+	  false
+      end;
+
+    true ->
+      {ActiveStatesAndJobs,Finished} =
+	find_active_jobs(NewStatesAndJobs),
       finish_jobs
 	(State,
 	 merge_jobs_and_states(ActiveStatesAndJobs),
-	 lists:usort(Finished++FinishedStates))
+	 lists:usort(Finished++FinishedStates),
+	 WhatToCheck)
   end.
 
+find_active_jobs(StatesAndJobs) ->
+  lists:foldl
+    (fun (SJ={S,Jobs},{A,F}) ->
+	 if
+	   (Jobs=/=[]) orelse (S#onestate.incoming=/=[]) -> {[SJ|A],F};
+	   true -> {A,[S|F]}
+	 end
+     end,
+     {[],[]},
+     StatesAndJobs).
+
+%% Check that remaining jobs (which have not finished) cannot be finished by the model
 check_remaining_jobs(State,FinalStates) ->
   {SuccessStates,JobsPerFailedState} =
     lists:foldl
       (fun (IndState,{S,J}) ->
-	   case executable_jobs(IndState#onestate.waiting,IndState,State) of
+	   case executable_jobs(IndState#onestate.waiting,IndState,State,both) of
 	     [] -> {[IndState|S],J};
 	     Jobs -> {S,[Jobs|J]}
 	   end
@@ -308,20 +351,20 @@ check_remaining_jobs(State,FinalStates) ->
   if
     SuccessStates==[] -> 
       io:format
-	("*** Error: at least one of the following calls can be completed by the model "++
+	("~n*** Error: at least one of the following calls can be completed by the model "++
 	   "but have not been completed:~n~p~n",
 	 [lists:usort
 	    (lists:flatmap
-	     (fun (Jobs) ->
-		  lists:map(fun (Job) -> Job#job.call end, Jobs)
-	      end, JobsPerFailedState))]),
+	       (fun (Jobs) ->
+		    lists:map(fun (Job) -> Job#job.call end, Jobs)
+		end, JobsPerFailedState))]),
       false;
     true ->
       {ok,SuccessStates}
   end.
 
-executable_jobs(Jobs,IndState,State) ->
-  lists:filter(fun (Job) -> job_is_executable(Job,IndState,State) end, Jobs).
+executable_jobs(Jobs,IndState,State,WhatToCheck) ->
+  lists:filter(fun (Job) -> job_is_executable(Job,IndState,State,WhatToCheck) end, Jobs).
 
 job_eq(Job1,Job2) ->
   (Job1#job.pid==Job2#job.pid) andalso (Job1#job.call==Job2#job.call).
@@ -338,9 +381,9 @@ minus_jobs(JobList1,JobList2) ->
 merge_jobs_and_states(JobsAndStates) ->
   lists:usort(JobsAndStates).
 
-job_is_executable(Job,IndState,State) ->
+job_is_executable(Job,IndState,State,WhatToCheck) ->
   job_cpre_is_true(Job,IndState,State)
-    andalso job_priority_enabled_is_true(Job,IndState,State).
+    andalso ((WhatToCheck==safety) orelse job_priority_enabled_is_true(Job,IndState,State)).
 
 job_cpre_is_true(Job,IndState,State) ->
   (State#state.dataSpec):cpre(resource_call(Job#job.call),IndState#onestate.sdata).
@@ -366,17 +409,22 @@ job_new_waiting(Job,IndState,State) ->
      waiting=lists:usort([UpdatedJob|IndState#onestate.waiting])
    }.
 
-job_next_state(Job,IndState,State) ->
+job_next_state(Job,IndState,State,WhatToCheck) ->
   NewDataState =
     (State#state.dataSpec):post
       (resource_call(Job#job.call),
        IndState#onestate.sdata),
   NewWaitState = 
-    (State#state.waitSpec):post_waiting
-      (resource_call(Job#job.call),
-       Job#job.waitinfo,
-       IndState#onestate.swait,
-       NewDataState),
+    if
+      WhatToCheck==both ->
+	(State#state.waitSpec):post_waiting
+	  (resource_call(Job#job.call),
+	   Job#job.waitinfo,
+	   IndState#onestate.swait,
+	   NewDataState);
+      true ->
+	IndState#onestate.swait
+    end,
   IndState#onestate
     {
     swait=NewWaitState,
@@ -438,10 +486,11 @@ prop_ok(DataSpec,WaitSpec,TestingSpec) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 custom_shrinking1(Cmds) ->
+  Cmds.
   %%io:format("custom_shrinking:~n~p~n",[Cmds]),
-  ?SHRINK
-     (Cmds,
-      [ custom_shrinking1(Shrunk) || Shrunk <- shrink_commands(Cmds) ]).
+  %%?SHRINK
+    %% (Cmds,
+      %%[ custom_shrinking1(Shrunk) || Shrunk <- shrink_commands(Cmds) ]).
 
 shrink_commands(Cmds) ->
   %%io:format("shrink_commands: ~p~n",[Cmds]),
@@ -503,7 +552,7 @@ eqc_printer(Format,String) ->
     _ -> io:format(Format,String)
   end.
 
-print_counterexample(Cmds,H,FailingState,Reason,TestingSpec) ->
+print_counterexample(Cmds,H,_FailingState,Reason,TestingSpec) ->
   try
     io:format
       ("~n~nTest failed with reason ~p~n",
@@ -523,7 +572,7 @@ print_counterexample(Cmds,H,FailingState,Reason,TestingSpec) ->
     io:format("~n~n")
   catch _:Exception ->
       io:format
-	("*** Warning: print_counterexample raised an exception ~p~n"
+	("~n*** Warning: print_counterexample raised an exception ~p~n"
 	 ++"Stacktrace:~n~p~n",
 	 [Exception,erlang:get_stacktrace()]),
       ok
@@ -590,7 +639,7 @@ print_unblocked_job(Job,{TestModule,_}) ->
   end.
 
 report_java_exception(Exception) ->
-  io:format("*** Warning: unexpected Java exception~n"),
+  io:format("~n*** Warning: unexpected Java exception~n"),
   Err = java:get_static(java:node_id(Exception),'java.lang.System',err),
   java:call(Exception,printStackTrace,[Err]).
 
