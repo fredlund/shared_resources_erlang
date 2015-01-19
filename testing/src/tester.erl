@@ -80,9 +80,8 @@ do_cmds_pre(State) ->
 do_cmds_args(State) ->
   [(State#state.testingSpec):command(State#state.test_state,State)].
 
-do_cmds_pre(State,Args) ->
-  io:format("Args are ~p~n",[Args]),
-  (State#state.testingSpec):precondition(State,State#state.test_state,filter_commands(Args)).
+do_cmds_pre(State,[Commands]) ->
+  (State#state.testingSpec):precondition(State,State#state.test_state,filter_commands(Commands)).
 
 do_cmds(Commands) ->
   ?LOG("Commands are ~p~n",[Commands]),
@@ -105,7 +104,8 @@ do_cmds(Commands) ->
       {[],[]};
     true ->
       FinishedJobs = wait_for_jobs(),
-      {NewJobs,FinishedJobs}
+      {lists:filter(fun (Job) -> not(is_void_job(Job)) end, NewJobs),
+       lists:filter(fun ({Job,_ReturnValue}) -> not(is_void_job(Job)) end, FinishedJobs)}
   end.
 
 do_cmds_post(State,Args,Result) ->
@@ -118,12 +118,15 @@ try
     true ->
       java_exception;
     false ->
-      FJobs = lists:map(fun ({Job,_}) -> Job end, FinishedJobs),
+      FJobs = lists:map(fun ({Job,_}) -> Job end,FinishedJobs),
       case calculate_next_state(add_new_jobs(NewJobs,State),FJobs,safety) of
 	false -> false;
 	_ -> case calculate_next_state(add_new_jobs(NewJobs,State),FJobs,both) of
 	       false -> false;
-	       _ -> true
+	       _ -> 
+		 %% Finally check whether some non-finished job is finishable in all
+		 %% possible model states
+		 check_remaining_jobs(State,State#state.states)
 	     end
       end
   end of
@@ -145,33 +148,41 @@ end.
 do_cmds_next(State,Result,Args) ->
   try
     {NewJobs,FinishedJobs} = Result,
-    ?LOG
-       ("Next_state: result=~p~n",[Result]),
-    FJobs =
-      lists:map(fun ({Job,_}) -> Job end, FinishedJobs),
-    {ok,NewState} =
-      calculate_next_state(add_new_jobs(NewJobs,State),FJobs,both),
-    NewTestState =
-      (State#state.testingSpec):next_state
-	(NewState#state.test_state,
-	 NewState,
-	 Result,
-	 Args),
-    NextState = NewState#state{test_state=NewTestState},
-    ?LOG("next_state: ~p~n",[NextState]),
-    NextState
+    ?LOG("Next_state: result=~p~n",[Result]),
+    FJobs = lists:map(fun ({Job,_}) -> Job end,FinishedJobs),
+    if
+      NewJobs==[] -> State;
+      true ->
+	{ok,NewState} = calculate_next_state(add_new_jobs(NewJobs,State),FJobs,both),
+	NewTestState =
+	  (State#state.testingSpec):next_state
+	    (NewState#state.test_state,
+	     NewState,
+	     Result,
+	     Args),
+	NextState = NewState#state{test_state=NewTestState},
+	?LOG("next_state: ~p~n",[NextState]),
+	NextState
+    end
   catch _:_ ->
       io:format("~n*** Warning: next raises exception~n"),
+      io:format("~p~n",[erlang:get_stacktrace()]),
       State
   end.
+
+make_void_call() -> {?MODULE,void,[]}.
+
+valid_jobs(Jobs,State) -> 
+  [OneIndState|_] = State#state.states,
+  lists:filter
+    (fun (Job) ->
+	   job_pre_is_true(Job,OneIndState,State) end,
+     Jobs).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 filter_commands(Commands) ->
-  lists:filter
-    (fun ({?MODULE,void,_}) -> false;
-	 (_) -> true
-     end, Commands).
+  lists:filter(fun (Command) -> not(is_void_call(Command)) end, Commands).
 
 store_data(Key,Value) ->
   ets:insert(?MODULE,{Key,Value}).
@@ -205,8 +216,7 @@ job_finished_with_exception({_,Result}) ->
   end.
 
 %% Calculate the next model state (a set of possible states) given the
-%% set of finished jobs. Also checks that no remaining job (not finished) 
-%% is finishable in all the possible states.
+%% set of finished jobs. 
 %%
 calculate_next_state(State,FinishedJobs,WhatToCheck) ->
   %% First always "accept" an incoming new job
@@ -233,13 +243,7 @@ calculate_next_state(State,FinishedJobs,WhatToCheck) ->
   %% the third parameter.
   case finish_jobs(State,FirstStatesAndJobs,[],WhatToCheck) of
     false -> false;
-    {ok,FinishStates} ->
-      %% Finally check whether some non-finished job is finishable in all
-      %% possible model states
-      case check_remaining_jobs(State,FinishStates) of
-	false -> false;
-	{ok,FinalStates} -> {ok,State#state{states=FinalStates}}
-      end
+    {ok,FinishStates} -> {ok,State#state{states=FinishStates}}
   end.
 
 accept_one_incoming(State,FinishedJobs) ->
@@ -321,8 +325,9 @@ find_active_jobs(StatesAndJobs) ->
      {[],[]},
      StatesAndJobs).
 
-%% Check that remaining jobs (which have not finished) cannot be finished by the model
+%% Check whether remaining jobs (which have not finished) can be finished by the model 
 check_remaining_jobs(State,FinalStates) ->
+  ?LOG("FinalStates=~n~p~n",[FinalStates]),
   {SuccessStates,JobsPerFailedState} =
     lists:foldl
       (fun (IndState,{S,J}) ->
@@ -345,7 +350,7 @@ check_remaining_jobs(State,FinalStates) ->
 		end, JobsPerFailedState))]),
       false;
     true ->
-      {ok,SuccessStates}
+      true
   end.
 
 executable_jobs(Jobs,IndState,State,WhatToCheck) ->
@@ -356,6 +361,12 @@ job_eq(Job1,Job2) ->
 
 job_exists(Job,JobList) ->
   lists:any(fun (ListJob) -> job_eq(Job,ListJob) end, JobList).
+
+is_void_job(Job) ->
+  is_void_call(Job#job.call).
+
+is_void_call(Command) ->
+  Command=={?MODULE,void,[]}.
 
 delete_job(Job,JobList) ->
   lists:filter(fun (ListJob) -> not(job_eq(ListJob,Job)) end, JobList).
@@ -418,12 +429,8 @@ job_next_state(Job,IndState,State,WhatToCheck) ->
    }.
 
 add_new_jobs(NewJobs,State) ->
-  [OneIndState|_] =
-    State#state.states,
-  ValidNewJobs =
-    lists:filter
-      (fun (Job) -> job_pre_is_true(Job,OneIndState,State) end,
-       NewJobs),
+  ValidNewJobs = 
+    valid_jobs(NewJobs,State),
   State#state
     {states =
        lists:map

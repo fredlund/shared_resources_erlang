@@ -56,7 +56,7 @@ job_cmd(TS,State) ->
     [{?MODULE,enter,[num_enters(TS),0,peso()]} ||
       num_enters(TS) < TS#teststate.n_robots-1]
     ++
-    [{tester,void,[]} ||
+    [tester:make_void_call() ||
       num_enters(TS) >= TS#teststate.n_robots-1]
     ++
     [{?MODULE,enter,[R,N,peso(P)]} ||
@@ -79,7 +79,7 @@ job_cmd(TS,State) ->
   end,
   eqc_gen:oneof(Alternatives).
 
-precondition(_State,TS,[Commands]) -> 
+precondition(_State,TS,Commands) -> 
   do_preconditions(TS#teststate{blocked=[]},Commands).
 
 do_preconditions(_TS,[]) ->
@@ -177,7 +177,8 @@ add_to_blocked(R,TS) ->
 robot_in_call(Call) ->
   case Call of
     {_,exit,[R,_,_]} -> R;
-    {_,enter,[R,_,_]} -> R
+    {_,enter,[R,_,_]} -> R;
+    {_,void,_} -> void
   end.
 
 warehouse_in_call(Call) ->
