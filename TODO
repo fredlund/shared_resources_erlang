@@ -1,4 +1,5 @@
 - Implement simulation mode -- reuse the test generation code (command).
+- Think about thread example with priorities.
 
 
 
