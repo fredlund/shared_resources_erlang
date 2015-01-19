@@ -587,10 +587,20 @@ print_commands([{Call,Result}|Rest],TestingSpec) ->
 	{_Jobs,Unblocked} =
 	  Result,
 	UnblockStr =
-	  lists:foldl
-	    (fun (UnblockedJob,Acc) ->
-		 io_lib:format("~sunblocks ~s,",[Acc,print_unblocked_job(UnblockedJob,TestingSpec)])
-	     end, " -- ", Unblocked),
+	  if
+	    Unblocked==[] ->
+	      "";
+	    true ->
+	      "-- unblocks "++
+	      lists:foldl
+		(fun (UnblockedJob,Acc) ->
+		     JobStr = print_unblocked_job(UnblockedJob,TestingSpec),
+		     if
+		       Acc=="" -> JobStr;
+		       true -> Acc++", "++JobStr
+		     end
+		 end, "", Unblocked)
+	  end,
 	ExceptionStr =
 	  lists:foldl
 	    (fun (UnblockedJob,Acc) ->
