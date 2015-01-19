@@ -107,10 +107,8 @@ do_preconditions(TS,[Call|NextCalls]) ->
 			     NextCalls).
 
 next_state(TS,_State,Result,_) ->
-  {NewJobs,FinishedJobsAndResults} =
+  {NewJobs,FinishedJobs} =
     Result,
-  FinishedJobs =
-    lists:map(fun ({Job,_}) -> Job end,FinishedJobsAndResults),
   RemainingNewJobs = 
     tester:minus_jobs(NewJobs,FinishedJobs),
   NewJobsBlocked =

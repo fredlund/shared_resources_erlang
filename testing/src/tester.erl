@@ -94,7 +94,7 @@ do_cmds(Commands) ->
                   spawn
                     (fun () ->
                          Result=apply(M,F,Args),
-                         ParentPid!{#job{pid=self(),call=Call},Result}
+                         ParentPid!#job{pid=self(),call=Call,result=Result}
                      end),
                 call=Call}
        end, Commands),
@@ -104,24 +104,21 @@ do_cmds(Commands) ->
       {[],[]};
     true ->
       FinishedJobs = wait_for_jobs(),
-      {lists:filter(fun (Job) -> not(is_void_job(Job)) end, NewJobs),
-       lists:filter(fun ({Job,_ReturnValue}) -> not(is_void_job(Job)) end, FinishedJobs)}
+      {non_void_jobs(NewJobs),non_void_jobs(FinishedJobs)}
   end.
 
 do_cmds_post(State,Args,Result) ->
 try
-  {NewJobs,FinishedJobs} = 
-    Result,
+  {NewJobs,FinishedJobs} = Result,
   ?LOG
      ("Postcondition: result=~p~n",[Result]),
   case lists:any(fun job_finished_with_exception/1,FinishedJobs) of
     true ->
       java_exception;
     false ->
-      FJobs = lists:map(fun ({Job,_}) -> Job end,FinishedJobs),
-      case calculate_next_state(add_new_jobs(NewJobs,State),FJobs,safety) of
+      case calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs,safety) of
 	false -> false;
-	_ -> case calculate_next_state(add_new_jobs(NewJobs,State),FJobs,both) of
+	_ -> case calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs,both) of
 	       false -> false;
 	       _ -> 
 		 %% Finally check whether some non-finished job is finishable in all
@@ -149,11 +146,10 @@ do_cmds_next(State,Result,Args) ->
   try
     {NewJobs,FinishedJobs} = Result,
     ?LOG("Next_state: result=~p~n",[Result]),
-    FJobs = lists:map(fun ({Job,_}) -> Job end,FinishedJobs),
     if
       NewJobs==[] -> State;
       true ->
-	{ok,NewState} = calculate_next_state(add_new_jobs(NewJobs,State),FJobs,both),
+	{ok,NewState} = calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs,both),
 	NewTestState =
 	  (State#state.testingSpec):next_state
 	    (NewState#state.test_state,
@@ -179,6 +175,9 @@ valid_jobs(Jobs,State) ->
 	   job_pre_is_true(Job,OneIndState,State) end,
      Jobs).
 
+non_void_jobs(Jobs) ->
+  lists:filter(fun (Job) -> not(is_void_job(Job)) end, Jobs).
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 filter_commands(Commands) ->
@@ -197,8 +196,8 @@ wait_for_jobs() ->
 
 receive_completions() ->
   receive
-    X={Job,_Result} when is_record(Job,job) ->
-      [X|receive_completions()];
+    Job when is_record(Job,job) ->
+      [Job|receive_completions()];
     X ->
       io:format("unknown message ~p received~n",[X]),
       throw(bad)
@@ -208,8 +207,8 @@ receive_completions() ->
 void() ->
   ok.
 
-job_finished_with_exception({_,Result}) ->
-  case Result of
+job_finished_with_exception(Job) ->
+  case Job#job.result of
     {java_exception,_Exc} -> true;
     {'EXIT',_,_} -> true;
     _ -> false
@@ -282,6 +281,7 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck) ->
 		 lists:flatmap
 		   (fun (Job) ->
 			case job_exists(Job,FJobs)
+			  andalso job_returns_correct_value(Job,IndState,State)
 			  andalso job_is_executable(Job,IndState,State,WhatToCheck) of
 			  true ->
 			    [{job_next_state(Job,IndState,State,WhatToCheck),
@@ -380,6 +380,9 @@ merge_jobs_and_states(JobsAndStates) ->
 job_is_executable(Job,IndState,State,WhatToCheck) ->
   job_cpre_is_true(Job,IndState,State)
     andalso ((WhatToCheck==safety) orelse job_priority_enabled_is_true(Job,IndState,State)).
+
+job_returns_correct_value(Job,IndState,State) ->
+  (State#state.dataSpec):return(IndState#onestate.sdata,resource_call(Job#job.call),Job#job.result).
 
 job_cpre_is_true(Job,IndState,State) ->
   (State#state.dataSpec):cpre(resource_call(Job#job.call),IndState#onestate.sdata).
@@ -585,13 +588,13 @@ print_commands([{Call,Result}|Rest],TestingSpec) ->
 	  Result,
 	UnblockStr =
 	  lists:foldl
-	    (fun ({UnblockedJob,_Res},Acc) ->
+	    (fun (UnblockedJob,Acc) ->
 		 io_lib:format("~sunblocks ~s,",[Acc,print_unblocked_job(UnblockedJob,TestingSpec)])
 	     end, " -- ", Unblocked),
 	ExceptionStr =
 	  lists:foldl
-	    (fun ({UnblockedJob,Res},Acc) ->
-		 case Res of
+	    (fun (UnblockedJob,Acc) ->
+		 case UnblockedJob#job.result of
 		   {java_exception,Exc} ->
 		     io:format("~n"),
 		     report_java_exception(Exc),
