@@ -78,13 +78,11 @@ do_cmds_pre(State) ->
   State#state.started.
 
 do_cmds_args(State) ->
-  ?LET
-     (Commands,
-      (State#state.testingSpec):command(State#state.test_state,State),
-      [filter_commands(Commands)]).
+  [(State#state.testingSpec):command(State#state.test_state,State)].
 
 do_cmds_pre(State,Args) ->
-  (State#state.testingSpec):precondition(State,State#state.test_state,Args).
+  io:format("Args are ~p~n",[Args]),
+  (State#state.testingSpec):precondition(State,State#state.test_state,filter_commands(Args)).
 
 do_cmds(Commands) ->
   ?LOG("Commands are ~p~n",[Commands]),
@@ -170,17 +168,10 @@ do_cmds_next(State,Result,Args) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 filter_commands(Commands) ->
-  filter_commands(Commands,false,[]).
-
-filter_commands([],_,L) ->
-  L;
-filter_commands([First|Rest],HasVoid,L) ->
-  case First of
-    {?MODULE,void,_} ->
-      filter_commands(Rest,true,L);
-    _ ->
-      filter_commands(Rest,HasVoid,[First|L])
-  end.
+  lists:filter
+    (fun ({?MODULE,void,_}) -> false;
+	 (_) -> true
+     end, Commands).
 
 store_data(Key,Value) ->
   ets:insert(?MODULE,{Key,Value}).
@@ -218,41 +209,36 @@ job_finished_with_exception({_,Result}) ->
 %% is finishable in all the possible states.
 %%
 calculate_next_state(State,FinishedJobs,WhatToCheck) ->
-  if
-    FinishedJobs==[] ->
-      {ok,State};
-    true ->
-      %% First always "accept" an incoming new job
-      %% (since otherwise the execution would still be blocked)
-      FirstStatesAndJobs =
-	if
-	  WhatToCheck==both ->
-	    accept_one_incoming(State,FinishedJobs);
-	  true ->
-	    lists:map
-	      (fun (IndState) ->
-		   {IndState#onestate
-		    {waiting=lists:usort(IndState#onestate.waiting++IndState#onestate.incoming),
-		     incoming=[]},
-		    FinishedJobs}
-	       end, State#state.states)
-	end,
-      ?LOG("WC=~p after first:~n~p~n",[WhatToCheck,FirstStatesAndJobs]),
+  %% First always "accept" an incoming new job
+  %% (since otherwise the execution would still be blocked)
+  FirstStatesAndJobs =
+    if
+      WhatToCheck==both ->
+	accept_one_incoming(State,FinishedJobs);
+      true ->
+	lists:map
+	  (fun (IndState) ->
+	       {IndState#onestate
+		{waiting=lists:usort(IndState#onestate.waiting++IndState#onestate.incoming),
+		 incoming=[]},
+		FinishedJobs}
+	   end, State#state.states)
+    end,
+  ?LOG("WC=~p after first:~n~p~n",[WhatToCheck,FirstStatesAndJobs]),
 
-      %% Now finish all remaining jobs, FirstStatesAndJobs is
-      %% a list of pairs (State,RemainingJobs) where State is
-      %% still a viable State, and RemainingJobs is the set of finished
-      %% jobs remaining to execute; once no jobs remain the state moves to
-      %% the third parameter.
-      case finish_jobs(State,FirstStatesAndJobs,[],WhatToCheck) of
+  %% Now finish all remaining jobs, FirstStatesAndJobs is
+  %% a list of pairs (State,RemainingJobs) where State is
+  %% still a viable State, and RemainingJobs is the set of finished
+  %% jobs remaining to execute; once no jobs remain the state moves to
+  %% the third parameter.
+  case finish_jobs(State,FirstStatesAndJobs,[],WhatToCheck) of
+    false -> false;
+    {ok,FinishStates} ->
+      %% Finally check whether some non-finished job is finishable in all
+      %% possible model states
+      case check_remaining_jobs(State,FinishStates) of
 	false -> false;
-	{ok,FinishStates} ->
-	  %% Finally check whether some non-finished job is finishable in all
-	  %% possible model states
-	  case check_remaining_jobs(State,FinishStates) of
-	    false -> false;
-	    {ok,FinalStates} -> {ok,State#state{states=FinalStates}}
-	  end
+	{ok,FinalStates} -> {ok,State#state{states=FinalStates}}
       end
   end.
 
@@ -272,56 +258,55 @@ finish_jobs(_,[],FinishedStates,WhatToCheck) ->
   {ok,lists:usort(FinishedStates)};
 finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck) ->
   ?LOG("WC=~p States:~n~p~nFinished=~p~n",[WhatToCheck,StatesAndJobs,FinishedStates]),
-  NewStatesAndJobs =
-    lists:flatmap
-      (fun ({IndState,FJobs}) ->
-	   NewAcceptStates =
-	     if
-	       WhatToCheck==both ->
-		 lists:map
-		   (fun (Job) -> {job_new_waiting(Job,IndState,State),FJobs} end,
-		    IndState#onestate.incoming);
-	       true ->
-		 []
-	     end,
-	   NewFinishStates =
-	     lists:flatmap
-	       (fun (Job) ->
-		    case job_exists(Job,FJobs)
-		      andalso job_is_executable(Job,IndState,State,WhatToCheck) of
-		      true ->
-			[{job_next_state(Job,IndState,State,WhatToCheck),
-			  delete_job(Job,FJobs)}];
-		      false -> []
-		    end
-		end,
-		IndState#onestate.waiting),
-	   NewAcceptStates++NewFinishStates
-       end, StatesAndJobs),
-
+  {NewStatesAndJobs,NewFinishedStates} =
+    lists:foldl
+      (fun ({IndState,FJobs},{NSJ,NF}) ->
+	   if
+	     FJobs==[], IndState#onestate.incoming==[] ->
+	       {NSJ,[IndState|NF]};
+	     true ->
+	       NewAcceptStates =
+		 if
+		   WhatToCheck==both ->
+		     lists:map
+		       (fun (Job) -> {job_new_waiting(Job,IndState,State),FJobs} end,
+			IndState#onestate.incoming);
+		   true ->
+		     []
+		 end,
+	       NewFinishStates =
+		 lists:flatmap
+		   (fun (Job) ->
+			case job_exists(Job,FJobs)
+			  andalso job_is_executable(Job,IndState,State,WhatToCheck) of
+			  true ->
+			    [{job_next_state(Job,IndState,State,WhatToCheck),
+			      delete_job(Job,FJobs)}];
+			  false -> []
+			end
+		    end,
+		    IndState#onestate.waiting),
+	       {NewAcceptStates++NewFinishStates++NSJ,NF}
+	   end
+       end, {[],FinishedStates}, StatesAndJobs),
   if
-    %% Some finished jobs could not be completed by any possible state in the model
-    NewStatesAndJobs==[], FinishedStates==[] ->
-      if 
-	WhatToCheck==safety ->
-	  io:format
-	    ("~n*** Error: there are calls that have been completed by the implementation "++
-	       "which cannot be completed by the model (without considering priority)~n"),
-	  false;
-	true -> 
-	  io:format
-	    ("~n*** Error: there are calls that have been completed by the implementation "++
-	       "which cannot be completed by the model (when considering priority)~n"),
-	  false
-      end;
+    NewStatesAndJobs==[], NewFinishedStates==[], WhatToCheck==safety ->
+      io:format
+	("~n*** Error: there are calls that have been completed by the implementation "++
+	   "which cannot be completed by the model (without considering priority)~n"),
+      false;
+
+    NewStatesAndJobs==[], NewFinishedStates==[] -> 
+      io:format
+	("~n*** Error: there are calls that have been completed by the implementation "++
+	   "which cannot be completed by the model (when considering priority)~n"),
+      false;
 
     true ->
-      {ActiveStatesAndJobs,Finished} =
-	find_active_jobs(NewStatesAndJobs),
       finish_jobs
 	(State,
-	 merge_jobs_and_states(ActiveStatesAndJobs),
-	 lists:usort(Finished++FinishedStates),
+	 merge_jobs_and_states(NewStatesAndJobs),
+	 lists:usort(NewFinishedStates),
 	 WhatToCheck)
   end.
 
@@ -628,7 +613,7 @@ print_cmds(Acc,[]) -> Acc;
 print_cmds(Acc,[{_,Fun,Args}|Rest]) ->
   Comma = if Acc=="" -> Acc; true -> ",\n     " end,
   case Fun of
-    void -> print_cmds(Acc,Rest);
+    void -> print_cmds(io_lib:format("~s~svoid",[Acc,Comma]),Rest);
     _ -> print_cmds(io_lib:format("~s~s~p ~p",[Acc,Comma,Fun,Args]),Rest)
   end.
 
