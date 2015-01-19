@@ -31,7 +31,7 @@ command(TS,State) ->
 	 (NextCommands,
 	  eqc_gen:frequency
 	    ([{3,[]},
-	      {0,
+	      {1,
 	       ?LAZY
 		  (begin
 		     TS1 = 
