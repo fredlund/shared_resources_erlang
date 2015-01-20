@@ -7,12 +7,12 @@
 -export([init/1,new_waiting/3,priority_enabled/4,post_waiting/4]).
 
 init([_,N,_MaxWeight]) ->
-  {ok,{N,lists:map(fun (I) -> {I,[]} end, lists:seq(0,N-1))}}.
+  {N,lists:map(fun (I) -> {I,[]} end, lists:seq(0,N-1))}.
 
 new_waiting(_Call,WS,_DS) ->
   {void,WS}.
 
-priority_enabled({call,exit,[_R,N,W]},_,{Max,Waiters},_) ->
+priority_enabled({exit,[_R,N,W]},_,{Max,Waiters},_) ->
   if
     N==Max-1 ->
       true;
@@ -23,7 +23,7 @@ priority_enabled({call,exit,[_R,N,W]},_,{Max,Waiters},_) ->
 priority_enabled(_Call,_Info,_WS,_DS) ->
   true.
 
-post_waiting({call,enter,[_R,N,W]},_CallInfo,WS={Max,Waiters},_) ->
+post_waiting({enter,[_R,N,W]},_CallInfo,WS={Max,Waiters},_) ->
   if
     N==Max-1 ->
       WS;
@@ -31,7 +31,7 @@ post_waiting({call,enter,[_R,N,W]},_CallInfo,WS={Max,Waiters},_) ->
       {_,OldWaiters} = lists:keyfind(N,1,Waiters),
       {Max,lists:keystore(N,1,Waiters,{N,[W|OldWaiters]})}
   end;
-post_waiting({call,exit,[_R,N,W]},_CallInfo,{Max,Waiters},_) ->
+post_waiting({exit,[_R,N,W]},_CallInfo,{Max,Waiters},_) ->
   {_,OldWaiters} = lists:keyfind(N,1,Waiters),
   {Max,lists:keystore(N,1,Waiters,{N,OldWaiters--[W]})}.
 
