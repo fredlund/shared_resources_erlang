@@ -59,6 +59,7 @@ start(TestSpec) ->
 	{java_exception_as_value,true},
 	{add_to_java_classpath,CP}]) of
     {ok,NodeId} ->
+      store_data(node,NodeId),
       TestSpec:start(NodeId),
       NodeId
   catch _:_ ->
@@ -162,7 +163,7 @@ do_cmds_next(State,Result,Args) ->
     end
   catch _:_ ->
       io:format("~n*** Warning: next raises exception~n"),
-      io:format("~p~n",[erlang:get_stacktrace()]),
+      %%io:format("~p~n",[erlang:get_stacktrace()]),
       State
   end.
 
@@ -470,6 +471,7 @@ prop_ok(DataSpec,WaitSpec,TestingSpec) ->
 	  ?MODULE,
 	  Cmds,
 	  begin
+	    try java:terminate(get_data(node)) catch _:_ -> ok end,
 	    if
 	      Res == ok ->
 		true;
