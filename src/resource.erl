@@ -75,8 +75,8 @@ start1(NameSpec, StateMod, WaitMod, Args, _Options, Link) ->
 	       _ ->
 		 self()
 	     end,
-	   {ok,State} = state_init(StateMod,Args),
-	   {ok,WaitState} = wait_init(WaitMod,[StateMod|Args]),
+	   State = state_init(StateMod,Args),
+	   WaitState = wait_init(WaitMod,[StateMod|Args]),
 	   ParentPid!ok,
 	   loop
 	     (#state
@@ -110,8 +110,10 @@ loop(State,NeedUpdate) ->
 	    CallInfo#call_waitinginfo.callrec,
 	  CallToExecute =
 	    CallRecordToExecute#call_record.call,
-	  {Result,PostState} =
+	  PostState =
 	    post(CallToExecute,NewState),
+	  Result =
+	    return_value(CallToExecute,NewState),
 	  Info =
 	    CallInfo#call_waitinginfo.waitinfo,
 	  NewWaitState =
@@ -198,15 +200,23 @@ cpre(Call,State) ->
       [State#state.name,print_call(Call),Result]),
   Result.
 
--spec post(#call{},#state{}) -> {any(),#state{}}.
+-spec post(#call{},#state{}) -> #state{}.
 post(Call,State) ->
-  Result
-    = {ReturnValue,NewDataState}
+    NewDataState
     = apply(State#state.state_module,post,[symbolic(Call),State#state.state]),
   ?LOG
      ("~p: post(~s) -> ~p~n",
-      [State#state.name,print_call(Call),Result]),
-  {ReturnValue,State#state{state=NewDataState}}.
+      [State#state.name,print_call(Call),NewDataState]),
+  State#state{state=NewDataState}.
+
+-spec return_value(#call{},#state{}) -> any().
+return_value(Call,State) ->
+  ReturnValue
+    = apply(State#state.state_module,post,[symbolic(Call),State#state.state]),
+  ?LOG
+     ("~p: return_value(~s) -> ~p~n",
+      [State#state.name,print_call(Call),ReturnValue]),
+  ReturnValue.
 
 -spec new_waiting(#call{},#state{}) -> {any(),waitstate()}.
 new_waiting(Call,State) ->
@@ -244,7 +254,7 @@ post_waiting(Call,Info,State) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 symbolic(Call) ->
-  {call,Call#call.function,Call#call.arguments}.
+  {Call#call.function,Call#call.arguments}.
 
 return_to_caller(Result,CallRecord) ->
   ReturnRecord = #return_record{result=Result,tag=CallRecord#call_record.tag},
