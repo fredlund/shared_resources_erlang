@@ -116,18 +116,50 @@ print_unblocked_job_info(Job) ->
 
 %% A trivial implementation
 
-start(_) ->
-  tester:store_data(seq,[]).
+start(_,TS) ->
+  Max = TS#teststate.max,
+  case whereis(multibuffer) of
+    undefined ->
+      register(multibuffer,spawn(fun () -> multibuffer(Max,[]) end));
+    _ ->
+      ok
+  end.
 
-put(L) ->
-  catch tester:store_data(seq,tester:get_data(seq)++L).
+multibuffer(Max,L) ->
+  receive
+    {put,{R,Pid}} ->
+      case Max >= length(R)+length(L) of
+	true ->
+	  Pid!ok,
+	  multibuffer(Max,L++R);
+	false ->
+	  Pid!nok,
+	  multibuffer(Max,L)
+      end;
+    {get,{N,Pid}} ->
+      case N =< length(L) of
+	true ->
+	  {Prefix,Suffix} = lists:split(N,L),
+	  Pid!{ok,Prefix},
+	  multibuffer(Max,Suffix);
+	false ->
+	  Pid!nok,
+	  multibuffer(Max,L)
+      end
+  end.
+
+put(R) ->
+  multibuffer!{put,{R,self()}},
+  receive
+    ok -> void;
+    nok -> timer:sleep(5), put(R)
+  end.
 
 get(N) ->
-  catch
-    begin
-      {Prefix,Suffix} = lists:split(N,tester:get_data(seq)),
-      tester:store_data(seq,Suffix),
-      Prefix
-    end.
+  multibuffer!{get,{N,self()}},
+  receive
+    {ok,R} -> R;
+    nok -> timer:sleep(5), ?MODULE:get(N)
+  end.
   
 

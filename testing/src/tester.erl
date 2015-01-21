@@ -46,9 +46,9 @@ start_pre(State) ->
   not(State#state.started).
 
 start_args(State) ->
-  [State#state.testingSpec].
+  [State#state.testingSpec,State#state.test_state].
 
-start(TestSpec) ->
+start(TestSpec,TestState) ->
   [{cp,CP}] =
     ets:lookup(?MODULE,cp),
   ?LOG("CP is ~p~n",[CP]),
@@ -60,7 +60,7 @@ start(TestSpec) ->
 	{add_to_java_classpath,CP}]) of
     {ok,NodeId} ->
       store_data(node,NodeId),
-      TestSpec:start(NodeId),
+      TestSpec:start(NodeId,TestState),
       NodeId
   catch _:_ ->
       io:format("~n*** Error: cannot start java. Is the javaerlang library installed?~n"),
