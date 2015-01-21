@@ -120,11 +120,14 @@ start(_) ->
   tester:store_data(seq,[]).
 
 put(L) ->
-  tester:store_data(seq,tester:get_data(seq)++L).
+  catch tester:store_data(seq,tester:get_data(seq)++L).
 
 get(N) ->
-  {Prefix,Suffix} = lists:split(N,tester:get_data(seq)),
-  tester:store_data(seq,Suffix),
-  Prefix.
+  catch
+    begin
+      {Prefix,Suffix} = lists:split(N,tester:get_data(seq)),
+      tester:store_data(seq,Suffix),
+      Prefix
+    end.
   
 

@@ -32,8 +32,11 @@ post({get,[N]},State) ->
 
 
 %% Any return values is ok for put
-return(_State,{put,_},_Result) ->
-  true.
+return(_State,{put,_},Result) ->
+  case Result of
+    {'EXIT',_} -> false;
+    _ -> true
+  end.
 
 %% A concrete return value for get
 return_value(State,{get,[N]}) ->
