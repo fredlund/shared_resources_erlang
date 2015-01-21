@@ -282,8 +282,8 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck) ->
 		 lists:flatmap
 		   (fun (Job) ->
 			case job_exists(Job,FJobs)
-			  andalso job_returns_correct_value(Job,IndState,State)
-			  andalso job_is_executable(Job,IndState,State,WhatToCheck) of
+			  andalso job_is_executable(Job,IndState,State,WhatToCheck)
+			  andalso job_returns_correct_value(Job,IndState,State) of
 			  true ->
 			    [{job_next_state(Job,IndState,State,WhatToCheck),
 			      delete_job(Job,FJobs)}];
@@ -383,7 +383,12 @@ job_is_executable(Job,IndState,State,WhatToCheck) ->
     andalso ((WhatToCheck==safety) orelse job_priority_enabled_is_true(Job,IndState,State)).
 
 job_returns_correct_value(Job,IndState,State) ->
-  (State#state.dataSpec):return(IndState#onestate.sdata,resource_call(Job#job.call),Job#job.result).
+  try (State#state.dataSpec):return_value(IndState#onestate.sdata,resource_call(Job#job.call)) of
+      Value -> Value =:= Job#job.result
+  catch _:_ ->
+      (State#state.dataSpec):return
+	(IndState#onestate.sdata,resource_call(Job#job.call),Job#job.result)
+  end.
 
 job_cpre_is_true(Job,IndState,State) ->
   (State#state.dataSpec):cpre(resource_call(Job#job.call),IndState#onestate.sdata).
