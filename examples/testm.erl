@@ -8,6 +8,8 @@ test1f() ->
   test(10,multbuf1,{fcfs,[]}).
 test1q() ->
   test(10,multbuf1,{queue_sched,[multibuffer]}).
+test1q2() ->
+  test(10,multbuf1,{queue_sched2,[multibuffer]}).
 
 test2a() ->
   test(10,multbuf2,{always,[]}).
@@ -15,6 +17,8 @@ test2f() ->
   test(10,multbuf2,{fcfs,[]}).
 test2q() ->
   test(10,multbuf2,{queue_sched,[multibuffer]}).
+test2q2() ->
+  test(10,multbuf2,{queue_sched2,[multibuffer]}).
 
 test3a() ->
   test(10,multbuf3,{always,[]}).
@@ -22,6 +26,8 @@ test3f() ->
   test(10,multbuf3,{fcfs,[]}).
 test3q() ->
   test(10,multbuf3,{queue_sched,[multibuffer]}).
+test3q2() ->
+  test(10,multbuf3,{queue_sched2,[multibuffer]}).
 
 test(Max,Imp,Prio) ->
   io:format("Testing ~p under priority ~p with max=~p~n",[Imp,Prio,Max]),
