@@ -8,12 +8,13 @@
 
 -compile(export_all).
 
--record(teststate,{max,max_readers,max_writers,readers,writers}).
+-record(teststate,{max,max_readers,max_writers,readers,writers,implementation}).
 
-init([MAX,NReaders,NWriters]) ->
+init([MAX,NReaders,NWriters,Implementation]) ->
   #teststate
     {
      max=MAX,
+     implementation=Implementation,
      max_readers=NReaders,
      max_writers=NWriters,
      readers=0,
@@ -47,10 +48,10 @@ command(TS,State) ->
 job_cmd(TS,State) ->
   ?LOG("job_cmd: TS=~p~nState=~p~n",[TS,State]),
   Alternatives =
-    [{?MODULE,put,[nats(TS#teststate.max div 2)]} ||
+    [{TS#teststate.implementation,put,[nats(TS#teststate.max div 2)]} ||
       TS#teststate.writers < TS#teststate.max_writers]
     ++
-    [{?MODULE,get,[choose(1,TS#teststate.max div 2)]} ||
+    [{TS#teststate.implementation,get,[choose(1,TS#teststate.max div 2)]} ||
       TS#teststate.readers < TS#teststate.max_readers]
     ++
     [tester:make_void_call() ||
@@ -118,62 +119,9 @@ print_terms([]) -> "";
 print_terms([T]) -> io_lib:format("~p",[T]);
 print_terms([T|Rest]) -> io_lib:format("~p,~s",[T,print_terms(Rest)]).
 
-%% A trivial implementation
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-start(Arg,TS) ->
-  Max = TS#teststate.max,
-  case whereis(multibuffer) of
-    undefined ->
-      register(multibuffer,spawn(fun () -> multibuffer(Max,[]) end));
-    _ ->
-      exit(whereis(multibuffer),killed),
-      timer:sleep(50),
-      start(Arg,TS)
-  end.
+start(_,TS) ->
+  (TS#teststate.implementation):start(TS#teststate.max).
 
-multibuffer(Max,L) ->
-  receive
-    {put,{R,Pid}} ->
-      case Max >= length(R)+length(L) of
-	true ->
-	  Pid!ok,
-	  multibuffer(Max,L++R);
-	false ->
-	  Pid!nok,
-	  multibuffer(Max,L)
-      end;
-    {get,{N,Pid}} ->
-      case N =< length(L) of
-	true ->
-	  {Prefix,Suffix} = lists:split(N,L),
-	  Pid!{ok,Prefix},
-	  multibuffer(Max,Suffix);
-	false ->
-	  Pid!nok,
-	  multibuffer(Max,L)
-      end;
-    init ->
-      multibuffer(Max,[])
-  end.
-
-put(R) ->
-  link(whereis(multibuffer)),
-  put1(R).
-put1(R) ->
-  multibuffer!{put,{R,self()}},
-  receive
-    ok -> void;
-    nok -> timer:sleep(5), put1(R)
-  end.
-
-get(N) ->
-  link(whereis(multibuffer)),
-  get1(N).
-get1(N) ->
-  multibuffer!{get,{N,self()}},
-  receive
-    {ok,R} -> R;
-    nok -> timer:sleep(5), ?MODULE:get1(N)
-  end.
   
-

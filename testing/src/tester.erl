@@ -20,7 +20,7 @@ initial_state() ->
   ?LOG("~p:initial_state~n",[?MODULE]),
   #state{}.
 
-init_state({DataSpec,DI},{WaitSpec,WI},{TestingSpec,TI}) ->
+init_state(Options,{DataSpec,DI},{WaitSpec,WI},{TestingSpec,TI}) ->
   ?LOG("~p:init_state~n",[?MODULE]),
   #state
     {
@@ -32,8 +32,10 @@ init_state({DataSpec,DI},{WaitSpec,WI},{TestingSpec,TI}) ->
 	  incoming=[],
 	  waiting=[],
 	  sdata=DataSpec:init(DI),
-	  swait=WaitSpec:init(WI)}
+	  swait=WaitSpec:init(WI)
+	}
        ],
+     options=Options,
      test_state=TestingSpec:init(TI),
      dataSpec=DataSpec,
      waitSpec=WaitSpec,
@@ -46,26 +48,34 @@ start_pre(State) ->
   not(State#state.started).
 
 start_args(State) ->
-  [State#state.testingSpec,State#state.test_state].
+  [State#state.options,State#state.testingSpec,State#state.test_state].
 
-start(TestSpec,TestState) ->
-  [{cp,CP}] =
-    ets:lookup(?MODULE,cp),
-  ?LOG("CP is ~p~n",[CP]),
-  try
-    java:start_node
-      ([{java_verbose,"SEVERE"},
-	{call_timeout,infinity},
-	{java_exception_as_value,true},
-	{add_to_java_classpath,CP}]) of
-    {ok,NodeId} ->
-      store_data(node,NodeId),
-      TestSpec:start(NodeId,TestState),
-      NodeId
-  catch _:_ ->
-      io:format("~n*** Error: cannot start java. Is the javaerlang library installed?~n"),
-      throw(bad)
-  end.
+start(Options,TestSpec,TestState) ->
+  Id =
+    proplists:get_value(id,Options,unknown),
+  NodeId =
+    case proplists:get_value(needs_java,Options,true) of
+      true ->
+	[{cp,CP}] = ets:lookup(?MODULE,cp),
+	ets:insert(?MODULE,{cp,CP}),
+	?LOG("CP is ~p~n",[CP]),
+	try
+	  java:start_node
+	    ([{java_verbose,"SEVERE"},
+	      {call_timeout,infinity},
+	      {java_exception_as_value,true},
+	      {add_to_java_classpath,CP}]) of
+	  {ok,NId} ->
+	    store_data(node,NId)
+	catch _:_ ->
+	    io:format("~n*** Error: cannot start java. Is the javaerlang library installed?~n"),
+	    throw(bad)
+	end;
+      false -> void
+    end,
+  ets:insert(?MODULE,{id,Id}),
+  TestSpec:start(NodeId,TestState),
+  NodeId.
 
 start_post(_State,_,_Result) ->
   true.
@@ -450,24 +460,24 @@ resource_call({_,Fun,Args}) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-test(CP,Id,DataSpec,WaitSpec,TestingSpec) ->
-  init_table(CP,Id),
-  check_prop(DataSpec,WaitSpec,TestingSpec).
+test(Options,DataSpec,WaitSpec,TestingSpec) ->
+  init_table(),
+  check_prop(Options,DataSpec,WaitSpec,TestingSpec).
 
-check_prop(DataSpec,WaitSpec,TestingSpec) ->
-  case eqc:quickcheck(eqc:on_output(fun eqc_printer/2,prop_ok(DataSpec,WaitSpec,TestingSpec))) of
+check_prop(Options,DataSpec,WaitSpec,TestingSpec) ->
+  case eqc:quickcheck(eqc:on_output(fun eqc_printer/2,prop_ok(Options,DataSpec,WaitSpec,TestingSpec))) of
     false ->
       io:format("~n~n***FAILED~n");
     true ->
       io:format("~n~nPASSED~n",[])
   end.
 
-prop_ok(DataSpec,WaitSpec,TestingSpec) ->
+prop_ok(Options,DataSpec,WaitSpec,TestingSpec) ->
   ?FORALL
      (Cmds,
       ?LET
 	 (SCmds,
-	  eqc_dynamic_cluster:dynamic_commands(?MODULE,init_state(DataSpec,WaitSpec,TestingSpec)),
+	  eqc_dynamic_cluster:dynamic_commands(?MODULE,init_state(Options,DataSpec,WaitSpec,TestingSpec)),
 	  custom_shrinking1(SCmds)),
       ?CHECK_COMMANDS
 	 ({H, DS, Res},
@@ -646,7 +656,7 @@ report_java_exception(Exception) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-init_table(CP,Id) ->
+init_table() ->
   case ets:info(?MODULE) of
     undefined ->
       ok;
@@ -661,9 +671,7 @@ init_table(CP,Id) ->
 	 ets:insert(?MODULE,{pid,self()}),
 	 wait_forever()
      end),
-  wait_until_stable(),
-  ets:insert(?MODULE,{cp,CP}),
-  ets:insert(?MODULE,{id,Id}).
+  wait_until_stable().
 
 wait_until_stable() ->
   case ets:info(?MODULE) of

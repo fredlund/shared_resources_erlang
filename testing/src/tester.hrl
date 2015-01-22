@@ -9,6 +9,7 @@
 	{
 	  started,    %% Started testing?
 	  states,     %% Set of possible (onestate) states
+	  options,    %% Testing options
 	  test_state, %% State for testing
 	  dataSpec,   %% Module implementing the data specification
 	  waitSpec,   %% Module implementing the priority specification
