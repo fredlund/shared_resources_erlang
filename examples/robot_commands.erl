@@ -262,5 +262,12 @@ start(NodeId) ->
       tester:store_data(controller,Controller)
   end.
 
-print_unblocked_job_info(Job) ->
+print_started_job_info(Job) ->
+  print_job_info(Job).
+
+print_finished_job_info(Job) ->
+  print_job_info(Job).
+
+print_job_info(Job) ->
   io_lib:format("~p",[robot_in_call(Job#job.call)]).
+

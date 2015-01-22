@@ -146,14 +146,14 @@ do_cmds_post(State,Args,Result) ->
       true ->
 	java_exception;
       false ->
-	case calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs,safety) of
+	case calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs,safety,State) of
 	  false -> false;
-	  _ -> case calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs,both) of
+	  _ -> case calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs,both,State) of
 		 false -> false;
-		 _ -> 
+		 {ok,NewState} -> 
 		   %% Finally check whether some non-finished job is finishable in all
 		   %% possible model states
-		   check_remaining_jobs(State,State#state.states)
+		   check_remaining_jobs(State,NewState#state.states)
 	       end
 	end
     end of
@@ -179,7 +179,8 @@ do_cmds_next(State,Result,Args) ->
       NewJobs==[] ->
 	State;
       true ->
-	{ok,NewState} = calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs,both),
+	{ok,NewState} =
+	  calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs,both,State),
 	NewTestState =
 	  (State#state.testingSpec):next_state
 	    (NewState#state.test_state,
@@ -245,7 +246,7 @@ job_finished_with_exception(Job) ->
 %% Calculate the next model state (a set of possible states) given the
 %% set of finished jobs. 
 %%
-calculate_next_state(State,FinishedJobs,WhatToCheck) ->
+calculate_next_state(State,FinishedJobs,WhatToCheck,OrigState) ->
   %% First always "accept" an incoming new job
   %% (since otherwise the execution would still be blocked)
   FirstStatesAndJobs =
@@ -268,7 +269,7 @@ calculate_next_state(State,FinishedJobs,WhatToCheck) ->
   %% still a viable State, and RemainingJobs is the set of finished
   %% jobs remaining to execute; once no jobs remain the state moves to
   %% the third parameter.
-  case finish_jobs(State,FirstStatesAndJobs,[],WhatToCheck) of
+  case finish_jobs(State,FirstStatesAndJobs,[],WhatToCheck,OrigState) of
     false -> false;
     {ok,FinishStates} -> {ok,State#state{states=FinishStates}}
   end.
@@ -284,10 +285,10 @@ accept_one_incoming(State,FinishedJobs) ->
   merge_jobs_and_states
     (lists:map(fun (NewState) -> {NewState,FinishedJobs} end, NewStates)).
     
-finish_jobs(_,[],FinishedStates,WhatToCheck) ->
+finish_jobs(_,[],FinishedStates,WhatToCheck,_) ->
   ?LOG("WC=~p Finished=~p~n",[WhatToCheck,FinishedStates]),
   {ok,lists:usort(FinishedStates)};
-finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck) ->
+finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
   ?LOG("WC=~p States:~n~p~nFinished=~p~n",[WhatToCheck,StatesAndJobs,FinishedStates]),
   {NewStatesAndJobs,NewFinishedStates} =
     lists:foldl
@@ -317,7 +318,7 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck) ->
 			      job_is_executable(QueueJob,IndState,State,WhatToCheck)
 			      andalso job_returns_correct_value(Job,IndState,State) of
 			      true ->
-				[{job_next_state(Job,IndState,State,WhatToCheck),
+				[{job_next_state(QueueJob,IndState,State,WhatToCheck),
 				  delete_job(Job,FJobs)}];
 			      false -> []
 			    end;
@@ -333,12 +334,14 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck) ->
       io:format
 	("~n*** Error: there are calls that have been completed by the implementation "++
 	   "which cannot be completed by the model (without considering priority)~n"),
+      maybe_print_state(OrigState),
       false;
 
     NewStatesAndJobs==[], NewFinishedStates==[] -> 
       io:format
 	("~n*** Error: there are calls that have been completed by the implementation "++
 	   "which cannot be completed by the model (when considering priority)~n"),
+      maybe_print_state(OrigState),
       false;
 
     true ->
@@ -346,7 +349,16 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck) ->
 	(State,
 	 merge_jobs_and_states(NewStatesAndJobs),
 	 lists:usort(NewFinishedStates),
-	 WhatToCheck)
+	 WhatToCheck,
+	 OrigState)
+  end.
+
+maybe_print_state(State) ->
+  case length(State#state.states) of
+    1 ->
+      io:format("Originating state:~n~p~n",[State]);
+    _ ->
+      ok
   end.
 
 find_active_jobs(StatesAndJobs) ->
@@ -361,12 +373,12 @@ find_active_jobs(StatesAndJobs) ->
      StatesAndJobs).
 
 %% Check whether remaining jobs (which have not finished) can be finished by the model 
-check_remaining_jobs(State,FinalStates) ->
+check_remaining_jobs(OrigState,FinalStates) ->
   ?LOG("FinalStates=~n~p~n",[FinalStates]),
   {SuccessStates,JobsPerFailedState} =
     lists:foldl
       (fun (IndState,{S,J}) ->
-	   case executable_jobs(IndState#onestate.waiting,IndState,State,both) of
+	   case executable_jobs(IndState#onestate.waiting,IndState,OrigState,both) of
 	     [] -> {[IndState|S],J};
 	     Jobs -> {S,[Jobs|J]}
 	   end
@@ -383,6 +395,7 @@ check_remaining_jobs(State,FinalStates) ->
 	       (fun (Jobs) ->
 		    lists:map(fun (Job) -> Job#job.call end, Jobs)
 		end, JobsPerFailedState))]),
+      maybe_print_state(OrigState),
       false;
     true ->
       true
@@ -637,7 +650,7 @@ print_commands([{Call,Result}|Rest],TestingSpec) ->
 	      "-- unblocks "++
 	      lists:foldl
 		(fun (UnblockedJob,Acc) ->
-		     JobStr = print_unblocked_job(UnblockedJob,TestingSpec),
+		     JobStr = print_finished_job_info(UnblockedJob,TestingSpec),
 		     if
 		       Acc=="" -> JobStr;
 		       true -> Acc++", "++JobStr
@@ -654,7 +667,7 @@ print_commands([{Call,Result}|Rest],TestingSpec) ->
 		     io:format("~n"),
 		     io_lib:format
 		       ("~s ~s raised exception",
-			[Acc,print_unblocked_job(UnblockedJob,TestingSpec)]);
+			[Acc,print_started_job_info(UnblockedJob,TestingSpec)]);
 		   _ ->
 		     Acc
 		 end
@@ -664,8 +677,9 @@ print_commands([{Call,Result}|Rest],TestingSpec) ->
     end,
   CallString =
     case Call of
-      {_,_,do_cmds,[Commands],_} ->
-	io_lib:format("<< ~s >>",[print_cmds("",Commands)]);
+      {_,_,do_cmds,[_Commands],_} ->
+	{Jobs,_} = Result,
+	io_lib:format("<< ~s >>",[print_jobs(fun print_started_job_info/2,"",Jobs,TestingSpec)]);
       {_,_,Name,Args,_} ->
 	io_lib:format("~p ~p",[Name,Args])
     end,
@@ -680,8 +694,19 @@ print_cmds(Acc,[{_,Fun,Args}|Rest]) ->
     _ -> print_cmds(io_lib:format("~s~s~p ~p",[Acc,Comma,Fun,Args]),Rest)
   end.
 
-print_unblocked_job(Job,{TestModule,_}) ->
-  try TestModule:print_unblocked_job_info(Job)
+print_jobs(_,Acc,[],_) -> Acc;
+print_jobs(Printer,Acc,[Job|Rest],TestingSpec) ->
+  Comma = if Acc=="" -> Acc; true -> ",\n     " end,
+  print_jobs(Printer,io_lib:format("~s~s~s",[Acc,Comma,Printer(Job,TestingSpec)]),Rest,TestingSpec).
+
+print_finished_job_info(Job,{TestModule,_}) ->
+  try TestModule:print_finished_job_info(Job)
+  catch _:_Reason ->
+      io_lib:format("~p",[Job])
+  end.
+
+print_started_job_info(Job,{TestModule,_}) ->
+  try TestModule:print_started_job_info(Job)
   catch _:_Reason ->
       io_lib:format("~p",[Job])
   end.

@@ -119,9 +119,13 @@ count_readers_writers(Jobs) ->
 	 end
      end, {0,0}, Jobs).
 
-print_unblocked_job_info(Job) ->
+print_started_job_info(Job) ->
   {_,Command,Args} = Job#job.call,
-  io_lib:format("~p(~s) -> ~p",[Command,print_terms(Args),Job#job.result]).
+  io_lib:format("~p:~p(~s)",[Job#job.pid,Command,print_terms(Args)]).
+
+print_finished_job_info(Job) ->
+  {_,Command,Args} = Job#job.call,
+  io_lib:format("~p:~p(~s) -> ~p",[Job#job.pid,Command,print_terms(Args),Job#job.result]).
 
 print_terms([]) -> "";
 print_terms([T]) -> io_lib:format("~p",[T]);
