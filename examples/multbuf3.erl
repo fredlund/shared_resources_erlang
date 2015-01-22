@@ -14,35 +14,37 @@ start(Max) ->
 multibuffer(Max,L,Queue) ->
   receive
     Msg={put,_} ->
-      runJobs(Max,L,Queue++[Msg]);
+      NewQueue = Queue++[Msg],
+      runJobs(Max,L,NewQueue,[]);
     Msg={get,_} ->
-      runJobs(Max,L,Queue++[Msg]);
+      NewQueue = Queue++[Msg],
+      runJobs(Max,L,NewQueue,[]);
     init ->
       multibuffer(Max,[],[])
   end.
       
-runJobs(Max,L,Queue) ->
-  {NewL,NewQueue} =
-    lists:foldl
-      (fun (Msg={put,{R,Pid}},{FL,Acc}) ->
-	   case Max >= length(R)+length(L) of
-	     true ->
-	       Pid!ok,
-	       {FL++R,Acc};
-	     false ->
-	       {FL,[Msg|Acc]}
-	   end;
-	   (Msg={get,{N,Pid}},{FL,Acc}) ->
-	   case N =< length(L) of
-	     true ->
-	       {Prefix,Suffix} = lists:split(N,L),
-	       Pid!{ok,Prefix},
-	       {Suffix,Acc};
-	     false ->
-	       {FL,[Msg|Acc]}
-	   end
-       end, {L,[]}, Queue),
-  multibuffer(Max,NewL,lists:reverse(NewQueue)).
+runJobs(Max,L,[],Seen) ->
+  multibuffer(Max,L,lists:reverse(Seen));
+runJobs(Max,L,[Msg|Rest],Seen) ->
+  case Msg of
+    {put,{R,Pid}} ->
+      case Max >= length(R)+length(L) of
+	true ->
+	  Pid!ok,
+	  runJobs(Max,L++R,lists:reverse(Seen,Rest),[]);
+	false ->
+	  runJobs(Max,L,Rest,[Msg|Seen])
+      end;
+    {get,{N,Pid}} ->
+      case N =< length(L) of
+	true ->
+	  {Prefix,Suffix} = lists:split(N,L),
+	  Pid!{ok,Prefix},
+	  runJobs(Max,Suffix,lists:reverse(Seen,Rest),[]);
+	false ->
+	  runJobs(Max,L,Rest,[Msg|Seen])
+      end
+  end.
 
 put(R) ->
   link(whereis(multibuffer)),
