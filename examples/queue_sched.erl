@@ -6,8 +6,8 @@
 
 -export([init/1,new_waiting/3,priority_enabled/4,post_waiting/4]).
 
-init([StateMod,_N,_MaxWeight]) ->
-  {ok,{StateMod,0,{[],[]}}}.
+init([StateMod]) ->
+  {StateMod,0,{[],[]}}.
 
 new_waiting(Call,{StateMod,Counter,{Queue,NonEnabled}},DataState) ->
   {Counter,

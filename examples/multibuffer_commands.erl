@@ -10,6 +10,8 @@
 
 -record(teststate,{max,max_readers,max_writers,readers,writers,implementation}).
 
+-define(MAX_CONCURRENT,3).
+
 init([MAX,NReaders,NWriters,Implementation]) ->
   #teststate
     {
@@ -22,28 +24,34 @@ init([MAX,NReaders,NWriters,Implementation]) ->
     }.
 
 command(TS,State) ->
+  command(TS,State,0).
+command(TS,State,NumConcurrent) ->
   ?LET
      (Command,
       job_cmd(TS,State),
-      ?LET
-	 (NextCommands,
-	  eqc_gen:frequency
-	    ([{3,[]},
-	      {1,
-	       ?LAZY
-		  (begin
-		     TS1 = 
-		       case calltype_in_call(Command) of
-			 void ->
-			   TS;
-			 put ->
-			   TS#teststate{writers=TS#teststate.writers+1};
-			 get ->
-			   TS#teststate{readers=TS#teststate.readers+1}
-		       end,
-		     command(TS1,State)
-		   end)}]),
-	  [Command|NextCommands])).
+      if
+	NumConcurrent>=?MAX_CONCURRENT -> [];
+	true ->
+	  ?LET
+	     (NextCommands,
+	      eqc_gen:frequency
+		([{5,[]},
+		  {1,
+		   ?LAZY
+		      (begin
+			 TS1 = 
+			   case calltype_in_call(Command) of
+			     void ->
+			       TS;
+			     put ->
+			       TS#teststate{writers=TS#teststate.writers+1};
+			     get ->
+			       TS#teststate{readers=TS#teststate.readers+1}
+			   end,
+			 command(TS1,State,NumConcurrent+1)
+		       end)}]),
+	      [Command|NextCommands])
+      end).
 
 job_cmd(TS,State) ->
   ?LOG("job_cmd: TS=~p~nState=~p~n",[TS,State]),

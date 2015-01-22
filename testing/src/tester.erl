@@ -9,7 +9,8 @@
 %%-define(debug,true).
 -include("../../src/debug.hrl").
 
--define(COMPLETION_TIME,100).
+-define(COMPLETION_TIME,50).
+-define(MAX_STATES,300).
 
 -include("tester.hrl").
 
@@ -86,7 +87,18 @@ start_next(State,_Result,_) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 do_cmds_pre(State) ->
-  State#state.started.
+  State#state.started
+    andalso begin
+	      OkNumStates = length(State#state.states)=<?MAX_STATES,
+	      if
+		OkNumStates -> ok;
+		true ->
+		  io:format
+		    ("*** Warning: cutting test case due to too many states: ~p~n",
+		     [length(State#state.states)])
+	      end,
+	      OkNumStates
+	    end.
 
 do_cmds_args(State) ->
   [(State#state.testingSpec):command(State#state.test_state,State)].
@@ -95,7 +107,6 @@ do_cmds_pre(State,[Commands]) ->
   (State#state.testingSpec):precondition(State,State#state.test_state,filter_commands(Commands)).
 
 do_cmds(Commands) ->
-  ?LOG("Commands are ~p~n",[Commands]),
   ParentPid =
     self(),
   NewJobs =
@@ -119,39 +130,47 @@ do_cmds(Commands) ->
   end.
 
 do_cmds_post(State,Args,Result) ->
-try
   {NewJobs,FinishedJobs} = Result,
-  ?LOG
-     ("Postcondition: result=~p~n",[Result]),
-  case lists:any(fun job_finished_with_exception/1,FinishedJobs) of
+  case proplists:get_value(verbose,State#state.options,false) of
     true ->
-      java_exception;
+      io:format
+	("~npostcondition: new jobs=~n~p~ncompleted jobs=~n~p~nstate=~n~p~n",
+	 [NewJobs,FinishedJobs,State]);
     false ->
-      case calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs,safety) of
-	false -> false;
-	_ -> case calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs,both) of
-	       false -> false;
-	       _ -> 
-		 %% Finally check whether some non-finished job is finishable in all
-		 %% possible model states
-		 check_remaining_jobs(State,State#state.states)
-	     end
-      end
-  end of
-  false ->
-    io:format("postcondition false for ~p~n",[Args]),
-    false;
-  true ->
-    true;
-  Other ->
-    io:format("strange postcondition ~p~n",[Other]),
-    false
-catch _:Reason ->
-    io:format("postcondition raises ~p~nStacktrace:~n~p~n",
-	      [Reason,
-	       erlang:get_stacktrace()]),
-    false
-end.
+      ok
+  end,
+  try
+    ?LOG
+       ("Postcondition: result=~p~n",[Result]),
+    case lists:any(fun job_finished_with_exception/1,FinishedJobs) of
+      true ->
+	java_exception;
+      false ->
+	case calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs,safety) of
+	  false -> false;
+	  _ -> case calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs,both) of
+		 false -> false;
+		 _ -> 
+		   %% Finally check whether some non-finished job is finishable in all
+		   %% possible model states
+		   check_remaining_jobs(State,State#state.states)
+	       end
+	end
+    end of
+    false ->
+      io:format("postcondition false for ~p~n",[Args]),
+      false;
+    true ->
+      true;
+    Other ->
+      io:format("strange postcondition ~p~n",[Other]),
+      false
+  catch _:Reason ->
+      io:format("postcondition raises ~p~nStacktrace:~n~p~n",
+		[Reason,
+		 erlang:get_stacktrace()]),
+      false
+  end.
 
 do_cmds_next(State,Result,Args) ->
   try
@@ -289,12 +308,19 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck) ->
 	       NewFinishStates =
 		 lists:flatmap
 		   (fun (Job) ->
-			case job_exists(Job,IndState#onestate.waiting)
-			  andalso job_is_executable(Job,IndState,State,WhatToCheck)
-			  andalso job_returns_correct_value(Job,IndState,State) of
-			  true ->
-			    [{job_next_state(Job,IndState,State,WhatToCheck),
-			      delete_job(Job,FJobs)}];
+			case find_job(Job,IndState#onestate.waiting) of
+			  {ok,QueueJob} ->
+			    case
+			      %% We have to be careful here -- the job in the state
+			      %% has the waiting info while the completed job has
+			      %% the correct result
+			      job_is_executable(QueueJob,IndState,State,WhatToCheck)
+			      andalso job_returns_correct_value(Job,IndState,State) of
+			      true ->
+				[{job_next_state(Job,IndState,State,WhatToCheck),
+				  delete_job(Job,FJobs)}];
+			      false -> []
+			    end;
 			  false -> []
 			end
 		    end,
@@ -367,6 +393,18 @@ executable_jobs(Jobs,IndState,State,WhatToCheck) ->
 
 job_eq(Job1,Job2) ->
   (Job1#job.pid==Job2#job.pid) andalso (Job1#job.call==Job2#job.call).
+
+find_job(Job,List) ->
+  find(fun (ListJob) -> job_eq(Job,ListJob) end, List).
+
+find(_F,[]) -> false;
+find(F,[Elem|Rest]) -> 
+  case F(Elem) of 
+    true ->
+      {ok,Elem};
+    false ->
+      find(F,Rest)
+  end.
 
 job_exists(Job,JobList) ->
   lists:any(fun (ListJob) -> job_eq(Job,ListJob) end, JobList).
