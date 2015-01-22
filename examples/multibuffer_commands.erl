@@ -54,8 +54,8 @@ job_cmd(TS,State) ->
       TS#teststate.readers < TS#teststate.max_readers]
     ++
     [tester:make_void_call() ||
-      (TS#teststate.writers < TS#teststate.max_writers)
-	andalso (TS#teststate.readers < TS#teststate.max_readers)],
+      (TS#teststate.writers >= TS#teststate.max_writers)
+	andalso (TS#teststate.readers >= TS#teststate.max_readers)],
   ?LOG("Alternatives=~p~n",[Alternatives]),
   if
     Alternatives==[] ->
@@ -108,21 +108,27 @@ count_readers_writers(Jobs) ->
 	   {_,get,_} -> {Readers+1,Writers};
 	   _ -> {Readers,Writers}
 	 end
-     end, Jobs).
+     end, {0,0}, Jobs).
 
 print_unblocked_job_info(Job) ->
-  io_lib:format("~p",[Job#job.call]).
+  {_,Command,Args} = Job#job.call,
+  io_lib:format("~p(~s) -> ~p",[Command,print_terms(Args),Job#job.result]).
 
+print_terms([]) -> "";
+print_terms([T]) -> io_lib:format("~p",[T]);
+print_terms([T|Rest]) -> io_lib:format("~p,~s",[T,print_terms(Rest)]).
 
 %% A trivial implementation
 
-start(_,TS) ->
+start(Arg,TS) ->
   Max = TS#teststate.max,
   case whereis(multibuffer) of
     undefined ->
       register(multibuffer,spawn(fun () -> multibuffer(Max,[]) end));
     _ ->
-      ok
+      exit(whereis(multibuffer),killed),
+      timer:sleep(50),
+      start(Arg,TS)
   end.
 
 multibuffer(Max,L) ->
@@ -145,21 +151,29 @@ multibuffer(Max,L) ->
 	false ->
 	  Pid!nok,
 	  multibuffer(Max,L)
-      end
+      end;
+    init ->
+      multibuffer(Max,[])
   end.
 
 put(R) ->
+  link(whereis(multibuffer)),
+  put1(R).
+put1(R) ->
   multibuffer!{put,{R,self()}},
   receive
     ok -> void;
-    nok -> timer:sleep(5), put(R)
+    nok -> timer:sleep(5), put1(R)
   end.
 
 get(N) ->
+  link(whereis(multibuffer)),
+  get1(N).
+get1(N) ->
   multibuffer!{get,{N,self()}},
   receive
     {ok,R} -> R;
-    nok -> timer:sleep(5), ?MODULE:get(N)
+    nok -> timer:sleep(5), ?MODULE:get1(N)
   end.
   
 

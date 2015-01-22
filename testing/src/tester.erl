@@ -146,9 +146,9 @@ end.
 do_cmds_next(State,Result,Args) ->
   try
     {NewJobs,FinishedJobs} = Result,
-    ?LOG("Next_state: result=~p~n",[Result]),
     if
-      NewJobs==[] -> State;
+      NewJobs==[] ->
+	State;
       true ->
 	{ok,NewState} = calculate_next_state(add_new_jobs(NewJobs,State),FinishedJobs,both),
 	NewTestState =
@@ -157,13 +157,11 @@ do_cmds_next(State,Result,Args) ->
 	     NewState,
 	     Result,
 	     Args),
-	NextState = NewState#state{test_state=NewTestState},
-	?LOG("next_state: ~p~n",[NextState]),
-	NextState
+	NewState#state{test_state=NewTestState}
     end
   catch _:_ ->
       io:format("~n*** Warning: next raises exception~n"),
-      %%io:format("~p~n",[erlang:get_stacktrace()]),
+      io:format("~p~n",[erlang:get_stacktrace()]),
       State
   end.
 
@@ -281,7 +279,7 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck) ->
 	       NewFinishStates =
 		 lists:flatmap
 		   (fun (Job) ->
-			case job_exists(Job,FJobs)
+			case job_exists(Job,IndState#onestate.waiting)
 			  andalso job_is_executable(Job,IndState,State,WhatToCheck)
 			  andalso job_returns_correct_value(Job,IndState,State) of
 			  true ->
@@ -290,7 +288,7 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck) ->
 			  false -> []
 			end
 		    end,
-		    IndState#onestate.waiting),
+		    FJobs),
 	       {NewAcceptStates++NewFinishStates++NSJ,NF}
 	   end
        end, {[],FinishedStates}, StatesAndJobs),

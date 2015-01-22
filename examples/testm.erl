@@ -10,6 +10,6 @@ test() ->
 	 "/home/fred/gits/src/cctester/test/cclib.jar"],
   DataSpec = {multibuffer,[10]},
   WaitSpec = {always,[]},
-  TestingSpec = {multibuffer_commands,[10,2,2]},
+  TestingSpec = {multibuffer_commands,[10,7,7]},
   tester:test(CP,Id,DataSpec,WaitSpec,TestingSpec).
 
