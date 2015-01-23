@@ -1,4 +1,5 @@
 %% A queue scheduler that preserves ordering for enabled processes
+%% (and preserves the ordering when processes become non-enabled)
 
 -module(queue_sched2).
 

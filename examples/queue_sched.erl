@@ -1,4 +1,5 @@
 %% A queue scheduler that preserves ordering for continously enabled processes
+%% Does not make very much sense, as things are basically evaluated or non-enabled in every step.
 
 -module(queue_sched).
 
