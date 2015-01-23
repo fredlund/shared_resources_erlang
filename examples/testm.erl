@@ -41,7 +41,7 @@ testAll() ->
       (
       [multbuf1,multbuf2,multbuf3],
       [{always,[]},{fcfs,[]},{queue_sched,[multibuffer]},{queue_sched2,[multibuffer]},
-       {smalles_first,[multibuffer]}]
+       {smallest_first,[multibuffer]}]
      ),
   lists:foreach
     (fun ({Implementation,Scheduler}) ->
