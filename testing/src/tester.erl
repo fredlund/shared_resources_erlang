@@ -10,7 +10,6 @@
 -include("../../src/debug.hrl").
 
 -define(COMPLETION_TIME,50).
--define(MAX_STATES,300).
 
 -include("tester.hrl").
 
@@ -32,12 +31,12 @@ init_state(Options,{DataSpec,DI},{WaitSpec,WI},{TestingSpec,TI}) ->
 	{
 	  incoming=[],
 	  waiting=[],
-	  sdata=DataSpec:init(DI),
-	  swait=WaitSpec:init(WI)
+	  sdata=DataSpec:init(DI,Options),
+	  swait=WaitSpec:init(WI,Options)
 	}
        ],
      options=Options,
-     test_state=TestingSpec:init(TI),
+     test_state=TestingSpec:init(TI,Options),
      dataSpec=DataSpec,
      waitSpec=WaitSpec,
      testingSpec=TestingSpec
@@ -87,18 +86,7 @@ start_next(State,_Result,_) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 do_cmds_pre(State) ->
-  State#state.started
-    andalso begin
-	      OkNumStates = length(State#state.states)=<?MAX_STATES,
-	      if
-		OkNumStates -> ok;
-		true ->
-		  io:format
-		    ("*** Warning: cutting test case due to too many states: ~p~n",
-		     [length(State#state.states)])
-	      end,
-	      OkNumStates
-	    end.
+  State#state.started.
 
 do_cmds_args(State) ->
   [(State#state.testingSpec):command(State#state.test_state,State)].

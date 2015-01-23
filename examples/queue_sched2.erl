@@ -4,11 +4,11 @@
 
 -behaviour(resource_wait_implementation).
 
--export([init/1,new_waiting/3,priority_enabled/4,post_waiting/4]).
+-export([init/2,new_waiting/3,priority_enabled/4,post_waiting/4]).
 
 -record(state,{statemodule,queue,time}).
 
-init([StateMod]) ->
+init([StateMod],_) ->
   #state{statemodule=StateMod,queue=orddict:new(),time=0}.
 
 new_waiting(Call,State,_DataState) ->

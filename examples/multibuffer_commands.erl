@@ -8,14 +8,16 @@
 
 -compile(export_all).
 
--record(teststate,{max,max_readers,max_writers,readers,writers,implementation}).
+-record(teststate,{max,max_readers,max_writers,readers,writers,implementation,options}).
 
 -define(MAX_CONCURRENT,3).
+-define(MAX_STATES,400).
 
-init([MAX,NReaders,NWriters,Implementation]) ->
+init([MAX,NReaders,NWriters,Implementation],Options) ->
   #teststate
     {
      max=MAX,
+     options=Options,
      implementation=Implementation,
      max_readers=NReaders,
      max_writers=NWriters,
@@ -23,6 +25,7 @@ init([MAX,NReaders,NWriters,Implementation]) ->
      writers=0
     }.
 
+%% Probably should move to the tester
 command(TS,State) ->
   command(TS,State,0).
 command(TS,State,NumConcurrent) ->
@@ -35,8 +38,8 @@ command(TS,State,NumConcurrent) ->
 	  ?LET
 	     (NextCommands,
 	      eqc_gen:frequency
-		([{5,[]},
-		  {1,
+		([{7,[]},
+		  {parfreq(State),
 		   ?LAZY
 		      (begin
 			 TS1 = 
@@ -52,6 +55,21 @@ command(TS,State,NumConcurrent) ->
 		       end)}]),
 	      [Command|NextCommands])
       end).
+
+parfreq(State) ->
+  case proplists:get_value(no_par,State#state.options,false) of
+    true -> 0;
+    false ->
+      case length(State#state.states)>=?MAX_STATES of
+	true ->
+	  io:format
+	    ("*** Warning: cutting parallel test case due to too many states: ~p~n",
+	     [length(State#state.states)]),
+	  0;
+	false ->
+	  1
+      end
+  end.
 
 job_cmd(TS,State) ->
   ?LOG("job_cmd: TS=~p~nState=~p~n",[TS,State]),

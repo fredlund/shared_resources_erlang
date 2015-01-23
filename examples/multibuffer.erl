@@ -2,11 +2,11 @@
 
 -behaviour(resource_data_implementation).
 
--export([init/1,pre/2,cpre/2,post/2,return/3,return_value/2]).
+-export([init/2,pre/2,cpre/2,post/2,return/3,return_value/2]).
 
 -record(state,{max,seq}).
 
-init([MAX]) ->
+init([MAX],_Options) ->
   #state{max=MAX,seq=[]}.
 
 
