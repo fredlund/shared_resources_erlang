@@ -1,10 +1,10 @@
 -module(robot_commands).
 
 -include_lib("eqc/include/eqc.hrl").
--include("../testing/src/tester.hrl").
+-include("../../testing/src/tester.hrl").
 
 %%-define(debug,true).
--include("../src/debug.hrl").
+-include("../../src/debug.hrl").
 
 -compile(export_all).
 
