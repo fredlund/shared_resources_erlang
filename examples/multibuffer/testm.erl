@@ -39,25 +39,69 @@ testAll() ->
   Combinations =
     product
       (
-      [multbuf1,multbuf2,multbuf3],
-      [{always,[]},{fcfs,[]},{queue_sched,[multibuffer]},{queue_sched2,[multibuffer]},
-       {smallest_first,[multibuffer]}]
+      [
+       [multbuf1,multbuf2,multbuf3]
+       ,[{always,[]},{fcfs,[]},{queue_sched,[multibuffer]},{queue_sched2,[multibuffer]},
+	 {smallest_first,[multibuffer]}]
+       ,[[{enforce_progress,true}],[{enforce_progress,false}]]
+      ]
      ),
+  Results =
+    lists:map
+      (fun (Spec=[Implementation,Scheduler,Options]) ->
+	   io:format("~nBefore running a test:~n~n"),
+	   case test(10,Implementation,Scheduler,Options) of
+	     false -> {Spec,false,eqc:counterexample()};
+	     true -> {Spec,true,void}
+	   end
+       end,
+       Combinations),
+  io:format("~n~n~nSummary:~n"),
   lists:foreach
-    (fun ({Implementation,Scheduler}) ->
-	 io:format("~n~n"),
-	 test(10,Implementation,Scheduler)
-     end,
-     Combinations).
+    (fun ({Spec,Success,_Counterexample}) ->
+	 case Success of 
+	   true ->
+	     io:format("~nSpec ~p succeeded~n",[Spec]);
+	   false ->
+	     io:format("~nSpec ~p failed~n",[Spec])
+	 end
+     end, Results),
+  io:format("~n~n~nCounterexamples:~n"),
+  lists:foreach
+    (fun ({Spec,Success,Counterexample}) ->
+	 case Success of 
+	   true ->
+	     ok;
+	   false ->
+	     io:format
+	       ("~nSpec ~p failed. Rerunning counterexample~n~p~n",
+		[Spec,rerun(Spec,Counterexample)])
+	 end
+     end, Results).
 
-product(AL,BL) ->  
-  lists:flatmap(fun (ElemA) -> lists:map(fun (ElemB) -> {ElemA,ElemB} end, BL) end, AL).
+product(Sets) ->
+  product(Sets,[]).
+
+product([],Elems) ->
+  [(lists:reverse(Elems))];
+product([Set|RestSets],Elems) ->
+  lists:flatmap
+    (fun (Elem) ->
+	 product(RestSets,[Elem|Elems])
+     end, Set).
+
+rerun([Implementation,Scheduler,Options],CounterExample) ->
+  test(10,Implementation,Scheduler,Options,CounterExample).
 
 test(Max,Imp,Prio) ->
-  io:format("Testing ~p under priority ~p with max=~p~n",[Imp,Prio,Max]),
+  test(Max,Imp,Prio,[]).
+test(Max,Imp,Prio,Options) ->
+  test(Max,Imp,Prio,Options,none).
+test(Max,Imp,Prio,Options,CounterExample) ->
+  io:format("Testing ~p under priority ~p with max=~p and options ~p~n",[Imp,Prio,Max,Options]),
   DataSpec = {multibuffer,[Max]},
   TestingSpec = {multibuffer_commands,[Max,7,7,Imp]},
-  tester:test([{needs_java,false}],DataSpec,Prio,TestingSpec).
+  tester:test(Options++[{no_par,true},{needs_java,false}],DataSpec,Prio,TestingSpec,CounterExample).
 
 
 
