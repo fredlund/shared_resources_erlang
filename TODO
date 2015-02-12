@@ -17,4 +17,10 @@ and the same exit and enter, but may increase between enter and exit.
 How to specify this?
 
 enter(Room,Weight) -> {enter,[Room,Weight]}
-?LET(Weight,
+?LET(Weight,...
+
+Maybe a state machine!
+
+- To remove the risk of gc:s causing errors we should probably
+rerun failing tests (non-progressing ones at least); that way we 
+could also reduce the timeout and increase testing frequency.

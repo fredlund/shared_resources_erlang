@@ -50,31 +50,43 @@ runtests_for_entregas(Entregas,CP) ->
 	   ("~nWill test user ~s in group ~s in ~s~n",
 	    [User,Group,Dir]),
 	 CPDir = [Dir|CP],
+
 	 io:format("~n~nno progress; no parallel~n"),
 	 io:format("---------------------------~n"),
 	 PreOptions1 = [{enforce_progress,false},{no_par,true}],
-	 Result1 = run(User,Dir,PreOptions1,CPDir),
+	 Result1 =
+	   run(User,Dir,PreOptions1,CPDir),
 
 	 Result2 =
+	   begin
+	     io:format("~n~nprogress; no parallel~n"),
+	     io:format("---------------------------~n"),
+	     PreOptions2 = [{enforce_progress,true},{no_par,true}],
+	     run(User,Dir,PreOptions2,CPDir)
+	   end,
+
+	 Result3 =
 	   if
-	     Result1 ->
-	       io:format("~n~nprogress; no parallel~n"),
+	     Result1, Result2 ->
+	       io:format("~n~nprogress; parallel~n"),
 	       io:format("---------------------------~n"),
-	       PreOptions2 = [{enforce_progress,true},{no_par,true}],
-	       run(User,Dir,PreOptions2,CPDir);
+	       PreOptions3 = [{enforce_progress,true},{no_par,false}],
+	       run(User,Dir,PreOptions3,CPDir);
 	     true ->
 	       false
 	   end,
-
+	 
 	 if
-	   Result2 ->
-	     io:format("~n~nprogress; parallel~n"),
-	     io:format("---------------------------~n"),
-	     PreOptions3 = [{enforce_progress,true},{no_par,false}],
-	     run(User,Dir,PreOptions3,CPDir);
+	   Result1, Result2, Result3 ->
+	     io:format
+	       ("No errors found for user ~p~n",
+		[User]);
 	   true ->
-	     ok
-	 end
+	     io:format
+	       ("User ~p has errors: test1: ~p test2: ~p test3: ~p~n",
+		[User,Result1,Result2,Result3])
+	 end,
+	 Result3
      end, Entregas).
 
 run(User,Dir,PreOptions,CP) ->
