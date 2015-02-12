@@ -28,47 +28,61 @@ test2() ->
   
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+%% Run all tests on a set of exercises
 runtests() ->
-  Target = "/home/fred/cc_prac1_final",
-  Entregas = find_entregas("ControlAccesoNavesMonitor.class",Target),
+  runtests("ControlAccesoNavesMonitor.class","/home/fred/cc_prac1_final").
 
-  io:format("~n~nno progress; no parallel~n"),
-  io:format("---------------------------~n"),
-  PreOptions1 = [{enforce_progress,false},{no_par,true}],
-  runall(Target,PreOptions1,Entregas),
-
-  io:format("~n~nprogress; no parallel~n"),
-  io:format("---------------------------~n"),
-  PreOptions2 = [{enforce_progress,true},{no_par,true}],
-  runall(Target,PreOptions2,Entregas),
-
-  io:format("~n~nprogress; parallel~n"),
-  io:format("---------------------------~n"),
-  PreOptions3 = [{enforce_progress,true},{no_par,false}],
-  runall(Target,PreOptions3,Entregas).
-
-runall(Target,PreOptions,Entregas) ->
+runtests(TargetFile,EntregasDir) ->
+  Entregas = find_entregas(TargetFile,EntregasDir),
+  CP =
+    ["/home/fred/gits/src/cctester/test/classes/",
+     "/usr/share/java/junit4.jar",
+     "/home/fred/lib/net-datastructures-5-0.jar",
+     "/home/fred/gits/src/cctester/test/cclib.jar"],
+  runtests_for_entregas(Entregas,CP).
+  
+runtests_for_entregas(Entregas,CP) ->
   lists:foreach
     (fun ({User,Group,Dir,_TimeStr,_Time}) ->
 	 io:format
 	   ("~n===============================================================~n"),
 	 io:format
-	   ("~nWill test ~s for user ~s in group ~s in ~s~n",
-	    [Target,User,Group,Dir]),
-	 CP =  ["/home/fred/gits/src/cctester/test/classes/",
-		Dir,
-		"/home/fred/gits/src/cctester/test/cclib.jar"],
-	 DataSpec = {robots,[4,1000]},
-	 WaitSpec = {always,[]},
-	 TestingSpec = {robot_commands,[10,4]},
-	 Options = [{needs_java,true},{no_par,true},{cp,CP},{id,User}],
-	 tester:test(Options,DataSpec,WaitSpec,TestingSpec)
+	   ("~nWill test user ~s in group ~s in ~s~n",
+	    [User,Group,Dir]),
+	 CPDir = [Dir|CP],
+	 io:format("~n~nno progress; no parallel~n"),
+	 io:format("---------------------------~n"),
+	 PreOptions1 = [{enforce_progress,false},{no_par,true}],
+	 Result1 = run(User,Dir,PreOptions1,CPDir),
+
+	 Result2 =
+	   if
+	     Result1 ->
+	       io:format("~n~nprogress; no parallel~n"),
+	       io:format("---------------------------~n"),
+	       PreOptions2 = [{enforce_progress,true},{no_par,true}],
+	       run(User,Dir,PreOptions2,CPDir);
+	     true ->
+	       false
+	   end,
+
+	 if
+	   Result2 ->
+	     io:format("~n~nprogress; parallel~n"),
+	     io:format("---------------------------~n"),
+	     PreOptions3 = [{enforce_progress,true},{no_par,false}],
+	     run(User,Dir,PreOptions3,CPDir);
+	   true ->
+	     ok
+	 end
      end, Entregas).
 
-print_cp([]) ->
-  "";
-print_cp([Obj|Rest]) ->
-  io_lib:format("~s ",[Obj])++print_cp(Rest).
+run(User,Dir,PreOptions,CP) ->
+  DataSpec = {robots,[4,1000]},
+  WaitSpec = {always,[]},
+  TestingSpec = {robot_commands,[10,4]},
+  Options = [{needs_java,true},{cp,CP},{id,User}|PreOptions],
+  tester:test(Options,DataSpec,WaitSpec,TestingSpec).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -191,10 +205,4 @@ find_late_entregas(Dir,Description) ->
      end,
      Description).
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-%% eqctest:runtests(practica_1, "ControlAccesoNavesMonitor.java", "/home/fred/cc_prac1_final", ["test/classes","/usr/share/java/junit4.jar","test/cclib.jar","test/net-datastructures-5-0.jar"]).
-
-test_all() ->
-  ?MODULE:runtests(practica_1, "ControlAccesoNavesMonitor.java", "/home/fred/cc_prac1_final", ["/home/fred/gits/src/cctester/test/classes","/usr/share/java/junit4.jar","/home/fred/gits/src/cctester/test/cclib.jar","test/net-datastructures-5-0.jar"]).
 

@@ -562,12 +562,17 @@ test(Options,DataSpec,WaitSpec,TestingSpec) ->
   check_prop(Options,DataSpec,WaitSpec,TestingSpec).
 
 check_prop(Options,DataSpec,WaitSpec,TestingSpec) ->
-  case eqc:quickcheck(eqc:on_output(fun eqc_printer/2,prop_ok(Options,DataSpec,WaitSpec,TestingSpec))) of
-    false ->
+  Result =
+    eqc:quickcheck
+      (eqc:on_output
+	 (fun eqc_printer/2,prop_ok(Options,DataSpec,WaitSpec,TestingSpec))),
+  if
+    not(Result) ->
       io:format("~n~n***FAILED~n");
     true ->
       io:format("~n~nPASSED~n",[])
-  end.
+  end,
+  Result.
 
 prop_ok(Options,DataSpec,WaitSpec,TestingSpec) ->
   ?FORALL
