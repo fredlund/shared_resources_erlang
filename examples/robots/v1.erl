@@ -30,6 +30,24 @@ test2() ->
 
 runtests() ->
   Target = "/home/fred/cc_prac1_final",
+  Entregas = find_entregas("ControlAccesoNavesMonitor.class",Target),
+
+  io:format("~n~nno progress; no parallel~n"),
+  io:format("---------------------------~n"),
+  PreOptions1 = [{enforce_progress,false},{no_par,true}],
+  runall(Target,PreOptions1,Entregas),
+
+  io:format("~n~nprogress; no parallel~n"),
+  io:format("---------------------------~n"),
+  PreOptions2 = [{enforce_progress,true},{no_par,true}],
+  runall(Target,PreOptions2,Entregas),
+
+  io:format("~n~nprogress; parallel~n"),
+  io:format("---------------------------~n"),
+  PreOptions3 = [{enforce_progress,true},{no_par,false}],
+  runall(Target,PreOptions3,Entregas).
+
+runall(Target,PreOptions,Entregas) ->
   lists:foreach
     (fun ({User,Group,Dir,_TimeStr,_Time}) ->
 	 io:format
@@ -45,7 +63,7 @@ runtests() ->
 	 TestingSpec = {robot_commands,[10,4]},
 	 Options = [{needs_java,true},{no_par,true},{cp,CP},{id,User}],
 	 tester:test(Options,DataSpec,WaitSpec,TestingSpec)
-     end, find_entregas("ControlAccesoNavesMonitor.class",Target)).
+     end, Entregas).
 
 print_cp([]) ->
   "";

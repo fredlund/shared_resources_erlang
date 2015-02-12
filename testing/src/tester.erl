@@ -160,6 +160,8 @@ do_cmds_post(State,Args,Result) ->
 		 {ok,NewState} -> 
 		   %% Finally check whether some non-finished job is finishable in all
 		   %% possible model states
+		   (not(proplists:get_value(enforce_progress,State#state.options,true)))
+		     orelse 
 		   check_remaining_jobs(State,NewState#state.states)
 	       end
 	end
