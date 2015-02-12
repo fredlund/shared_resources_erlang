@@ -2,12 +2,12 @@
 
 -behaviour(resource_data_implementation).
 
--export([init/1,pre/2,cpre/2,post/2,return/3,return_value/2]).
+-export([init/2,pre/2,cpre/2,post/2,return/3,return_value/2]).
 -export([num_naves/1,max_weight/1]).
 
 -include("robots.hrl").
 
-init([NumNaves,MaxWeight]) ->
+init([NumNaves,MaxWeight],_Options) ->
   #robots
     {
      num_naves=NumNaves,

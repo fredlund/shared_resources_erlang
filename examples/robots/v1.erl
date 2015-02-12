@@ -11,7 +11,8 @@ test() ->
   DataSpec = {robots,[4,1000]},
   WaitSpec = {fcfs,[]},
   TestingSpec = {robot_commands,[10,4]},
-  tester:test(CP,Id,DataSpec,WaitSpec,TestingSpec).
+  Options = [{needs_java,true},{cp,CP},{no_par,true},{id,Id}],
+  tester:test(Options,DataSpec,WaitSpec,TestingSpec).
 
 test2() ->
   Id = "test",
@@ -22,46 +23,29 @@ test2() ->
   DataSpec = {robots,[4,1000]},
   WaitSpec = {always,[]},
   TestingSpec = {robot_commands,[10,4]},
-  tester:test(CP,Id,DataSpec,WaitSpec,TestingSpec).
+  Options = [{needs_java,true},{no_par,true},{cp,CP},{id,Id}],
+  tester:test(Options,DataSpec,WaitSpec,TestingSpec).
   
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-check(Args) ->
-  case Args of
-    [ModuleString,Id|CP] ->
-      io:format("Args are ~p~n",[Args]),
-      io:format("CP is ~p~n",[CP]),
-      check(list_to_atom(ModuleString),CP,Id);
-    _ ->
-      io:format("*** Error: strange arguments ~p~n",[Args])
-  end,
-  halt().
-
-check(_Module,CP,Id) ->
-  DataSpec = {robots,[4,1000]},
-  WaitSpec = {always,[]},
-  TestingSpec = {robot_commands,[10,4]},
-  tester:test(CP,Id,DataSpec,WaitSpec,TestingSpec).
-
-runtests(Module,LFile,Target,CP) ->
+runtests() ->
+  Target = "/home/fred/cc_prac1_final",
   lists:foreach
     (fun ({User,Group,Dir,_TimeStr,_Time}) ->
 	 io:format
 	   ("~n===============================================================~n"),
 	 io:format
-	   ("~nWill test ~s for user ~s in group ~s~n",
-	    [Target,User,Group]),
-	 CmdLine =
-	   io_lib:format
-	      ("erl -env ERL_MAX_PORTS 4096 -noshell -sname tester -pa ebin -run ~p check ~p '~s' "++
-		 print_cp([Dir|CP])++
-		 " -run erlang halt~n",
-	       [?MODULE,Module,
-		io_lib:format("User ~s in group ~s",[User,Group])]),
-	 io:format("Cmd is ~s~n",[CmdLine]),
-	 Result = os:cmd(CmdLine),
-	 io:format("~nOutput:~n~n~s~n",[Result])
-     end, find_entregas(LFile,Target)).
+	   ("~nWill test ~s for user ~s in group ~s in ~s~n",
+	    [Target,User,Group,Dir]),
+	 CP =  ["/home/fred/gits/src/cctester/test/classes/",
+		Dir,
+		"/home/fred/gits/src/cctester/test/cclib.jar"],
+	 DataSpec = {robots,[4,1000]},
+	 WaitSpec = {always,[]},
+	 TestingSpec = {robot_commands,[10,4]},
+	 Options = [{needs_java,true},{no_par,true},{cp,CP},{id,User}],
+	 tester:test(Options,DataSpec,WaitSpec,TestingSpec)
+     end, find_entregas("ControlAccesoNavesMonitor.class",Target)).
 
 print_cp([]) ->
   "";

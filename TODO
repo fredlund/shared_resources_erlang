@@ -1,6 +1,20 @@
 - Implement simulation mode -- reuse the test generation code (command).
   There is also the implementation in Erlang (but this does not generate traffic).
+
 - Think about thread example with priorities.
 
+- We can easily generate a "generator" from a set of "trace executions".
+Generator =
+   run_traces	
+   ([{enter, 0, weight()}, 
+     {exit, 0, weight()},
+     {enter, 1, weight()},
+     ...
+    ]++...)
 
+The problem is the weights; weights must be monotonically increasing,
+and the same exit and enter, but may increase between enter and exit.
+How to specify this?
 
+enter(Room,Weight) -> {enter,[Room,Weight]}
+?LET(Weight,

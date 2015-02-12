@@ -8,47 +8,76 @@
 
 -compile(export_all).
 
--record(teststate,{n_robots,n_naves,num_enters,blocked,corridors,warehouses}).
+-record(teststate,
+	{n_robots,n_naves,num_enters,blocked,corridors,warehouses,options,controller}).
 
 -define(PESO_FACTOR,10).
 
-init([NumRobots,NumNaves]) ->
+-define(MAX_CONCURRENT,3).
+-define(MAX_STATES,400).
+
+init([NumRobots,NumNaves],Options) ->
   #teststate
     {
       n_robots=NumRobots,
       n_naves=NumNaves,
+      options=Options,
       num_enters=0,
       blocked=[],
       corridors=lists:map(fun (I) -> {I,[]} end, lists:seq(0,NumNaves-1)),
       warehouses=lists:map(fun (I) -> {I,[]} end, lists:seq(0,NumNaves-1))
     }.
 
+started(TS,Controller) ->
+  TS#teststate{controller=Controller}.
+
 command(TS,State) ->
+  command(TS,State,0).
+command(TS,State,NumConcurrent) ->
   ?LET
      (Command,
       job_cmd(TS,State),
-      ?LET
-	 (NextCommands,
-	  eqc_gen:frequency
-	    ([{3,[]},
-	      {1,
-	       ?LAZY
-		  (begin
-		     TS1 = 
-		       case calltype_in_call(Command) of
-			 void ->
-			   TS;
-			 _ ->
-			   TS0 =
-			     case call_is_enter_in_warehouse0(Command) of
-			       true -> add_enters(1,TS);
-			       false -> TS
-			     end,
-			   add_to_blocked(robot_in_call(Command),TS0)
-		       end,
-		     command(TS1,State)
-		   end)}]),
-	  [Command|NextCommands])).
+      if
+	NumConcurrent>=?MAX_CONCURRENT -> [];
+	true ->
+	  ?LET
+	     (NextCommands,
+	      eqc_gen:frequency
+		([{3,[]},
+		  {parfreq(State),
+		   ?LAZY
+		      (begin
+			 TS1 = 
+			   case calltype_in_call(Command) of
+			     void ->
+			       TS;
+			     _ ->
+			       TS0 =
+				 case call_is_enter_in_warehouse0(Command) of
+				   true -> add_enters(1,TS);
+				   false -> TS
+				 end,
+			       add_to_blocked(robot_in_call(Command),TS0)
+			   end,
+			 command(TS1,State)
+		       end)}]),
+	      [Command|NextCommands])
+      end).
+
+parfreq(State) ->
+  case proplists:get_value(no_par,State#state.options,false) of
+    true -> 0;
+    false ->
+      case length(State#state.states)>=?MAX_STATES of
+	true ->
+	  io:format
+	    ("*** Warning: cutting parallel test case due to too many states: ~p~n",
+	     [length(State#state.states)]),
+	  0;
+	false ->
+	  1
+      end
+  end.
 
 job_cmd(TS,State) ->
   ?LOG("job_cmd: TS=~p~nState=~p~n",[TS,State]),
@@ -253,21 +282,58 @@ enter(_R,N,P) ->
 exit(_R,N,P) ->
   java:call(tester:get_data(controller),solicitarSalir,[N,P]).
 
-start(NodeId) ->  
+start(NodeId,_TS) ->  
   case java:new(NodeId,'ControlAccesoNavesMonitor',[]) of
     Exc = {java_exception,_} -> 
       java:report_java_exception(Exc),
       throw(bad);
     Controller ->
-      tester:store_data(controller,Controller)
+      tester:store_data(controller,Controller),
+      Controller
   end.
 
 print_started_job_info(Job) ->
-  print_job_info(Job).
+  {_,Name,[Robot,Warehouse,Weight]} = Job#job.call,
+  io_lib:format("~p(~p,~p,~p)",[Name,Robot,Warehouse,Weight]).
 
 print_finished_job_info(Job) ->
   print_job_info(Job).
 
 print_job_info(Job) ->
   io_lib:format("~p",[robot_in_call(Job#job.call)]).
+
+print_state(TS) ->
+  lists:foldr
+    (fun (I,Acc) ->  
+	 Warehouse = warehouse(I,TS),
+	 if
+	   I == 0 ->
+	     io_lib:format
+	       ("w(0)={~s}; ",
+		[print_warehouse(Warehouse)]);
+	   true ->
+	     Corridor = corridor(I,TS),
+	     io_lib:format
+	       ("corr(~p)={~s} w(~p)={~s}; ",
+		[I,print_corridor(Corridor),I,print_warehouse(Warehouse)])
+	 end++Acc
+     end, "", lists:seq(0,TS#teststate.n_naves-1)).
+
+print_corridor([]) -> "";
+print_corridor([RobotPeso]) -> 
+  print_robot_peso(RobotPeso).
+
+print_warehouse([]) -> "";
+print_warehouse([RobotPeso]) -> 
+  print_robot_peso(RobotPeso);
+print_warehouse([RobotPeso|Rest]) -> 
+  print_robot_peso(RobotPeso)++","++print_warehouse(Rest).
+
+print_robot_peso({Robot,Peso}) ->
+  io_lib:format("~p:~p",[Robot,Peso]).
+
+  
+  
+
+	 
 

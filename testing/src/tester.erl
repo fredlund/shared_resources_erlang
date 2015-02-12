@@ -56,7 +56,7 @@ start(Options,TestSpec,TestState) ->
   NodeId =
     case proplists:get_value(needs_java,Options,true) of
       true ->
-	[{cp,CP}] = ets:lookup(?MODULE,cp),
+	CP = proplists:get_value(cp,Options,[]),
 	ets:insert(?MODULE,{cp,CP}),
 	?LOG("CP is ~p~n",[CP]),
 	try
@@ -66,22 +66,25 @@ start(Options,TestSpec,TestState) ->
 	      {java_exception_as_value,true},
 	      {add_to_java_classpath,CP}]) of
 	  {ok,NId} ->
-	    store_data(node,NId)
+	    store_data(node,NId),
+	    NId
 	catch _:_ ->
-	    io:format("~n*** Error: cannot start java. Is the javaerlang library installed?~n"),
+	    io:format
+	      ("~n*** Error: cannot start java. Is the javaerlang library installed?~n"),
 	    throw(bad)
 	end;
       false -> void
     end,
   ets:insert(?MODULE,{id,Id}),
-  TestSpec:start(NodeId,TestState),
-  NodeId.
+  TestSpec:start(NodeId,TestState).
 
 start_post(_State,_,_Result) ->
   true.
 
-start_next(State,_Result,_) ->
-  State#state{started=true}.
+start_next(State,Result,_) ->
+  TestState = State#state.test_state,
+  StartedTestState = (State#state.testingSpec):started(TestState,Result),
+  State#state{started=true,test_state=StartedTestState}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -119,6 +122,22 @@ do_cmds(Commands) ->
 
 do_cmds_post(State,Args,Result) ->
   {NewJobs,FinishedJobs} = Result,
+  if
+    NewJobs==[] ->
+      if
+	FinishedJobs==[] -> 
+	  true;
+	true -> 
+	  io:format
+	    ("~n*** Error: there are calls~n~s~n"++
+	       "that have been completed by the implementation "++
+	       "even though no new calls were made~n",
+	     [FinishedJobs]),
+	  print_test_state(State),
+	  maybe_print_model_state(State),
+	  false
+      end;
+    true ->
   case proplists:get_value(verbose,State#state.options,false) of
     true ->
       io:format
@@ -158,6 +177,7 @@ do_cmds_post(State,Args,Result) ->
 		[Reason,
 		 erlang:get_stacktrace()]),
       false
+  end
   end.
 
 do_cmds_next(State,Result,Args) ->
@@ -242,6 +262,7 @@ calculate_next_state(State,FinishedJobs,WhatToCheck,OrigState) ->
       WhatToCheck==both ->
 	accept_one_incoming(State,FinishedJobs);
       true ->
+	%% if we are not checking scheduling we can just move the incoming jobs to waiting
 	lists:map
 	  (fun (IndState) ->
 	       {IndState#onestate
@@ -273,18 +294,23 @@ accept_one_incoming(State,FinishedJobs) ->
   merge_jobs_and_states
     (lists:map(fun (NewState) -> {NewState,FinishedJobs} end, NewStates)).
     
-finish_jobs(_,[],FinishedStates,WhatToCheck,_) ->
+%% Terminate when no non-finished states remain
+finish_jobs(_,[],FinishedStates,_WhatToCheck,_) ->
   ?LOG("WC=~p Finished=~p~n",[WhatToCheck,FinishedStates]),
   {ok,lists:usort(FinishedStates)};
 finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
   ?LOG("WC=~p States:~n~p~nFinished=~p~n",[WhatToCheck,StatesAndJobs,FinishedStates]),
   {NewStatesAndJobs,NewFinishedStates} =
+    %% Recurse over the list of possible states (and finished jobs in each state)
     lists:foldl
       (fun ({IndState,FJobs},{NSJ,NF}) ->
 	   if
+	     %% Nothing to do when no more jobs, and incoming is empty; 
+	     %% move state to finished states
 	     FJobs==[], IndState#onestate.incoming==[] ->
 	       {NSJ,[IndState|NF]};
 	     true ->
+	       %% Accepting moves
 	       NewAcceptStates =
 		 if
 		   WhatToCheck==both ->
@@ -294,6 +320,7 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
 		   true ->
 		     []
 		 end,
+	       %% A call finishes
 	       NewFinishStates =
 		 lists:flatmap
 		   (fun (Job) ->
@@ -322,14 +349,16 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
       io:format
 	("~n*** Error: there are calls that have been completed by the implementation "++
 	   "which cannot be completed by the model (without considering priority)~n"),
-      maybe_print_state(OrigState),
+      print_test_state(OrigState),
+      maybe_print_model_state(OrigState),
       false;
 
     NewStatesAndJobs==[], NewFinishedStates==[] -> 
       io:format
 	("~n*** Error: there are calls that have been completed by the implementation "++
 	   "which cannot be completed by the model (when considering priority)~n"),
-      maybe_print_state(OrigState),
+      print_test_state(OrigState),
+      maybe_print_model_state(OrigState),
       false;
 
     true ->
@@ -341,14 +370,40 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
 	 OrigState)
   end.
 
-maybe_print_state(State) ->
-  case length(State#state.states) of
-    1 ->
-      io:format("Originating state:~n~p~n",[State]);
+print_test_state(State) ->
+  io:format
+    ("Final test state:~n~s~n",
+     [print_test_state(State#state.test_state,State#state.testingSpec)]).
+  
+maybe_print_model_state(State) ->
+  case State#state.states of
+    [IndState] ->
+      io:format
+	("Final model state:~n~s~nSchedule state:~n~s~n",
+	 [print_model_state(IndState#onestate.sdata,State#state.dataSpec),
+	  print_schedule_state(IndState#onestate.swait,State#state.waitSpec)]);
     _ ->
       ok
   end.
 
+print_test_state(TestState,TestingSpec) ->
+  case lists:member({print_state,1},TestingSpec:module_info(exports)) of
+    true -> TestingSpec:print_state(TestState);
+    false -> io_lib:format("~p",[TestState]) 
+  end.
+      
+print_model_state(ModelState,ModelSpec) ->
+  case lists:member({print_state,1},ModelSpec:module_info(exports)) of
+    true -> ModelSpec:print_state(ModelState);
+    false -> io_lib:format("~p",[ModelState]) 
+  end.
+
+print_schedule_state(ScheduleState,ScheduleSpec) ->
+  case lists:member({print_state,1},ScheduleSpec:module_info(exports)) of
+    true -> ScheduleSpec:print_state(ScheduleState);
+    false -> io_lib:format("~p",[ScheduleState]) 
+  end.
+      
 find_active_jobs(StatesAndJobs) ->
   lists:foldl
     (fun (SJ={S,Jobs},{A,F}) ->
@@ -383,7 +438,8 @@ check_remaining_jobs(OrigState,FinalStates) ->
 	       (fun (Jobs) ->
 		    lists:map(fun (Job) -> Job#job.call end, Jobs)
 		end, JobsPerFailedState))]),
-      maybe_print_state(OrigState),
+      print_test_state(OrigState),
+      maybe_print_model_state(OrigState),
       false;
     true ->
       true
@@ -668,6 +724,8 @@ print_commands([{Call,Result}|Rest],TestingSpec) ->
       {_,_,do_cmds,[_Commands],_} ->
 	{Jobs,_} = Result,
 	io_lib:format("<< ~s >>",[print_jobs(fun print_started_job_info/2,"",Jobs,TestingSpec)]);
+      {_,_,start,_,_} ->
+	"start";
       {_,_,Name,Args,_} ->
 	io_lib:format("~p ~p",[Name,Args])
     end,
