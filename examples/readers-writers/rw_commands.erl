@@ -11,10 +11,10 @@
 %% shared resource model inner state
 -record(teststate,
   {
-    n_readers,
-    n_writers,
-    num_readers, 
-    num_writers ,
+    max_readers,
+    max_writers,
+    readers, 
+    writers ,
     blocked,
     options,
     controller
@@ -27,10 +27,9 @@
 init([NumReaders,NumWriters],Options) ->
   #teststate
     {
-      n_readers=NumReaders, %% # max of readers
-      n_writers=NumWriters, %% # max of writers
+      max_readers=NumReaders, %% # max of readers
+      max_writers=NumWriters, %% # max of writers
       options=Options,
-      num_readers=0,
       blocked=[],
       readers=0,
       writers=0
@@ -60,9 +59,13 @@ command(TS,State,NumConcurrent) ->
          case calltype_in_call(Command) of
            void ->
              TS;
-           put ->
+           afterWrite ->
+             TS;
+           afterReadv ->
+             TS;
+           beforeWrite ->
              TS#teststate{writers=TS#teststate.writers+1};
-           get ->
+           beforeRead ->
              TS#teststate{readers=TS#teststate.readers+1}
          end,
        command(TS1,State,NumConcurrent+1)
@@ -90,15 +93,15 @@ parfreq(State) ->
 job_cmd(TS,State) ->
   ?LOG("job_cmd: TS=~p~nState=~p~n",[TS,State]),
   Alternatives =
-    [{?MODULE,beforeRead]} ||
+    [{?MODULE,beforeRead} ||
       TS#teststate.readers < TS#teststate.max_readers]
     ++
-    [{?MODULE,beforeWrite]} ||
+    [{?MODULE,beforeWrite} ||
       TS#teststate.writers < TS#teststate.max_writers]
     ++
-    [{?MODULE,afterRead]} || true ]
+    [{?MODULE,afterRead} || true ]
     ++
-    [{?MODULE,afterWrite]} || true ]
+    [{?MODULE,afterWrite} || true ]
     ++
     [tester:make_void_call() ||
       (TS#teststate.writers >= TS#teststate.max_writers) andalso
@@ -123,18 +126,18 @@ do_preconditions(_TS,[]) ->
 do_preconditions(TS,[Call|NextCalls]) ->
   Result =
     case Call of
-      {_,beforeRead,_} ->
+      {_,beforeRead} ->
           {TS#teststate.readers < TS#teststate.max_readers,
           TS#teststate{readers=TS#teststate.readers+1}};
-      {_,beforeWrite,_} ->
+      {_,beforeWrite} ->
           {TS#teststate.writers < TS#teststate.max_writers,
           TS#teststate{writers=TS#teststate.writers+1}};
-      {_,afterRead,_} ->
+      {_,afterRead} ->
         true;
-      {_,afterWrite,_} ->
-        true;
+      {_,afterWrite} ->
+        true
     end,
-    Result andalso do_preconditions(NewTS,NextCalls)  
+    Result andalso do_preconditions(TS,NextCalls)  
   .
 
 next_state(TS,_State,Result,_) ->
@@ -158,11 +161,11 @@ count_readers_writers(Jobs) ->
    end
      end, {0,0}, Jobs).
 
-% num_readers(TS) ->
-%   TS#teststate.num_readers.
+% readers(TS) ->
+%   TS#teststate.readers.
 
-% num_writers(TS) ->
-%   TS#teststate.num_writers.
+% writers(TS) ->
+%   TS#teststate.writers.
 
 is_blocked(R,TS) ->
   lists:member(R,TS#teststate.blocked).
@@ -171,31 +174,31 @@ add_to_blocked(R,TS) ->
   OldUsed = TS#teststate.blocked,
   TS#teststate{blocked=[R|OldUsed]}.
   
-%% returns the type of the call
-% calltype_in_call(Call) ->
-%   case Call of
-%     {_,beforeRead,_} -> beforeRead;
-%     {_,afterRead,_} -> afterRead;
-%     {_,beforeWrite,_} -> beforeWrite;
-%     {_,afterWrite,_} -> afterWrite;
-%     {_,void} -> void
-%   end.
+% returns the type of the call
+calltype_in_call(Call) ->
+  case Call of
+    {_,beforeRead} -> beforeRead;
+    {_,afterRead} -> afterRead;
+    {_,beforeWrite} -> beforeWrite;
+    {_,afterWrite} -> afterWrite;
+    {_,void} -> void
+  end.
 
 blocked(TS) ->
   TS#teststate.blocked.
 
 %% JAVA calls
 beforeRead() ->
-  java:call(tester:get_data(controller),beforeRead,_).
+  java:call(tester:get_data(controller),beforeRead).
 
-afterRead(_R,N,P) ->
-  java:call(tester:get_data(controller),afterRead,_).
+afterRead() ->
+  java:call(tester:get_data(controller),afterRead).
 
-beforeRead() ->
-  java:call(tester:get_data(controller),beforeWrite,_).
+beforeWrite() ->
+  java:call(tester:get_data(controller),beforeWrite).
 
-afterRead(_R,N,P) ->
-  java:call(tester:get_data(controller),afterWrite,_).
+afterWrite() ->
+  java:call(tester:get_data(controller),afterWrite).
 
 %% JAVA construction
 start(NodeId,_TS) ->  

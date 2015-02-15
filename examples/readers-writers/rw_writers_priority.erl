@@ -11,25 +11,20 @@ init([_,N,_MaxWeight]) ->
   {N,lists:map(fun (I) -> {I,[]} end, lists:seq(0,N-1))}.
 
 %% call, ss, sa ??? why two components
-new_waiting({beforeWrite}},WS={_x,_rWaitingWriters},_DS) ->
-  {void,{_x, _rWaitingWriters+1};
-
+new_waiting({beforeWrite},WS={_x,_rWaitingWriters},_DS) ->
+  {void,{_x,_rWaitingWriters+1}};
 new_waiting(_Call,WS,_DS) ->
   {void,WS}.
 
 %% como marcar protocolos ??
 %%  call, cinfo, ss, sa
 %% ss = {_, readers waiting}
-priority_enabled({beforeWrite},_cinfo,WS={_,_rWaitingWriters},TS) ->
-  TS#teststate.readers == 0;
-
-priority_enabled({beforeRead},_cinfo,WS={_,_rWaitingWriters},_) ->
+priority_enabled({beforeRead},_cinfo,{_,_rWaitingWriters},_) ->
   _rWaitingWriters == 0;
-
 priority_enabled(_Call,_Info,_WS,_DS) ->
   true.
 
-post_waiting({afterWrite},_CallInfo,WS={_x,_rWaitingWriters},_) ->
+post_waiting({afterWrite},_CallInfo,{_x,_rWaitingWriters},_) ->
   {_x, _rWaitingWriters-1};
 
 post_waiting(_,_CallInfo,WS,_) ->
