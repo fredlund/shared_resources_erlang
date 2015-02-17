@@ -9,14 +9,11 @@ The test is generating by building a state-based model that will help in testing
 * Framework Source Code
 * Warehouse example with several sheduling policies
 
-### How do I get set up? ###
+### Requirement ###
 
-* Summary of set up
-* Configuration
-* Dependencies
-* Database configuration
-* How to run tests
-* Deployment instructions
+* [Erlang](http://www.erlang.org/)
+* [JavaErlang](https://github.com/fredlund/JavaErlang)
+* [Java](http://www.oracle.com/technetwork/es/java/javase/downloads/index.html)
 
 ### Contribution guidelines ###
 
