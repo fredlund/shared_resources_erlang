@@ -4,11 +4,11 @@
 
 -behaviour(resource_wait_implementation).
 
--export([init/1,new_waiting/3,priority_enabled/4,post_waiting/4]).
+-export([init/2,new_waiting/3,priority_enabled/4,post_waiting/4]).
 
 %% TBD ???
-init([_,N,_MaxWeight]) ->
-  {N,lists:map(fun (I) -> {I,[]} end, lists:seq(0,N-1))}.
+init(_,_) ->
+  {x,0}.
 
 %% call, ss, sa ??? why two components
 new_waiting({beforeWrite},WS={_x,_rWaitingWriters},_DS) ->
