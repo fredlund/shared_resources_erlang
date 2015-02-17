@@ -8,20 +8,10 @@ The test is generating by building a state-based model that will help in testing
 
 * Framework Source Code
 * Warehouse example with several sheduling policies
+* Other examples are going to be upload...
 
-### Requirement ###
+### Requirements ###
 
 * [Erlang](http://www.erlang.org/)
 * [JavaErlang](https://github.com/fredlund/JavaErlang)
 * [Java](http://www.oracle.com/technetwork/es/java/javase/downloads/index.html)
-
-### Contribution guidelines ###
-
-* Writing tests
-* Code review
-* Other guidelines
-
-### Who do I talk to? ###
-
-* Repo owner or admin
-* Other community or team contact
