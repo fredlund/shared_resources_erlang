@@ -12,14 +12,14 @@
 init(Id,[N_NAVES]) ->
   #state{n_naves=N_NAVES,next={enter,0},weight=100}.
 
-precondition(Id,State,{CallType,Nave,Weight}) ->
+precondition(Id,State,_GlobalState,{CallType,Nave,Weight}) ->
   ({CallType,Nave} == State#state.next)
     andalso if
 	      CallType==exit -> Weight==State#state.weight;
 	      true -> Weight >= State#state.weight
 	    end.
 
-command(Id,State) ->
+command(Id,State,_GlobalState) ->
  case State#state.next of
    stopped ->
      stopped;
@@ -29,7 +29,7 @@ command(Id,State) ->
      {enter,Nave,peso(State#state.weight)}
  end.
 
-next_state(Id,State,Call) ->
+next_state(Id,State,_GlobalState,Call) ->
   NAVES_LIMIT = State#state.n_naves-1,
   case Call of
     {exit,NAVES_LIMIT,W} ->
