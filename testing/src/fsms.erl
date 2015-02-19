@@ -3,21 +3,21 @@
 -include_lib("eqc/include/eqc.hrl").
 -include("tester.hrl").
 
--export([initial_state/0,start/2,init_state/2,precondition/3,command/2,
-	 strip_call_info/1,next_state/4]).
+-export([initial_state/0,start/2,started/2,init_state/2,precondition/3,
+	 command/2,strip_call_info/1,next_state/4]).
 
 -define(MAX_CONCURRENT,3).
 -define(MAX_STATES,400).
 
--record(fstate,{machines,global_state,options,start,blocked}).
+-record(fstate,{machines,global_state,options,start,started,blocked}).
 
 initial_state() ->
   #fstate{}.
 
-init_state({GlobalStateInit,N,MachineWithMachineInit,Start},Options) ->
+init_state({GlobalStateInit,N,MachineWithMachineInit,Start,Started},Options) ->
   Machines = lists:duplicate(N,MachineWithMachineInit),
-  init_state({GlobalStateInit,Start,Machines},Options);
-init_state({GlobalStateInit,Start,Machines},Options) ->
+  init_state({GlobalStateInit,Start,Started,Machines},Options);
+init_state({GlobalStateInit,Start,Started,Machines},Options) ->
   #fstate
     {
       machines=
@@ -28,16 +28,26 @@ init_state({GlobalStateInit,Start,Machines},Options) ->
 	  lists:zip(lists:seq(1,length(Machines)),Machines)),
       options=Options,
       start=Start,
+      started=Started,
       blocked=[],
       global_state=GlobalStateInit
     }.
 
-start(NodeId,State) ->
+started(NodeId,State) ->
   Start = State#fstate.start,
   if
     is_function(Start) -> Start(NodeId,State);
     true -> ok
   end.
+
+started(State,Result) ->
+  Started = State#fstate.started,
+  if
+    is_function(Started) ->
+      State#state{global_state=Started(State,Result)};
+    true ->
+      State
+  end.		     
 
 precondition(_,State,Commands) ->
   lists:all
