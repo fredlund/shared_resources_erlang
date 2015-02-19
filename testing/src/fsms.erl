@@ -33,7 +33,7 @@ init_state({GlobalStateInit,Start,Started,Machines},Options) ->
       global_state=GlobalStateInit
     }.
 
-started(NodeId,State) ->
+start(NodeId,State) ->
   Start = State#fstate.start,
   if
     is_function(Start) -> Start(NodeId,State);
@@ -44,7 +44,7 @@ started(State,Result) ->
   Started = State#fstate.started,
   if
     is_function(Started) ->
-      State#state{global_state=Started(State,Result)};
+      State#fstate{global_state=Started(State,Result)};
     true ->
       State
   end.		     
