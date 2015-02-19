@@ -1,11 +1,12 @@
-COMPILER=/home/fred/tools_alter/bin/erlc
+COMPILER=erlc
 
-vpath %.erl src examples schedulers examples examples/robots examples/multibuffer testing/src
+vpath %.erl src examples schedulers examples examples/readers-writers examples/robots examples/multibuffer testing/src
 
 BEAMS = $(patsubst src/%.erl,ebin/%.beam,$(wildcard src/*.erl))
 BEAMS += $(patsubst schedulers/%.erl,ebin/%.beam,$(wildcard schedulers/*.erl))
 BEAMS += $(patsubst examples/%.erl,ebin/%.beam,$(wildcard examples/*.erl))
 BEAMS += $(patsubst examples/multibuffer/%.erl,ebin/%.beam,$(wildcard examples/multibuffer/*.erl))
+BEAMS += $(patsubst examples/readers-writers/%.erl,ebin/%.beam,$(wildcard examples/readers-writers/*.erl))
 BEAMS += $(patsubst examples/robots/%.erl,ebin/%.beam,$(wildcard examples/robots/*.erl))
 BEAMS += $(patsubst testing/src/%.erl,ebin/%.beam,$(wildcard testing/src/*.erl))
 EFLAGS = +debug_info 
