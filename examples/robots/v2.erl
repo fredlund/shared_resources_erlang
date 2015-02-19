@@ -22,7 +22,7 @@ test2() ->
 	 "/home/fred/gits/src/cctester/test/cclib.jar"],
   DataSpec = {robots,[4,1000]},
   WaitSpec = {always,[]},
-  TestingSpec = {robot_commands,[10,4]},
+  TestingSpec = {fsms,{}},
   Options = [{needs_java,true},{no_par,true},{cp,CP},{id,Id}],
   tester:test(Options,DataSpec,WaitSpec,TestingSpec).
   

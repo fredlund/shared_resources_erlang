@@ -3,7 +3,7 @@
 -include_lib("eqc/include/eqc.hrl").
 -include("tester.hrl").
 
--export([initial_state/0,start/2,init_state/3,precondition/3,command/2,
+-export([initial_state/0,start/2,init_state/2,precondition/3,command/2,
 	 strip_call_info/1,next_state/4]).
 
 -define(MAX_CONCURRENT,3).
@@ -14,10 +14,10 @@
 initial_state() ->
   #fstate{}.
 
-init_state({N,MachineWithMachineInit,Start},GlobalStateInit,Options) ->
+init_state({GlobalStateInit,N,MachineWithMachineInit,Start},Options) ->
   Machines = lists:duplicate(N,MachineWithMachineInit),
-  init_state({Start,Machines},GlobalStateInit,Options);
-init_state({Start,Machines},GlobalStateInit,Options) ->
+  init_state({GlobalStateInit,Start,Machines},Options);
+init_state({GlobalStateInit,Start,Machines},Options) ->
   #fstate
     {
       machines=
