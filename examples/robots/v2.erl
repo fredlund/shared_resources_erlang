@@ -10,7 +10,7 @@ test() ->
 	 "/home/fred/gits/src/cctester/test/cclib.jar"],
   DataSpec = {robots,[4,1000]},
   WaitSpec = {fcfs,[]},
-  TestingSpec = {robot_commands,[10,4]},
+  TestingSpec = {fsms,{void,10,{robot_fsm,[4]},fun () -> ok end}},
   Options = [{needs_java,true},{cp,CP},{no_par,true},{id,Id}],
   tester:test(Options,DataSpec,WaitSpec,TestingSpec).
 
@@ -22,7 +22,7 @@ test2() ->
 	 "/home/fred/gits/src/cctester/test/cclib.jar"],
   DataSpec = {robots,[4,1000]},
   WaitSpec = {always,[]},
-  TestingSpec = {fsms,{}},
+  TestingSpec = {fsms,{void,10,{robot_fsm,[4]},fun () -> ok end}},
   Options = [{needs_java,true},{no_par,true},{cp,CP},{id,Id}],
   tester:test(Options,DataSpec,WaitSpec,TestingSpec).
   
