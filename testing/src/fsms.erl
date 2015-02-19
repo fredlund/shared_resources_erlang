@@ -1,22 +1,23 @@
 -module(fsms).
 
 -include_lib("eqc/include/eqc.hrl").
+-include("tester.hrl").
 
--export([initial_state/0,start/2,init_state/2,precondition/3,command/2,
+-export([initial_state/0,start/2,init_state/3,precondition/3,command/2,
 	 strip_call_info/1,next_state/4]).
 
 -define(MAX_CONCURRENT,3).
 -define(MAX_STATES,400).
 
--record(fstate,{machines,options,start,blocked}).
+-record(fstate,{machines,global_state,options,start,blocked}).
 
 initial_state() ->
   #fstate{}.
 
-init_state({N,MachineWithMachineInit,Start},Options) ->
+init_state({N,MachineWithMachineInit,Start},GlobalStateInit,Options) ->
   Machines = lists:duplicate(N,MachineWithMachineInit),
-  init_state({Start,Machines},Options);
-init_state({Start,Machines},Options) ->
+  init_state({Start,Machines},GlobalStateInit,Options);
+init_state({Start,Machines},GlobalStateInit,Options) ->
   #fstate
     {
       machines=
@@ -27,7 +28,8 @@ init_state({Start,Machines},Options) ->
 	  lists:zip(lists:seq(1,length(Machines)),Machines)),
       options=Options,
       start=Start,
-      blocked=[]
+      blocked=[],
+      global_state=GlobalStateInit
     }.
 
 start(NodeId,State) ->
@@ -41,7 +43,7 @@ precondition(_,State,Commands) ->
   lists:all
     (fun ({I,Command}) ->
 	 {_,{Machine,MachineState}} = lists:keyfind(I,1,State#fstate.machines),
-	 Machine:precondition(I,MachineState,Command)
+	 Machine:precondition(I,MachineState,State#fstate.global_state,Command)
      end, Commands).
 
 command(State,TesterState) ->
@@ -79,7 +81,7 @@ gen_mach_cmd(State) ->
 	   begin
 	     NewBlocked = [MachId|State#fstate.blocked],
 	     NewState = State#fstate{blocked=NewBlocked},
-	     case Machine:command(MachId,MachineState) of
+	     case Machine:command(MachId,MachineState,State#fstate.global_state) of
 	       stopped ->
 		 gen_mach_cmd(NewState);
 	       CmdGen ->
@@ -91,16 +93,30 @@ gen_mach_cmd(State) ->
 strip_call_info({_,Call}) -> 
   Call.
 
-next_state(State,_TesterState,_Result,[Commands]) ->
-  lists:foldl
-    (fun ({I,Command},S) ->
-	 {_,{Machine,MachineState}} = lists:keyfind(I,1,S#fstate.machines),
-	 NewMachineState = Machine:next_state(I,MachineState,Command),
-	 S#fstate
-	   {machines=
-	      lists:keyreplace
-		(I,1,S#fstate.machines,{I,{Machine,NewMachineState}})}
-     end, Commands, State).
+next_state(State,_TesterState,Result,[Commands]) ->
+  {_,FinishedJobs} =
+    Result,
+  FinishedMachines =
+    lists:map
+      (fun (Job) ->
+	   {MachineId,_} = Job#job.callinfo,
+	   MachineId
+       end, FinishedJobs),
+  NewState =
+    lists:foldl
+      (fun ({I,Command},S) ->
+	   {_,{Machine,MachineState}} =
+	     lists:keyfind(I,1,S#fstate.machines),
+	   {NewMachineState,NewGlobalState} =
+	     Machine:next_state
+	       (I,MachineState,State#fstate.global_state,Command),
+	   S#fstate
+	     {machines=
+		lists:keyreplace
+		  (I,1,S#fstate.machines,{I,{Machine,NewMachineState}}),
+	      global_state=NewGlobalState}
+       end, Commands, State),
+  NewState#fstate{blocked=NewState#fstate.blocked--FinishedMachines}.
 
 permit_par(State,NPars) ->
   case proplists:get_value(max_par,State#fstate.options,?MAX_CONCURRENT) of
