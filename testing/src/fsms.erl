@@ -2,22 +2,21 @@
 
 -include_lib("eqc/include/eqc.hrl").
 
--export([initial_state/0,init_state/3,precondition/3,command/2,
+-export([initial_state/0,start/2,init_state/2,precondition/3,command/2,
 	 prepare/1,next_state/4]).
 
 -define(MAX_CONCURRENT,3).
 -define(MAX_STATES,400).
 
--record(fstate,{machines,options}).
+-record(fstate,{machines,options,start}).
 
 initial_state() ->
   #fstate{}.
 
-init_state(N,MachineWithMachineInit,Options) ->
+init_state({N,MachineWithMachineInit,Start},Options) ->
   Machines = lists:duplicate(N,MachineWithMachineInit),
-  init_state(Machines,Options).
-
-init_state(Machines,Options) ->
+  init_state({Start,Machines},Options);
+init_state({Start,Machines},Options) ->
   #fstate
     {
      machines=
@@ -26,14 +25,22 @@ init_state(Machines,Options) ->
 	      {I,{Machine,Machine:init(I,Init)}}
 	  end, 
 	  lists:zip(lists:seq(1,length(Machines)),Machines)),
-     options=Options
+     options=Options,
+     start=Start
     }.
+
+start(NodeId,State) ->
+  Start = State#fstate.start,
+  if
+    is_function(Start) -> Start(NodeId,State);
+    true -> ok
+  end.
 
 precondition(_,State,Commands) ->
   lists:all
     (fun ({I,Command}) ->
 	 {_,{Machine,MachineState}} = lists:keyfind(I,1,State#fstate.machines),
-	 Machine:precondition(MachineState,Command)
+	 Machine:precondition(I,MachineState,Command)
      end, Commands).
 
 command(State,TesterState) ->
