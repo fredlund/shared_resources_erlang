@@ -19,6 +19,7 @@
 	{
 	  pid,        
 	  call,
+	  callinfo,
 	  result,
 	  waitinfo
 	}).

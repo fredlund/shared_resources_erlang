@@ -3,12 +3,12 @@
 -include_lib("eqc/include/eqc.hrl").
 
 -export([initial_state/0,start/2,init_state/2,precondition/3,command/2,
-	 prepare/1,next_state/4]).
+	 strip_call_info/1,next_state/4]).
 
 -define(MAX_CONCURRENT,3).
 -define(MAX_STATES,400).
 
--record(fstate,{machines,options,start}).
+-record(fstate,{machines,options,start,blocked}).
 
 initial_state() ->
   #fstate{}.
@@ -19,14 +19,15 @@ init_state({N,MachineWithMachineInit,Start},Options) ->
 init_state({Start,Machines},Options) ->
   #fstate
     {
-     machines=
+      machines=
        lists:map
 	 (fun ({I,{Machine,Init}}) ->
 	      {I,{Machine,Machine:init(I,Init)}}
 	  end, 
 	  lists:zip(lists:seq(1,length(Machines)),Machines)),
-     options=Options,
-     start=Start
+      options=Options,
+      start=Start,
+      blocked=[]
     }.
 
 start(NodeId,State) ->
@@ -46,42 +47,49 @@ precondition(_,State,Commands) ->
 command(State,TesterState) ->
   [command1(State,TesterState)].
 command1(State,TesterState) ->
-  command1(State,TesterState,0,[]).
-command1(State,TesterState,NPars,UsedMachines) ->
-  case length(UsedMachines)<length(State#fstate.machines) 
+  command1(State,TesterState,0).
+command1(State,TesterState,NPars) ->
+  case length(State#fstate.blocked)<length(State#fstate.machines) 
     andalso permit_par(State,NPars) of
     false -> [];
     true ->
-      ?LET({Command,NewUsedMachines},
-	   gen_mach_cmd(State,UsedMachines),
+      ?LET({Command,NewState},
+	   gen_mach_cmd(State),
 	   case limit_states(State,TesterState) of
-	     true -> [Command];
+	     true ->
+	       [Command];
 	     false ->
 	       ?LET(NextCommands,
-		    command1(State,TesterState,NPars,NewUsedMachines),
+		    command1(NewState,TesterState,NPars),
 		    [Command|NextCommands])
 	   end)
   end.
 
-gen_mach_cmd(State,UsedMachines) ->
-  case length(UsedMachines)>=length(State#fstate.machines) of
-    true ->
-      {tester:make_void_call(),UsedMachines};
+gen_mach_cmd(State) ->
+  NonBlocked =
+    lists:filter
+      (fun ({I,_}) -> not(lists:member(I,State#fstate.blocked)) end,
+       State#fstate.machines),
+  case NonBlocked of
+    [] ->
+      {tester:make_void_call(),State};
     false ->
       ?LET({MachId,{Machine,MachineState}},
-	   oneof(lists:filter
-		   (fun ({I,_}) -> not(lists:member(I,UsedMachines)) end,
-		    State#fstate.machines)),
-	   case Machine:command(MachId,MachineState) of
-	     stopped ->
-	       gen_mach_cmd(State,[MachId|UsedMachines]);
-	     CmdGen ->
-	       {{MachId,CmdGen},[MachId|UsedMachines]}
+	   oneof(NonBlocked),
+	   begin
+	     NewBlocked = [MachId|State#fstate.blocked],
+	     NewState = State#fstate{blocked=NewBlocked},
+	     case Machine:command(MachId,MachineState) of
+	       stopped ->
+		 gen_mach_cmd(NewState);
+	       CmdGen ->
+		 {{MachId,CmdGen},NewState}
+	     end
 	   end)
   end.
 
-prepare(Commands) ->
-  lists:map(fun ({_,Command}) -> Command end,Commands).
+strip_call_info({_,Call}) -> 
+  Call.
 
 next_state(State,_TesterState,_Result,[Commands]) ->
   lists:foldl

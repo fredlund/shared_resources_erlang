@@ -98,20 +98,20 @@ do_cmds_args(State) ->
 do_cmds_pre(State,[Commands,_]) ->
   (State#state.testingSpec):precondition(State,State#state.test_state,filter_commands(Commands)).
 
-do_cmds(PreCommands,TestingSpec) ->
-  Commands =
-    try_execute(TestingSpec,prepare,[PreCommands],PreCommands),
+do_cmds(Commands,TestingSpec) ->
   ParentPid =
     self(),
   NewJobs =
     lists:map
-      (fun (Call={M,F,Args}) ->
+      (fun (CallInfo) ->
+	   {M,F,Args} = Call = strip_call_info(TestingSpec,CallInfo),
            #job{pid=
                   spawn
                     (fun () ->
-                         Result=apply(M,F,Args),
-                         ParentPid!#job{pid=self(),call=Call,result=Result}
+                         Result = apply(M,F,Args),
+                         ParentPid!#job{pid=self(),call=Call,callinfo=CallInfo,result=Result}
                      end),
+		callinfo=CallInfo,
                 call=Call}
        end, Commands),
   ?LOG("New jobs are ~p~n",[NewJobs]),
@@ -207,6 +207,10 @@ do_cmds_next(State,Result,{Commands,_}) ->
       io:format("~p~n",[erlang:get_stacktrace()]),
       State
   end.
+
+strip_call_info(TestingSpec,CallInfo) ->
+  try_execute
+    (TestingSpec,strip_call_info,CallInfo,CallInfo).
 
 make_void_call() -> {?MODULE,void,[]}.
 
