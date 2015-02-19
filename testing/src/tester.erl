@@ -92,12 +92,15 @@ do_cmds_pre(State) ->
   State#state.started.
 
 do_cmds_args(State) ->
-  [(State#state.testingSpec):command(State#state.test_state,State)].
+  [(State#state.testingSpec):command(State#state.test_state,State),
+   State#state.testingSpec].
 
-do_cmds_pre(State,[Commands]) ->
+do_cmds_pre(State,[Commands,_]) ->
   (State#state.testingSpec):precondition(State,State#state.test_state,filter_commands(Commands)).
 
-do_cmds(Commands) ->
+do_cmds(PreCommands,TestingSpec) ->
+  Commands =
+    try_execute(TestingSpec,prepare,[PreCommands],PreCommands),
   ParentPid =
     self(),
   NewJobs =
@@ -182,7 +185,7 @@ do_cmds_post(State,Args,Result) ->
   end
   end.
 
-do_cmds_next(State,Result,Args) ->
+do_cmds_next(State,Result,{Commands,_}) ->
   try
     {NewJobs,FinishedJobs} = Result,
     if
@@ -196,7 +199,7 @@ do_cmds_next(State,Result,Args) ->
 	    (NewState#state.test_state,
 	     NewState,
 	     Result,
-	     Args),
+	     [Commands]),
 	NewState#state{test_state=NewTestState}
     end
   catch _:_ ->
@@ -769,6 +772,15 @@ report_java_exception(Exception) ->
   Err = java:get_static(java:node_id(Exception),'java.lang.System',err),
   java:call(Exception,printStackTrace,[Err]).
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+try_execute(Module,Function,Args,DefaultValue) ->
+  case lists:member({Function,length(Args)},Function:module_info(export)) of
+    true ->
+      apply(Module,Function,Args);
+    false ->
+      DefaultValue
+  end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

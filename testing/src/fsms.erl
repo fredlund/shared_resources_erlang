@@ -3,7 +3,7 @@
 -include_lib("eqc/include/eqc.hrl").
 
 -export([initial_state/0,init_state/3,precondition/3,command/2,
-	 postcondition/3,prepare/1,next_state/3]).
+	 prepare/1,next_state/4]).
 
 -define(MAX_CONCURRENT,3).
 -define(MAX_STATES,400).
@@ -36,22 +36,22 @@ precondition(_,State,Commands) ->
 	 Machine:precondition(MachineState,Command)
      end, Commands).
 
-command(State,CardTestState) ->
-  [command1(State,CardTestState)].
-command1(State,CardTestState) ->
-  command1(State,CardTestState,0,[]).
-command1(State,CardTestState,NPars,UsedMachines) ->
+command(State,TesterState) ->
+  [command1(State,TesterState)].
+command1(State,TesterState) ->
+  command1(State,TesterState,0,[]).
+command1(State,TesterState,NPars,UsedMachines) ->
   case length(UsedMachines)<length(State#fstate.machines) 
     andalso permit_par(State,NPars) of
     false -> [];
     true ->
       ?LET({Command,NewUsedMachines},
 	   gen_mach_cmd(State,UsedMachines),
-	   case limit_states(State,CardTestState) of
+	   case limit_states(State,TesterState) of
 	     true -> [Command];
 	     false ->
 	       ?LET(NextCommands,
-		    command1(State,CardTestState,NPars,NewUsedMachines),
+		    command1(State,TesterState,NPars,NewUsedMachines),
 		    [Command|NextCommands])
 	   end)
   end.
@@ -73,13 +73,10 @@ gen_mach_cmd(State,UsedMachines) ->
 	   end)
   end.
 
-postcondition(_,_,_) ->
-  true.
-
 prepare(Commands) ->
   lists:map(fun ({_,Command}) -> Command end,Commands).
 
-next_state(State,_Result,[Commands]) ->
+next_state(State,_TesterState,_Result,[Commands]) ->
   lists:foldl
     (fun ({I,Command},S) ->
 	 {_,{Machine,MachineState}} = lists:keyfind(I,1,S#fstate.machines),
@@ -98,12 +95,12 @@ permit_par(State,NPars) ->
       NPars >= N
   end.
 
-limit_states(State,CardTestState) ->
+limit_states(State,TesterState) ->
   case proplists:get_value(limit_card_state,State#fstate.options,?MAX_STATES) of
     false ->
       false;
     N when is_integer(N), N>0 ->
-      CardTestState >= N
+      TesterState >= N
   end.
 
     
