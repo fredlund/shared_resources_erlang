@@ -92,13 +92,18 @@ do_cmds_pre(State) ->
   State#state.started.
 
 do_cmds_args(State) ->
-  [(State#state.testingSpec):command(State#state.test_state,State),
-   State#state.testingSpec].
+  Commands = (State#state.testingSpec):command(State#state.test_state,State),
+  io:format("Commands are ~p~n",[Commands]),
+  [Commands,State#state.testingSpec].
 
 do_cmds_pre(State,[Commands,_]) ->
-  (State#state.testingSpec):precondition(State,State#state.test_state,filter_commands(Commands)).
+  Result = 
+  (State#state.testingSpec):precondition(State,State#state.test_state,filter_commands(Commands)),
+  io:format("Pre returns ~p~n",[Result]),
+  Result.
 
 do_cmds(Commands,TestingSpec) ->
+  io:format("will execute ~p~n",[Commands]),
   ParentPid =
     self(),
   NewJobs =
@@ -209,8 +214,7 @@ do_cmds_next(State,Result,{Commands,_}) ->
   end.
 
 strip_call_info(TestingSpec,CallInfo) ->
-  try_execute
-    (TestingSpec,strip_call_info,CallInfo,CallInfo).
+  try_execute(TestingSpec,strip_call_info,[CallInfo],CallInfo).
 
 make_void_call() -> {?MODULE,void,[]}.
 
@@ -779,7 +783,7 @@ report_java_exception(Exception) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 try_execute(Module,Function,Args,DefaultValue) ->
-  case lists:member({Function,length(Args)},Function:module_info(export)) of
+  case lists:member({Function,length(Args)},Module:module_info(exports)) of
     true ->
       apply(Module,Function,Args);
     false ->

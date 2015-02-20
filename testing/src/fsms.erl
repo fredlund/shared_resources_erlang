@@ -54,20 +54,31 @@ started(State,Result) ->
   Started = State#fstate.started,
   if
     is_function(Started) ->
-      State#fstate{global_state=Started(State,Result)};
+      Started(State,Result);
     true ->
       State
   end.		     
 
 precondition(_,State,Commands) ->
+  io:format("Commands are ~p~n",[Commands]),
   lists:all
     (fun ({I,Command}) ->
 	 {_,{Machine,MachineState}} = lists:keyfind(I,1,State#fstate.machines),
-	 Machine:precondition(I,MachineState,State#fstate.global_state,Command)
+	 Result = 
+	   Machine:precondition(I,MachineState,State#fstate.global_state,Command),
+	 if 
+	   Result ->
+	     ok;
+	   true ->
+	     io:format
+	       ("I=~p Machine ~p en estado ~p falla su precondition para la llamada ~n~p~n",
+		[I,Machine,MachineState,Command])
+	 end,
+	 Result
      end, Commands).
 
 command(State,TesterState) ->
-  [command1(State,TesterState)].
+  command1(State,TesterState).
 command1(State,TesterState) ->
   command1(State,TesterState,0).
 command1(State,TesterState,NPars) ->
@@ -130,6 +141,7 @@ next_state(State,_TesterState,Result,[Commands]) ->
 	   {NewMachineState,NewGlobalState} =
 	     Machine:next_state
 	       (I,MachineState,State#fstate.global_state,Command),
+	   io:format("NewGlobalState=~p~n",[NewGlobalState]),
 	   S#fstate
 	     {machines=
 		lists:keyreplace
