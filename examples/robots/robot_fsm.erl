@@ -33,11 +33,11 @@ command(Id,State,_GlobalState) ->
 next_state(Id,State,_GlobalState,Call) ->
   NAVES_LIMIT = State#rstate.n_naves-1,
   case Call of
-    {exit,NAVES_LIMIT,W} ->
+    {_,exit,[_,NAVES_LIMIT,W]} ->
       {State#rstate{next=stopped,weight=W},void};
-    {enter,N,W} ->
+    {_,enter,[_,N,W]} ->
       {State#rstate{next={exit,N},weight=W},void};
-    {exit,N,W} ->
+    {_,exit,[_,N,W]} ->
       {State#rstate{next={enter,N+1},weight=W},void}
   end.
 
@@ -48,14 +48,10 @@ peso(P) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 enter(Robot,Nave,Peso) ->     
-  io:format
-    ("enter(~p,~p,~p)~n",
-     [Robot,Nave,Peso]).
+  java:call(tester:get_data(controller),solicitarEntrar,[Nave,Peso]).
 
 exit(Robot,Nave,Peso) ->     
-  io:format
-    ("exit(~p,~p,~p)~n",
-     [Robot,Nave,Peso]).
+  java:call(tester:get_data(controller),solicitarSalir,[Nave,Peso]).
 
      
 	

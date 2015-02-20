@@ -26,7 +26,7 @@ test() ->
   DataSpec =
     {robots,[4,1000]},
   WaitSpec =
-    {fcfs,[]},
+    {always,[]},
   TestingSpec = 
     {fsms,[{10,{robot_fsm,[4]}}]},  %% 10 robots for a system of 4 warehouses
   Options =
@@ -36,18 +36,7 @@ test() ->
      {started_fun,fun started/2}],
   tester:test(Options,DataSpec,WaitSpec,TestingSpec).
 
-test2() ->
-  Id = "test",
-  CP =  ["/home/fred/gits/src/cctester/test/classes/",
-%%	 "/home/fred/practica_1_complete/G-4F1M/110175/20140605-170257",
-	 "/home/fred/practica_1_complete/G-4F1M/000999/20140522-143819/",
-	 "/home/fred/gits/src/cctester/test/cclib.jar"],
-  DataSpec = {robots,[4,1000]},
-  WaitSpec = {always,[]},
-  TestingSpec = {fsms,{void,10,{robot_fsm,[4]},fun () -> ok end,fun () -> ok end}},
-  Options = [{needs_java,true},{no_par,true},{cp,CP},{id,Id}],
-  tester:test(Options,DataSpec,WaitSpec,TestingSpec).
-  
+ 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Run all tests on a set of exercises

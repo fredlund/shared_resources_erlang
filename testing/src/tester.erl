@@ -93,17 +93,12 @@ do_cmds_pre(State) ->
 
 do_cmds_args(State) ->
   Commands = (State#state.testingSpec):command(State#state.test_state,State),
-  io:format("Commands are ~p~n",[Commands]),
   [Commands,State#state.testingSpec].
 
 do_cmds_pre(State,[Commands,_]) ->
-  Result = 
-  (State#state.testingSpec):precondition(State,State#state.test_state,filter_commands(Commands)),
-  io:format("Pre returns ~p~n",[Result]),
-  Result.
+  (State#state.testingSpec):precondition(State,State#state.test_state,filter_commands(Commands)).
 
 do_cmds(Commands,TestingSpec) ->
-  io:format("will execute ~p~n",[Commands]),
   ParentPid =
     self(),
   NewJobs =
@@ -190,7 +185,7 @@ do_cmds_post(State,Args,Result) ->
   end
   end.
 
-do_cmds_next(State,Result,{Commands,_}) ->
+do_cmds_next(State,Result,[Commands,_]) ->
   try
     {NewJobs,FinishedJobs} = Result,
     if
@@ -348,7 +343,8 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
 			      true ->
 				[{job_next_state(QueueJob,IndState,State,WhatToCheck),
 				  delete_job(Job,FJobs)}];
-			      false -> []
+			      false ->
+				[]
 			    end;
 			  false -> []
 			end
@@ -500,7 +496,8 @@ job_is_executable(Job,IndState,State,WhatToCheck) ->
 
 job_returns_correct_value(Job,IndState,State) ->
   try (State#state.dataSpec):return_value(IndState#onestate.sdata,resource_call(Job#job.call)) of
-      Value -> Value =:= Job#job.result
+      Value -> 
+      Value =:= Job#job.result
   catch _:_ ->
       (State#state.dataSpec):return
 	(IndState#onestate.sdata,resource_call(Job#job.call),Job#job.result)

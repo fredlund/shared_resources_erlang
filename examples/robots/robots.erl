@@ -2,7 +2,7 @@
 
 -behaviour(resource_data_implementation).
 
--export([init/2,pre/2,cpre/2,post/2,return/3,return_value/2]).
+-export([init/2,pre/2,cpre/2,post/2,return/3]).
 -export([num_naves/1,max_weight/1]).
 
 -include("robots.hrl").
@@ -51,9 +51,6 @@ post({exit,[_R,N,W]},State) ->
 
 return(_State,_Call,_Result) ->
   true.
-
-return_value(_,_) ->
-  void.
 
 add_weight(W,N,State) ->
   {_,OldWeight} = lists:keyfind(N,1,State#robots.warehouses),

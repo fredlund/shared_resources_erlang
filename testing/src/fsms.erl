@@ -60,21 +60,10 @@ started(State,Result) ->
   end.		     
 
 precondition(_,State,Commands) ->
-  io:format("Commands are ~p~n",[Commands]),
   lists:all
     (fun ({I,Command}) ->
 	 {_,{Machine,MachineState}} = lists:keyfind(I,1,State#fstate.machines),
-	 Result = 
-	   Machine:precondition(I,MachineState,State#fstate.global_state,Command),
-	 if 
-	   Result ->
-	     ok;
-	   true ->
-	     io:format
-	       ("I=~p Machine ~p en estado ~p falla su precondition para la llamada ~n~p~n",
-		[I,Machine,MachineState,Command])
-	 end,
-	 Result
+	 Machine:precondition(I,MachineState,State#fstate.global_state,Command)
      end, Commands).
 
 command(State,TesterState) ->
@@ -125,14 +114,16 @@ strip_call_info({_,Call}) ->
   Call.
 
 next_state(State,_TesterState,Result,[Commands]) ->
-  {_,FinishedJobs} =
+  {NewJobs,FinishedJobs} =
     Result,
-  FinishedMachines =
-    lists:map
-      (fun (Job) ->
-	   {MachineId,_} = Job#job.callinfo,
-	   MachineId
-       end, FinishedJobs),
+  RemainingNewJobs = 
+    tester:minus_jobs(NewJobs,FinishedJobs),
+  NewJobsBlocked =
+    lists:map(fun (Job) -> robot_in_call(Job#job.call) end, RemainingNewJobs),
+  NewUnblocked =
+    lists:map(fun (Job) -> robot_in_call(Job#job.call) end, FinishedJobs),
+  NewBlocked =
+    (State#fstate.blocked ++ NewJobsBlocked) -- NewUnblocked,
   NewState =
     lists:foldl
       (fun ({I,Command},S) ->
@@ -141,14 +132,13 @@ next_state(State,_TesterState,Result,[Commands]) ->
 	   {NewMachineState,NewGlobalState} =
 	     Machine:next_state
 	       (I,MachineState,State#fstate.global_state,Command),
-	   io:format("NewGlobalState=~p~n",[NewGlobalState]),
 	   S#fstate
 	     {machines=
 		lists:keyreplace
 		  (I,1,S#fstate.machines,{I,{Machine,NewMachineState}}),
 	      global_state=NewGlobalState}
-       end, Commands, State),
-  NewState#fstate{blocked=NewState#fstate.blocked--FinishedMachines}.
+       end, State, Commands),
+  NewState#fstate{blocked=NewBlocked}.
 
 permit_par(State,NPars) ->
   case proplists:get_value(max_par,State#fstate.options,?MAX_CONCURRENT) of
