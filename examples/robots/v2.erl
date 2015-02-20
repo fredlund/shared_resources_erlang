@@ -2,7 +2,7 @@
 
 -compile(export_all).
 
--include("fstate.hrl").
+-include("../../testing/src/fstate.hrl").
 
 start(NodeId,_TS) ->  
   case java:new(NodeId,'ControlAccesoNavesMonitor',[]) of
@@ -15,7 +15,7 @@ start(NodeId,_TS) ->
   end.
 
 started(TS,Controller) ->
-  TS#fstate{controller=Controller}.
+  TS#fstate{global_state=Controller}.
 
 test() ->
   Id = "test",

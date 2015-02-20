@@ -95,7 +95,7 @@ gen_mach_cmd(State) ->
   case NonBlocked of
     [] ->
       {tester:make_void_call(),State};
-    false ->
+    _ ->
       ?LET({MachId,{Machine,MachineState}},
 	   oneof(NonBlocked),
 	   begin
@@ -142,7 +142,7 @@ permit_par(State,NPars) ->
   case proplists:get_value(max_par,State#fstate.options,?MAX_CONCURRENT) of
     false ->
       false;
-    N when is_integer(N), N>0 ->
+    N when is_integer(N), N>=0 ->
       NPars >= N
   end.
 

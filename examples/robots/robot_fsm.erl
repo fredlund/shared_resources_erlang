@@ -11,7 +11,7 @@
 
 
 init(Id,[N_NAVES]) ->
-  #rstate{n_naves=N_NAVES,next={enter,0},weight=100,controller=void}.
+  #rstate{n_naves=N_NAVES,next={enter,0},weight=100}.
 
 precondition(Id,State,_GlobalState,{CallType,Nave,Weight}) ->
   ({CallType,Nave} == State#rstate.next)
