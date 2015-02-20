@@ -3,18 +3,18 @@
 -include_lib("eqc/include/eqc.hrl").
 -include("tester.hrl").
 
--export([initial_state/0,start/2,started/2,init_state/2,precondition/3,
+-export([initial_state/0,start/2,started/2,init/2,precondition/3,
 	 command/2,strip_call_info/1,next_state/4]).
 
 -define(MAX_CONCURRENT,3).
 -define(MAX_STATES,400).
 
--record(fstate,{machines,global_state,options,start,started,blocked}).
+-include("fstate.hrl").
 
 initial_state() ->
   #fstate{}.
 
-init_state(PreMachineSpec,Options) ->
+init(PreMachineSpec,Options) ->
   StartFun =
     proplists:get_value(start_fun,Options,void),
   StartedFun =
@@ -24,7 +24,7 @@ init_state(PreMachineSpec,Options) ->
   MachineSpec =
     lists:foldl
       (fun ({N,MachineWithMachineInit},Acc) when is_integer(N) ->
-	   lists:duplicat(N,MachineWithMachineInit)++Acc;
+	   lists:duplicate(N,MachineWithMachineInit)++Acc;
 	   (MachineWithInit,Acc) ->
 	   [MachineWithInit|Acc]
        end, [], PreMachineSpec),

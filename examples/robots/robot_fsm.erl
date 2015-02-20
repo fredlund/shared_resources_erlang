@@ -4,7 +4,8 @@
 
 -include_lib("eqc/include/eqc.hrl").
 
--include("rstate.hrl").
+-record(rstate,{n_naves,next,weight,controller}).
+
 
 -define(PESO_FACTOR,10).
 
