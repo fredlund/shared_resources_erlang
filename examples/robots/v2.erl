@@ -2,16 +2,38 @@
 
 -compile(export_all).
 
+-include("rstate.hrl").
+
+start(NodeId,_TS) ->  
+  case java:new(NodeId,'ControlAccesoNavesMonitor',[]) of
+    Exc = {java_exception,_} -> 
+      java:report_java_exception(Exc),
+      throw(bad);
+    Controller ->
+      tester:store_data(controller,Controller),
+      Controller
+  end.
+
+started(TS,Controller) ->
+  TS#rstate{controller=Controller}.
+
 test() ->
   Id = "test",
   CP =  ["/home/fred/gits/src/cctester/test/classes/",
 %%	 "/home/fred/practica_1_complete/G-4F1M/110175/20140605-170257",
 	 "/home/fred/practica_1_complete/G-4F1M/000999/20140522-143819/",
 	 "/home/fred/gits/src/cctester/test/cclib.jar"],
-  DataSpec = {robots,[4,1000]},
-  WaitSpec = {fcfs,[]},
-  TestingSpec = {fsms,{void,10,{robot_fsm,[4]},fun () -> ok end,fun () -> ok end}},
-  Options = [{needs_java,true},{cp,CP},{no_par,true},{id,Id}],
+  DataSpec =
+    {robots,[4,1000]},
+  WaitSpec =
+    {fcfs,[]},
+  TestingSpec = 
+    {fsms,[{10,{robot_fsm,[4]}}]},  %% 10 robots for a system of 4 warehouses
+  Options =
+    [{needs_java,true},{cp,CP},{max_par,0},{id,Id},
+     {start_fun,fun start/2},
+     {global_state,void},      %% We could leave this out...
+     {started_fun,fun started/2}],
   tester:test(Options,DataSpec,WaitSpec,TestingSpec).
 
 test2() ->

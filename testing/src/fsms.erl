@@ -14,10 +14,20 @@
 initial_state() ->
   #fstate{}.
 
-init_state({GlobalStateInit,N,MachineWithMachineInit,Start,Started},Options) ->
-  Machines = lists:duplicate(N,MachineWithMachineInit),
-  init_state({GlobalStateInit,Start,Started,Machines},Options);
-init_state({GlobalStateInit,Start,Started,Machines},Options) ->
+init_state(PreMachineSpec,Options) ->
+  StartFun =
+    proplists:get_value(start_fun,Options,void),
+  StartedFun =
+    proplists:get_value(started_fun,Options,void),
+  GlobalState =
+    proplists:get_value(global_state,Options,void),
+  MachineSpec =
+    lists:foldl
+      (fun ({N,MachineWithMachineInit},Acc) when is_integer(N) ->
+	   lists:duplicat(N,MachineWithMachineInit)++Acc;
+	   (MachineWithInit,Acc) ->
+	   [MachineWithInit|Acc]
+       end, [], PreMachineSpec),
   #fstate
     {
       machines=
@@ -25,12 +35,12 @@ init_state({GlobalStateInit,Start,Started,Machines},Options) ->
 	 (fun ({I,{Machine,Init}}) ->
 	      {I,{Machine,Machine:init(I,Init)}}
 	  end, 
-	  lists:zip(lists:seq(1,length(Machines)),Machines)),
+	  lists:zip(lists:seq(1,length(MachineSpec)),MachineSpec)),
       options=Options,
-      start=Start,
-      started=Started,
+      start=StartFun,
+      started=StartedFun,
       blocked=[],
-      global_state=GlobalStateInit
+      global_state=GlobalState
     }.
 
 start(NodeId,State) ->

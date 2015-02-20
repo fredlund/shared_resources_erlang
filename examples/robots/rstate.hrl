@@ -1,0 +1,1 @@
+-record(rstate,{n_naves,next,weight,controller}).
