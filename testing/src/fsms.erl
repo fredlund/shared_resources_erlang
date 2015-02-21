@@ -5,6 +5,7 @@
 
 -export([initial_state/0,start/2,started/2,init/2,precondition/3,
 	 command/2,strip_call_info/1,next_state/4]).
+-export([print_finished_job_info/2,print_started_job_info/2,print_state/1]).
 
 -define(MAX_CONCURRENT,3).
 -define(MAX_STATES,400).
@@ -59,11 +60,12 @@ started(State,Result) ->
       State
   end.		     
 
-precondition(_,State,Commands) ->
+precondition(_,#fstate{blocked=Blocked,machines=Machines,global_state=GlobalState},Commands) ->
   lists:all
     (fun ({I,Command}) ->
-	 {_,{Machine,MachineState}} = lists:keyfind(I,1,State#fstate.machines),
-	 Machine:precondition(I,MachineState,State#fstate.global_state,Command)
+	 {_,{Machine,MachineState}} = lists:keyfind(I,1,Machines),
+	 Machine:precondition(I,MachineState,GlobalState,Command)
+	   andalso not(lists:member(I,Blocked))
      end, Commands).
 
 command(State,TesterState) ->
@@ -77,13 +79,17 @@ command1(State,TesterState,NPars) ->
     true ->
       ?LET({Command,NewState},
 	   gen_mach_cmd(State),
-	   case limit_states(State,TesterState) of
-	     true ->
-	       [Command];
-	     false ->
-	       ?LET(NextCommands,
-		    command1(NewState,TesterState,NPars),
-		    [Command|NextCommands])
+	   case Command of
+	     void -> [];
+	     _ ->
+	       case limit_states(State,TesterState) of
+		 true ->
+		   [Command];
+		 false ->
+		   ?LET(NextCommands,
+			command1(NewState,TesterState,NPars),
+			[Command|NextCommands])
+	       end
 	   end)
   end.
 
@@ -94,7 +100,7 @@ gen_mach_cmd(State) ->
        State#fstate.machines),
   case NonBlocked of
     [] ->
-      {tester:make_void_call(),State};
+      {void,State};
     _ ->
       ?LET({MachId,{Machine,MachineState}},
 	   oneof(NonBlocked),
@@ -110,20 +116,25 @@ gen_mach_cmd(State) ->
 	   end)
   end.
 
+%% careful with void!
 strip_call_info({_,Call}) -> 
   Call.
+
+jobs_to_machines(Jobs) ->
+  lists:map
+    (fun (Job) ->
+	 {Machine,_} = Job#job.callinfo,
+	 Machine
+     end, Jobs).
 
 next_state(State,_TesterState,Result,[Commands]) ->
   {NewJobs,FinishedJobs} =
     Result,
-  RemainingNewJobs = 
-    tester:minus_jobs(NewJobs,FinishedJobs),
-  NewJobsBlocked =
-    lists:map(fun (Job) -> robot_in_call(Job#job.call) end, RemainingNewJobs),
-  NewUnblocked =
-    lists:map(fun (Job) -> robot_in_call(Job#job.call) end, FinishedJobs),
+  RemainingNewMachines = 
+    jobs_to_machines(NewJobs) -- jobs_to_machines(FinishedJobs),
   NewBlocked =
-    (State#fstate.blocked ++ NewJobsBlocked) -- NewUnblocked,
+    (State#fstate.blocked -- jobs_to_machines(FinishedJobs))
+    ++ RemainingNewMachines,
   NewState =
     lists:foldl
       (fun ({I,Command},S) ->
@@ -156,4 +167,50 @@ limit_states(State,TesterState) ->
       TesterState >= N
   end.
 
-    
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+print_finished_job_info(Job=#job{callinfo={MachId,_}},TS) ->
+  {_,{Machine,MachineState}} = lists:keyfind(MachId,1,TS#fstate.machines),
+  try Machine:print_finished_job_info(Job,MachId,MachineState,TS#fstate.global_state)
+  catch _:_ -> io_lib:format("~p",[Job#job.call]) end.
+
+print_started_job_info(Job=#job{callinfo={MachId,_}},TS) ->
+  {_,{Machine,MachineState}} = lists:keyfind(MachId,1,TS#fstate.machines),
+  try Machine:print_started_job_info(Job,MachId,MachineState,TS#fstate.global_state)
+  catch _:_ -> io_lib:format("~p",[Job#job.call]) end.
+      
+print_state(#fstate{blocked=Blocked,machines=Machines}) ->
+  combine
+    (Machines,
+     "||",
+     fun ({MachineId,{Machine,MachineState}}) ->
+	 String =
+	   try Machine:print_state(MachineId,MachineState)
+	   catch _:_ -> io_lib:format("~p",[MachineState]) end,
+	 IsBlockedString =
+	   case lists:member(MachineId,Blocked) of
+	     true -> "*";
+	     _ -> ""
+	   end,
+	 String ++ IsBlockedString
+     end).
+
+combine([],_,_) ->
+  "";
+combine([Element|Rest],Combinator,F) ->
+  ElementString = F(Element),
+  RestString = combine(Rest,Combinator,F),
+  if
+    ElementString=/="", RestString=/="" ->
+      ElementString ++ Combinator ++ RestString;
+    true ->
+      ElementString ++ RestString
+  end.
+     
+
+
+
+
+	       
+
+	  

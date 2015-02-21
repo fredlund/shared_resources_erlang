@@ -379,11 +379,6 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
 	 OrigState)
   end.
 
-print_test_state(State) ->
-  io:format
-    ("Final test state:~n~s~n",
-     [print_test_state(State#state.test_state,State#state.testingSpec)]).
-  
 maybe_print_model_state(State) ->
   case State#state.states of
     [IndState] ->
@@ -395,23 +390,19 @@ maybe_print_model_state(State) ->
       ok
   end.
 
-print_test_state(TestState,TestingSpec) ->
-  case lists:member({print_state,1},TestingSpec:module_info(exports)) of
-    true -> TestingSpec:print_state(TestState);
-    false -> io_lib:format("~p",[TestState]) 
-  end.
+print_test_state(#state{test_state=TS,testingSpec=TestModule}) ->
+  io:format
+    ("Final test state:~n~s~n",
+     [try TestModule:print_state(TS)
+      catch _:_ -> io_lib:format("~p",[TS]) end]).
       
 print_model_state(ModelState,ModelSpec) ->
-  case lists:member({print_state,1},ModelSpec:module_info(exports)) of
-    true -> ModelSpec:print_state(ModelState);
-    false -> io_lib:format("~p",[ModelState]) 
-  end.
+  try ModelSpec:print_state(ModelState)
+  catch _:_ -> io_lib:format("~p",[ModelState]) end.
 
 print_schedule_state(ScheduleState,ScheduleSpec) ->
-  case lists:member({print_state,1},ScheduleSpec:module_info(exports)) of
-    true -> ScheduleSpec:print_state(ScheduleState);
-    false -> io_lib:format("~p",[ScheduleState]) 
-  end.
+  try ScheduleSpec:print_state(ScheduleState)
+  catch _:_ -> io_lib:format("~p",[ScheduleState]) end.
       
 find_active_jobs(StatesAndJobs) ->
   lists:foldl
@@ -599,7 +590,7 @@ prop_ok(Options,DataSpec,WaitSpec,TestingSpec) ->
 	      Res == ok ->
 		true;
 	      true ->
-		print_counterexample(Cmds,H,DS,Res,TestingSpec),
+		print_counterexample(Cmds,H,DS,Res),
 		false
 	    end
 	  end)).
@@ -662,7 +653,7 @@ eqc_printer(Format,String) ->
     _ -> io:format(Format,String)
   end.
 
-print_counterexample(Cmds,H,_FailingState,Reason,TestingSpec) ->
+print_counterexample(Cmds,H,FailingState,Reason) -> 
   try
     io:format
       ("~n~nTest failed with reason ~p~n",
@@ -678,7 +669,8 @@ print_counterexample(Cmds,H,_FailingState,Reason,TestingSpec) ->
       end,
     io:format("~nCommand sequence:~n"),
     io:format("-----------------~n~n"),
-    print_commands(lists:zip(tl(FailingCommandSequence),ReturnValues),TestingSpec),
+    print_commands
+      (lists:zip(tl(FailingCommandSequence),ReturnValues),FailingState),
     io:format("~n~n")
   catch _:Exception ->
       io:format
@@ -693,9 +685,9 @@ result_value_from_history({_,_,_,Result}) ->
 result_value_from_history({_,_,Result}) ->
   Result.
 
-print_commands([],_TestingSpec) ->
+print_commands([],_State) ->
   ok;
-print_commands([{Call,Result}|Rest],TestingSpec) ->
+print_commands([{Call,Result}|Rest],State) ->
   ResultString =
     case Call of
       {_,_,do_cmds,_Cmds,_} ->
@@ -709,7 +701,7 @@ print_commands([{Call,Result}|Rest],TestingSpec) ->
 	      "-- unblocks "++
 	      lists:foldl
 		(fun (UnblockedJob,Acc) ->
-		     JobStr = print_finished_job_info(UnblockedJob,TestingSpec),
+		     JobStr = print_finished_job_info(UnblockedJob,State),
 		     if
 		       Acc=="" -> JobStr;
 		       true -> Acc++", "++JobStr
@@ -726,7 +718,7 @@ print_commands([{Call,Result}|Rest],TestingSpec) ->
 		     io:format("~n"),
 		     io_lib:format
 		       ("~s ~s raised exception",
-			[Acc,print_started_job_info(UnblockedJob,TestingSpec)]);
+			[Acc,print_started_job_info(UnblockedJob,State)]);
 		   _ ->
 		     Acc
 		 end
@@ -736,16 +728,16 @@ print_commands([{Call,Result}|Rest],TestingSpec) ->
     end,
   CallString =
     case Call of
-      {_,_,do_cmds,[_Commands],_} ->
+      {_,_,do_cmds,[_Commands,_],_} ->
 	{Jobs,_} = Result,
-	io_lib:format("<< ~s >>",[print_jobs(fun print_started_job_info/2,"",Jobs,TestingSpec)]);
+	io_lib:format("<< ~s >>",[print_jobs(fun print_started_job_info/2,"",Jobs,State)]);
       {_,_,start,_,_} ->
 	"start";
       {_,_,Name,Args,_} ->
 	io_lib:format("~p ~p",[Name,Args])
     end,
   io:format("  ~s ~s~n",[CallString,ResultString]),
-  print_commands(Rest,TestingSpec).
+  print_commands(Rest,State).
 
 print_cmds(Acc,[]) -> Acc;
 print_cmds(Acc,[{_,Fun,Args}|Rest]) ->
@@ -756,18 +748,18 @@ print_cmds(Acc,[{_,Fun,Args}|Rest]) ->
   end.
 
 print_jobs(_,Acc,[],_) -> Acc;
-print_jobs(Printer,Acc,[Job|Rest],TestingSpec) ->
+print_jobs(Printer,Acc,[Job|Rest],State) ->
   Comma = if Acc=="" -> Acc; true -> ",\n     " end,
-  print_jobs(Printer,io_lib:format("~s~s~s",[Acc,Comma,Printer(Job,TestingSpec)]),Rest,TestingSpec).
+  print_jobs(Printer,io_lib:format("~s~s~s",[Acc,Comma,Printer(Job,State)]),Rest,State).
 
-print_finished_job_info(Job,{TestModule,_}) ->
-  try TestModule:print_finished_job_info(Job)
+print_finished_job_info(Job,#state{testingSpec=TestModule,test_state=TS}) ->
+  try TestModule:print_finished_job_info(Job,TS)
   catch _:_Reason ->
       io_lib:format("~p",[Job])
   end.
 
-print_started_job_info(Job,{TestModule,_}) ->
-  try TestModule:print_started_job_info(Job)
+print_started_job_info(Job,#state{testingSpec=TestModule,test_state=TS}) ->
+  try TestModule:print_started_job_info(Job,TS)
   catch _:_Reason ->
       io_lib:format("~p",[Job])
   end.

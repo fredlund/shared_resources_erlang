@@ -4,6 +4,8 @@
 
 -include_lib("eqc/include/eqc.hrl").
 
+-include("../../testing/src/tester.hrl").
+
 -record(rstate,{n_naves,next,weight,controller}).
 
 
@@ -53,7 +55,22 @@ enter(Robot,Nave,Peso) ->
 exit(Robot,Nave,Peso) ->     
   java:call(tester:get_data(controller),solicitarSalir,[Nave,Peso]).
 
-     
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%     
 	
-  
+print_finished_job_info(Job,Id,State,GlobalState) ->
+  case Job#job.call of
+    {_,_,[R,_,_]} -> io_lib:format("~p",[R])
+  end.
+
+print_started_job_info(Job,Id,State,GlobalState) ->
+  case Job#job.call of
+    {_,CallType,[R,N,P]} -> io_lib:format("~p(~p,~p,~p)",[CallType,R,N,P])
+  end.
+
+print_state(MachineId,#rstate{next={CallType,Nave},weight=Weight}) ->      
+  case {CallType,Nave} of
+    {enter,0} -> "";
+    _ -> io_lib:format("~p(~p,~p,~p)",[CallType,MachineId,Nave,Weight])
+  end.
+
 

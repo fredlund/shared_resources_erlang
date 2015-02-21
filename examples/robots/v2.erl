@@ -21,7 +21,8 @@ test() ->
   Id = "test",
   CP =  ["/home/fred/gits/src/cctester/test/classes/",
 %%	 "/home/fred/practica_1_complete/G-4F1M/110175/20140605-170257",
-	 "/home/fred/practica_1_complete/G-4F1M/000999/20140522-143819/",
+%%	 "/home/fred/practica_1_complete/G-4F1M/000999/20140522-143819/",
+	 "/home/fred/practica_1_complete/G-4F2M/120369/20140608-232557/",
 	 "/home/fred/gits/src/cctester/test/cclib.jar"],
   DataSpec =
     {robots,[4,1000]},
@@ -103,8 +104,13 @@ runtests_for_entregas(Entregas,CP) ->
 run(User,Dir,PreOptions,CP) ->
   DataSpec = {robots,[4,1000]},
   WaitSpec = {always,[]},
-  TestingSpec = {robot_commands,[10,4]},
-  Options = [{needs_java,true},{cp,CP},{id,User}|PreOptions],
+  TestingSpec = 
+    {fsms,[{10,{robot_fsm,[4]}}]},  %% 10 robots for a system of 4 warehouses
+  Options =
+    [{needs_java,true},{cp,CP},{max_par,0},{id,User},
+     {start_fun,fun start/2},
+     {global_state,void},      %% We could leave this out...
+     {started_fun,fun started/2}|PreOptions],
   tester:test(Options,DataSpec,WaitSpec,TestingSpec).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
