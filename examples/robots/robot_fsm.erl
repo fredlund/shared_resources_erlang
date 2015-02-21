@@ -6,42 +6,47 @@
 
 -include("../../testing/src/tester.hrl").
 
--record(rstate,{n_naves,next,weight,controller}).
+-record(rstate,{n_naves,next,controller}).
 
 
--define(PESO_FACTOR,10).
+-define(PESO_FACTOR,11).
 
 
 init(Id,[N_NAVES]) ->
-  #rstate{n_naves=N_NAVES,next={enter,0},weight=100}.
+  #rstate{n_naves=N_NAVES,next={enter,0,100}}.
 
-precondition(Id,State,_GlobalState,{_,CallType,[_,Nave,Weight]}) ->
-  ({CallType,Nave} == State#rstate.next)
+precondition(Id,#rstate{next={NCallType,NNave,NWeight}},_,
+	     {_,CallType,[_,Nave,Weight]}) ->
+  (CallType==NCallType)
+    andalso (Nave==NNave)
     andalso if
-	      CallType==exit -> Weight==State#rstate.weight;
-	      true -> Weight >= State#rstate.weight
+	      CallType==exit -> Weight==NWeight;
+	      true -> Weight >= NWeight
 	    end.
 
-command(Id,State,_GlobalState) ->
- case State#rstate.next of
+command(Id,#rstate{next=Next},_GlobalState) ->
+ case Next of
    stopped ->
      stopped;
-   {exit,Nave} ->
-     {?MODULE,exit,[Id,Nave,State#rstate.weight]};
-   {enter,Nave} ->
-     {?MODULE,enter,[Id,Nave,peso(State#rstate.weight)]}
+   {exit,Nave,Weight} ->
+     {?MODULE,exit,[Id,Nave,Weight]};
+   {enter,Nave,Weight} ->
+     {?MODULE,enter,[Id,Nave,peso(Weight)]}
  end.
 
-next_state(Id,State,_GlobalState,Call) ->
-  NAVES_LIMIT = State#rstate.n_naves-1,
-  case Call of
-    {_,exit,[_,NAVES_LIMIT,W]} ->
-      {State#rstate{next=stopped,weight=W},void};
-    {_,enter,[_,N,W]} ->
-      {State#rstate{next={exit,N},weight=W},void};
-    {_,exit,[_,N,W]} ->
-      {State#rstate{next={enter,N+1},weight=W},void}
-  end.
+next_state(Id,State=#rstate{next=Next,n_naves=N_NAVES},GS,Job) ->
+  NavesLimit =
+    N_NAVES-1,
+  NewNext =
+    case Next of
+      {exit,NavesLimit,_} ->
+	stopped;
+      {exit,Nave,Weight} ->
+	{enter,Nave+1,Weight};
+      {enter,Nave,Weight} ->
+	{exit,Nave,Weight}
+    end,
+  {State#rstate{next=NewNext},GS}.
 
 peso(P) ->
   Pdiv = P div 100,
@@ -67,9 +72,9 @@ print_started_job_info(Job,Id,State,GlobalState) ->
     {_,CallType,[R,N,P]} -> io_lib:format("~p(~p,~p,~p)",[CallType,R,N,P])
   end.
 
-print_state(MachineId,#rstate{next={CallType,Nave},weight=Weight}) ->      
-  case {CallType,Nave} of
-    {enter,0} -> "";
+print_state(MachineId,#rstate{next={CallType,Nave,Weight}},IsBlocked) ->      
+  case {CallType,Nave,IsBlocked} of
+    {enter,0,false} -> "";
     _ -> io_lib:format("~p(~p,~p,~p)",[CallType,MachineId,Nave,Weight])
   end.
 

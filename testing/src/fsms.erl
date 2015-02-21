@@ -137,18 +137,19 @@ next_state(State,_TesterState,Result,[Commands]) ->
     ++ RemainingNewMachines,
   NewState =
     lists:foldl
-      (fun ({I,Command},S) ->
+      (fun (Job,S) ->
+	   {I,Command} = Job#job.callinfo,
 	   {_,{Machine,MachineState}} =
 	     lists:keyfind(I,1,S#fstate.machines),
 	   {NewMachineState,NewGlobalState} =
 	     Machine:next_state
-	       (I,MachineState,State#fstate.global_state,Command),
+	       (I,MachineState,State#fstate.global_state,Job),
 	   S#fstate
 	     {machines=
 		lists:keyreplace
 		  (I,1,S#fstate.machines,{I,{Machine,NewMachineState}}),
 	      global_state=NewGlobalState}
-       end, State, Commands),
+       end, State, FinishedJobs),
   NewState#fstate{blocked=NewBlocked}.
 
 permit_par(State,NPars) ->
@@ -184,13 +185,15 @@ print_state(#fstate{blocked=Blocked,machines=Machines}) ->
     (Machines,
      "||",
      fun ({MachineId,{Machine,MachineState}}) ->
+	 IsBlocked =
+	   lists:member(MachineId,Blocked),
 	 String =
-	   try Machine:print_state(MachineId,MachineState)
+	   try Machine:print_state(MachineId,MachineState,IsBlocked)
 	   catch _:_ -> io_lib:format("~p",[MachineState]) end,
 	 IsBlockedString =
-	   case lists:member(MachineId,Blocked) of
-	     true -> "*";
-	     _ -> ""
+	   if
+	     IsBlocked -> "*";
+	     true -> ""
 	   end,
 	 String ++ IsBlockedString
      end).
@@ -206,11 +209,5 @@ combine([Element|Rest],Combinator,F) ->
     true ->
       ElementString ++ RestString
   end.
-     
-
-
-
-
-	       
 
 	  
