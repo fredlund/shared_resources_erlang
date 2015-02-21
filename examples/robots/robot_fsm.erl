@@ -13,38 +13,36 @@
 
 
 init(Id,[N_NAVES]) ->
-  #rstate{n_naves=N_NAVES,next={enter,0,100}}.
+  #rstate{n_naves=N_NAVES,next={?MODULE,enter,[Id,0,100]}}.
 
-precondition(Id,#rstate{next={NCallType,NNave,NWeight}},_,
-	     {_,CallType,[_,Nave,Weight]}) ->
-  (CallType==NCallType)
-    andalso (Nave==NNave)
-    andalso if
-	      CallType==exit -> Weight==NWeight;
-	      true -> Weight >= NWeight
-	    end.
+precondition(Id,
+	     #rstate{next={NModule,NCallType,[NId,NNave,NWeight]}},_,
+	     {Module,CallType,[Id,Nave,Weight]}) ->
+  {NModule,NCallType,NId,NNave} == {Module,CallType,Id,Nave}
+  andalso if
+	    CallType==exit -> Weight==NWeight;
+	    true -> Weight >= NWeight
+	  end.
 
 command(Id,#rstate{next=Next},_GlobalState) ->
  case Next of
-   stopped ->
-     stopped;
-   {exit,Nave,Weight} ->
-     {?MODULE,exit,[Id,Nave,Weight]};
-   {enter,Nave,Weight} ->
-     {?MODULE,enter,[Id,Nave,peso(Weight)]}
+   {?MODULE,enter,[Id,Nave,Weight]} ->
+     {?MODULE,enter,[Id,Nave,peso(Weight)]};
+   _ ->
+     Next
  end.
 
 next_state(Id,State=#rstate{next=Next,n_naves=N_NAVES},GS,Job) ->
   NavesLimit =
     N_NAVES-1,
   NewNext =
-    case Next of
-      {exit,NavesLimit,_} ->
+    case Job#job.call of
+      {_,exit,[_,NavesLimit,_]} ->
 	stopped;
-      {exit,Nave,Weight} ->
-	{enter,Nave+1,Weight};
-      {enter,Nave,Weight} ->
-	{exit,Nave,Weight}
+      {_,exit,[_,Nave,Weight]} ->
+	{?MODULE,enter,[Id,Nave+1,Weight]};
+      {_,enter,[_,Nave,Weight]} ->
+	{?MODULE,exit,[Id,Nave,Weight]}
     end,
   {State#rstate{next=NewNext},GS}.
 
@@ -72,10 +70,10 @@ print_started_job_info(Job,Id,State,GlobalState) ->
     {_,CallType,[R,N,P]} -> io_lib:format("~p(~p,~p,~p)",[CallType,R,N,P])
   end.
 
-print_state(MachineId,#rstate{next={CallType,Nave,Weight}},IsBlocked) ->      
+print_state(_,#rstate{next={_,CallType,[Id,Nave,Weight]}},IsBlocked) ->      
   case {CallType,Nave,IsBlocked} of
     {enter,0,false} -> "";
-    _ -> io_lib:format("~p(~p,~p,~p)",[CallType,MachineId,Nave,Weight])
+    _ -> io_lib:format("~p(~p,~p,~p)",[CallType,Id,Nave,Weight])
   end.
 
 
