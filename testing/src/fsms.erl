@@ -71,7 +71,7 @@ precondition(_,#fstate{blocked=Blocked,machines=Machines,global_state=GlobalStat
 command(State,TesterState) ->
   command1(State,TesterState).
 command1(State,TesterState) ->
-  command1(State,TesterState,0).
+  command1(State,TesterState,1).
 command1(State,TesterState,NPars) ->
   case length(State#fstate.blocked)<length(State#fstate.machines) 
     andalso permit_par(State,NPars) of

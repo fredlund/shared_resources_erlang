@@ -67,7 +67,8 @@ runtests_for_entregas(Entregas,CP) ->
 	 io:format("---------------------------~n"),
 	 PreOptions1 = [{enforce_progress,false},{no_par,true}],
 	 Result1 =
-	   run(User,Dir,PreOptions1,CPDir),
+	   %%run(User,Dir,PreOptions1,CPDir),
+	   false,
 
 	 Result2 =
 	   begin
@@ -79,7 +80,7 @@ runtests_for_entregas(Entregas,CP) ->
 
 	 Result3 =
 	   if
-	     Result1, Result2 ->
+	     Result2 ->
 	       io:format("~n~nprogress; parallel~n"),
 	       io:format("---------------------------~n"),
 	       PreOptions3 = [{enforce_progress,true},{no_par,false}],
@@ -89,7 +90,7 @@ runtests_for_entregas(Entregas,CP) ->
 	   end,
 	 
 	 if
-	   Result1, Result2, Result3 ->
+	   Result2, Result3 ->
 	     io:format
 	       ("No errors found for user ~p~n",
 		[User]);
