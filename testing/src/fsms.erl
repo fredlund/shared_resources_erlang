@@ -15,7 +15,14 @@
 initial_state() ->
   #fstate{}.
 
-init(PreMachineSpec,Options) ->
+init(PreMachineSpec,PreOptions) ->
+  Options =
+    case proplists:get_value(no_par,PreOptions,false) of
+      true ->
+	[{max_par,1}|PreOptions];
+      _ ->
+	PreOptions
+    end,
   StartFun =
     proplists:get_value(start_fun,Options,void),
   StartedFun =
