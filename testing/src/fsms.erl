@@ -20,6 +20,8 @@ init(PreMachineSpec,PreOptions) ->
     case proplists:get_value(no_par,PreOptions,false) of
       true ->
 	[{max_par,1}|PreOptions];
+      false ->
+	[{max_par,?MAX_CONCURRENT}|PreOptions];
       _ ->
 	PreOptions
     end,

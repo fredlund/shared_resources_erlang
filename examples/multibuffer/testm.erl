@@ -68,14 +68,14 @@ testAll() ->
      end, Results),
   io:format("~n~n~nCounterexamples:~n"),
   lists:foreach
-    (fun ({Spec,Success,Counterexample}) ->
+    (fun ({Spec,Success,_Counterexample}) ->
 	 case Success of 
 	   true ->
 	     ok;
 	   false ->
 	     io:format
-	       ("~nSpec ~p failed. Rerunning counterexample~n~p~n",
-		[Spec,rerun(Spec,Counterexample)])
+	       ("~nSpec ~p failed~n",
+		[Spec])
 	 end
      end, Results).
 
@@ -90,19 +90,21 @@ product([Set|RestSets],Elems) ->
 	 product(RestSets,[Elem|Elems])
      end, Set).
 
-rerun([Implementation,Scheduler,Options],CounterExample) ->
-  test(10,Implementation,Scheduler,Options,CounterExample).
-
 test(Max,Imp,Prio) ->
   test(Max,Imp,Prio,[]).
 test(Max,Imp,Prio,Options) ->
-  test(Max,Imp,Prio,Options,none).
-test(Max,Imp,Prio,Options,CounterExample) ->
   io:format("Testing ~p under priority ~p with max=~p and options ~p~n",[Imp,Prio,Max,Options]),
   DataSpec = {multibuffer,[Max]},
-  TestingSpec = {multibuffer_commands,[Max,7,7,Imp]},
-  tester:test(Options++[{no_par,true},{needs_java,false}],DataSpec,Prio,TestingSpec,CounterExample).
+  TestingSpec =
+    %% {multibuffer_commands,[Max,7,7,Imp]},
+    {fsms,[{7,{multibuffer_reader_fsm,[Max,Imp]}},
+	   {7,{multibuffer_writer_fsm,[Max,Imp]}}]},
+  tester:test(Options++[{start_fun,start(Imp,Max)},{no_par,true},{needs_java,false}],DataSpec,Prio,TestingSpec).
 
+start(Implementation,Max) ->
+  fun (_,_) ->
+      Implementation:start(Max)
+  end.
 
 
 
