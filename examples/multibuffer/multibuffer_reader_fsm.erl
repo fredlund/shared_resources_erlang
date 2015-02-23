@@ -15,7 +15,7 @@ init(Id,[Max,Implementation]) ->
 precondition(_Id,_State,_GS,_Call) ->
   true.
 
-command(_Id,#mstate{implementation=Implementation,max=Max},_GlobalState) ->
+command(_Id,#mstate{max=Max,implementation=Implementation},_GS) ->
   {Implementation,get,[choose(1,Max div 2)]}.
 
 next_state(_Id,State,GS,_Job) ->

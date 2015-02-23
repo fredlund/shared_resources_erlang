@@ -2,6 +2,9 @@
 
 -compile(export_all).
 
+-include("../../testing/src/fstate.hrl").
+
+
 test1a() ->
   test(10,multbuf1,{always,[]}).
 test1f() ->
@@ -97,14 +100,20 @@ test(Max,Imp,Prio,Options) ->
   DataSpec = {multibuffer,[Max]},
   TestingSpec =
     %% {multibuffer_commands,[Max,7,7,Imp]},
-    {fsms,[{7,{multibuffer_reader_fsm,[Max]}},
+    {fsms,[{7,{multibuffer_reader_fsm,[Max,Imp]}},
 	   {7,{multibuffer_writer_fsm,[Max,Imp]}}]},
-  tester:test(Options++[{start_fun,start(Imp,Max)},{no_par,true},{needs_java,false},{implementation,Imp}],DataSpec,Prio,TestingSpec).
+  tester:test
+    (Options++[{no_par,true},
+	       {implementation,{Imp,[Max]}},
+	       {start_fun,fun start/2}],
+     DataSpec,Prio,TestingSpec).
 
-start(Implementation,Max) ->
-  fun (_,_) ->
-      Implementation:start(Max)
-  end.
+start(State,Options) ->
+  {Implementation,_} = proplists:get_value(implementation,Options),
+  State#fstate{global_state=Implementation}.
+
+  
+  
 
 
 

@@ -53,7 +53,7 @@ start_args(State) ->
 start(Options,TestSpec,TestState) ->
   Id = proplists:get_value(id,Options,unknown),
   ets:insert(?MODULE,{id,Id}),
-  TestSpec:start(TestState).
+  TestSpec:start(TestState,Options).
 
 start_post(_State,_,_Result) ->
   true.
