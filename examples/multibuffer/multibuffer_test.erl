@@ -1,4 +1,4 @@
--module(testm).
+-module(multibuffer_test).
 
 -compile(export_all).
 
