@@ -3,7 +3,7 @@
 -include_lib("eqc/include/eqc.hrl").
 -include("tester.hrl").
 
--export([initial_state/0,start/2,started/2,init/2,precondition/3,
+-export([initial_state/0,start/1,started/2,init/2,precondition/3,
 	 command/2,strip_call_info/1,next_state/4]).
 -export([print_finished_job_info/2,print_started_job_info/2,print_state/1]).
 
@@ -54,11 +54,18 @@ init(PreMachineSpec,PreOptions) ->
       global_state=GlobalState
     }.
 
-start(NodeId,State) ->
+start(State) ->
+  %% We should start the implementation too
   Start = State#fstate.start,
   if
-    is_function(Start) -> Start(NodeId,State);
+    is_function(Start) -> Start(State);
     true -> ok
+  end,
+  case proplists:get_value(implementation,State#fstate.options) of
+    {F,Args} when is_function(F) ->
+      F(Args,State#fstate.options);
+    _ ->
+      ok
   end.
 
 started(State,Result) ->

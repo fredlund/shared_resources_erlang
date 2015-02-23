@@ -97,9 +97,9 @@ test(Max,Imp,Prio,Options) ->
   DataSpec = {multibuffer,[Max]},
   TestingSpec =
     %% {multibuffer_commands,[Max,7,7,Imp]},
-    {fsms,[{7,{multibuffer_reader_fsm,[Max,Imp]}},
+    {fsms,[{7,{multibuffer_reader_fsm,[Max]}},
 	   {7,{multibuffer_writer_fsm,[Max,Imp]}}]},
-  tester:test(Options++[{start_fun,start(Imp,Max)},{no_par,true},{needs_java,false}],DataSpec,Prio,TestingSpec).
+  tester:test(Options++[{start_fun,start(Imp,Max)},{no_par,true},{needs_java,false},{implementation,Imp}],DataSpec,Prio,TestingSpec).
 
 start(Implementation,Max) ->
   fun (_,_) ->

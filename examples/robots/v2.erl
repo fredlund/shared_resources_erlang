@@ -4,19 +4,6 @@
 
 -include("../../testing/src/fstate.hrl").
 
-start(NodeId,_TS) ->  
-  case java:new(NodeId,'ControlAccesoNavesMonitor',[]) of
-    Exc = {java_exception,_} -> 
-      java:report_java_exception(Exc),
-      throw(bad);
-    Controller ->
-      tester:store_data(controller,Controller),
-      Controller
-  end.
-
-started(TS,Controller) ->
-  TS#fstate{global_state=Controller}.
-
 test() ->
   Id = "test",
   CP =  ["/home/fred/gits/src/cctester/test/classes/",
@@ -31,10 +18,9 @@ test() ->
   TestingSpec = 
     {fsms,[{10,{robot_fsm,[4]}}]},  %% 10 robots for a system of 4 warehouses
   Options =
-    [{needs_java,true},{cp,CP},{max_par,0},{id,Id},
-     {start_fun,fun start/2},
-     {global_state,void},      %% We could leave this out...
-     {started_fun,fun started/2}],
+    [{max_par,0},{id,Id},{cp,CP},
+     {implementation,{robot_java_impl,[]}},
+     {global_state,void}],  
   tester:test(Options,DataSpec,WaitSpec,TestingSpec).
 
  
@@ -108,10 +94,9 @@ run(User,Dir,PreOptions,CP) ->
   TestingSpec = 
     {fsms,[{10,{robot_fsm,[4]}}]},  %% 10 robots for a system of 4 warehouses
   Options =
-    [{needs_java,true},{cp,CP},{max_par,1},{id,User},
-     {start_fun,fun start/2},
-     {global_state,void},      %% We could leave this out...
-     {started_fun,fun started/2}|PreOptions],
+    [{max_par,1},{id,User},{cp,CP},
+     {implementation,{robot_java_impl,[]}},
+     {global_state,void}|PreOptions],
   tester:test(Options,DataSpec,WaitSpec,TestingSpec).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

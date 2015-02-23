@@ -13,7 +13,8 @@
 -define(MAX_CONCURRENT,3).
 -define(MAX_STATES,400).
 
-init([MAX,NReaders,NWriters,Implementation],Options) ->
+init([MAX,NReaders,NWriters],Options) ->
+  Implementation = proplists:get_value(implementation,Options),
   #teststate
     {
      max=MAX,

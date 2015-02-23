@@ -50,14 +50,6 @@ peso(P) ->
   Pdiv = P div 100,
   ?LET(X,eqc_gen:choose(Pdiv,?PESO_FACTOR),X*100).
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-enter(Robot,Nave,Peso) ->     
-  java:call(tester:get_data(controller),solicitarEntrar,[Nave,Peso]).
-
-exit(Robot,Nave,Peso) ->     
-  java:call(tester:get_data(controller),solicitarSalir,[Nave,Peso]).
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%     
 	
 print_finished_job_info(Job,Id,State,GlobalState) ->

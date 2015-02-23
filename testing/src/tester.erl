@@ -51,32 +51,9 @@ start_args(State) ->
   [State#state.options,State#state.testingSpec,State#state.test_state].
 
 start(Options,TestSpec,TestState) ->
-  Id =
-    proplists:get_value(id,Options,unknown),
-  NodeId =
-    case proplists:get_value(needs_java,Options,true) of
-      true ->
-	CP = proplists:get_value(cp,Options,[]),
-	ets:insert(?MODULE,{cp,CP}),
-	?LOG("CP is ~p~n",[CP]),
-	try
-	  java:start_node
-	    ([{java_verbose,"SEVERE"},
-	      {call_timeout,infinity},
-	      {java_exception_as_value,true},
-	      {add_to_java_classpath,CP}]) of
-	  {ok,NId} ->
-	    store_data(node,NId),
-	    NId
-	catch _:_ ->
-	    io:format
-	      ("~n*** Error: cannot start java. Is the javaerlang library installed?~n"),
-	    throw(bad)
-	end;
-      false -> void
-    end,
+  Id = proplists:get_value(id,Options,unknown),
   ets:insert(?MODULE,{id,Id}),
-  TestSpec:start(NodeId,TestState).
+  TestSpec:start(TestState).
 
 start_post(_State,_,_Result) ->
   true.
