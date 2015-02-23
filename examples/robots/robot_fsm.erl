@@ -6,14 +6,17 @@
 
 -include("../../testing/src/tester.hrl").
 
--record(rstate,{n_naves,next,controller}).
+-record(rstate,{n_naves,next,controller,implementation}).
 
 
 -define(PESO_FACTOR,11).
 
 
-init(Id,[N_NAVES]) ->
-  #rstate{n_naves=N_NAVES,next={?MODULE,enter,[Id,0,100]}}.
+init(Id,[N_NAVES,Implementation]) ->
+  #rstate
+    {n_naves=N_NAVES,
+     next={Implementation,enter,[Id,0,100]},
+     implementation=Implementation}.
 
 precondition(Id,
 	     #rstate{next={NModule,NCallType,[NId,NNave,NWeight]}},_,
@@ -24,15 +27,15 @@ precondition(Id,
 	    true -> Weight >= NWeight
 	  end.
 
-command(Id,#rstate{next=Next},_GlobalState) ->
+command(Id,#rstate{next=Next,implementation=Implementation},_GlobalState) ->
  case Next of
-   {?MODULE,enter,[Id,Nave,Weight]} ->
-     {?MODULE,enter,[Id,Nave,peso(Weight)]};
+   {Implementation,enter,[Id,Nave,Weight]} ->
+     {Implementation,enter,[Id,Nave,peso(Weight)]};
    _ ->
      Next
  end.
 
-next_state(Id,State=#rstate{next=Next,n_naves=N_NAVES},GS,Job) ->
+next_state(Id,State=#rstate{next=Next,n_naves=N_NAVES,implementation=Implementation},GS,Job) ->
   NavesLimit =
     N_NAVES-1,
   NewNext =
@@ -40,9 +43,9 @@ next_state(Id,State=#rstate{next=Next,n_naves=N_NAVES},GS,Job) ->
       {_,exit,[_,NavesLimit,_]} ->
 	stopped;
       {_,exit,[_,Nave,Weight]} ->
-	{?MODULE,enter,[Id,Nave+1,Weight]};
+	{Implementation,enter,[Id,Nave+1,Weight]};
       {_,enter,[_,Nave,Weight]} ->
-	{?MODULE,exit,[Id,Nave,Weight]}
+	{Implementation,exit,[Id,Nave,Weight]}
     end,
   {State#rstate{next=NewNext},GS}.
 
