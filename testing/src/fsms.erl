@@ -189,23 +189,28 @@ print_started_job_info(Job=#job{callinfo={MachId,_}},TS) ->
   try Machine:print_started_job_info(Job,MachId,MachineState,TS#fstate.global_state)
   catch _:_ -> io_lib:format("~p",[Job#job.call]) end.
       
-print_state(#fstate{blocked=Blocked,machines=Machines}) ->
-  combine
-    (Machines,
-     "||",
-     fun ({MachineId,{Machine,MachineState}}) ->
-	 IsBlocked =
-	   lists:member(MachineId,Blocked),
-	 String =
-	   try Machine:print_state(MachineId,MachineState,IsBlocked)
-	   catch _:_ -> io_lib:format("~p",[MachineState]) end,
-	 IsBlockedString =
-	   if
-	     IsBlocked -> "*";
-	     true -> ""
-	   end,
-	 String ++ IsBlockedString
-     end).
+print_state(State=#fstate{blocked=Blocked,machines=Machines,options=Options}) ->
+  case proplists:get_value(fsm_printer,Options) of
+    Printer when is_function(Printer) ->
+      Printer(State);
+    _ ->
+      combine
+	(Machines,
+	 "||",
+	 fun ({MachineId,{Machine,MachineState}}) ->
+	     IsBlocked =
+	       lists:member(MachineId,Blocked),
+	     String =
+	       try Machine:print_state(MachineId,MachineState,IsBlocked)
+	       catch _:_ -> io_lib:format("~p",[MachineState]) end,
+	     IsBlockedString =
+	       if
+		 IsBlocked -> "*";
+		 true -> ""
+	       end,
+	     String ++ IsBlockedString
+	 end)
+  end.
 
 combine([],_,_) ->
   "";
