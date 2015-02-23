@@ -108,7 +108,7 @@ run(User,Dir,PreOptions,CP) ->
   TestingSpec = 
     {fsms,[{10,{robot_fsm,[4]}}]},  %% 10 robots for a system of 4 warehouses
   Options =
-    [{needs_java,true},{cp,CP},{max_par,0},{id,User},
+    [{needs_java,true},{cp,CP},{max_par,1},{id,User},
      {start_fun,fun start/2},
      {global_state,void},      %% We could leave this out...
      {started_fun,fun started/2}|PreOptions],

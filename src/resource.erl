@@ -5,10 +5,10 @@
 
 -module(resource).
 
--export([start/4,start_link/4,start/5,start_link/5]).
+-export([start/3,start_link/3,start/4,start_link/4]).
 -export([call/3]).
 
--define(debug,true).
+%%-define(debug,true).
 -include("debug.hrl").
 
 -type waitstate() :: any().
@@ -50,16 +50,18 @@
 -export_type([call/0]).
 
 
-start(StateMod, WaitMod, Args, Options) ->
-  start1(false, StateMod, WaitMod, Args, Options, false).
-start(NameSpec, StateMod, WaitMod, Args, Options) ->
-  start1(NameSpec, StateMod, WaitMod, Args, Options, false).
-start_link(StateMod, WaitMod, Args, Options) ->
-  start1(false, StateMod, WaitMod, Args, Options, true).
-start_link(NameSpec, StateMod, WaitMod, Args, Options) ->
-  start1(NameSpec, StateMod, WaitMod, Args, Options, true).
+start(StateSpec, WaitSpec, Options) ->
+  start1(false, StateSpec, WaitSpec, Options, false).
+start(NameSpec, StateSpec, WaitSpec, Options) ->
+  start1(NameSpec, StateSpec, WaitSpec, Options, false).
+start_link(StateSpec, WaitSpec, Options) ->
+  start1(false, StateSpec, WaitSpec, Options, true).
+start_link(NameSpec, StateSpec, WaitSpec, Options) ->
+  start1(NameSpec, StateSpec, WaitSpec, Options, true).
 
-start1(NameSpec, StateMod, WaitMod, Args, _Options, Link) ->
+start1(NameSpec, StateSpec, WaitSpec, Options, Link) ->
+  {StateMod,StateInit} = StateSpec,
+  {WaitMod,WaitInit} = WaitSpec,
   {A1,A2,A3} = erlang:now(),
   random:seed(A1,A2,A3),
   ParentPid = self(),
@@ -75,8 +77,8 @@ start1(NameSpec, StateMod, WaitMod, Args, _Options, Link) ->
 	       _ ->
 		 self()
 	     end,
-	   State = state_init(StateMod,Args),
-	   WaitState = wait_init(WaitMod,[StateMod|Args]),
+	   State = state_init(StateMod,StateInit,Options),
+	   WaitState = wait_init(WaitMod,WaitInit,Options),
 	   ParentPid!ok,
 	   loop
 	     (#state
@@ -113,7 +115,10 @@ loop(State,NeedUpdate) ->
 	  PostState =
 	    post(CallToExecute,NewState),
 	  Result =
-	    return_value(CallToExecute,NewState),
+	    case return_value(CallToExecute,NewState) of
+	      underspecified -> void;
+	      Other -> Other
+	    end,
 	  Info =
 	    CallInfo#call_waitinginfo.waitinfo,
 	  NewWaitState =
@@ -170,15 +175,15 @@ enabled_calls(State) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-state_init(Module,Arguments) ->
-  Result = apply(Module,init,[Arguments]),
+state_init(Module,Arguments,Options) ->
+  Result = apply(Module,init,[Arguments,Options]),
   ?LOG
      ("~s -> ~p~n",
       [print_call(init,Arguments),Result]),
   Result.
 
-wait_init(Module,Arguments) ->
-  Result = apply(Module,init,[Arguments]),
+wait_init(Module,Arguments,Options) ->
+  Result = apply(Module,init,[Arguments,Options]),
   ?LOG
      ("~s -> ~p~n",
       [print_call(init,Arguments),Result]),
@@ -212,7 +217,7 @@ post(Call,State) ->
 -spec return_value(#call{},#state{}) -> any().
 return_value(Call,State) ->
   ReturnValue
-    = apply(State#state.state_module,post,[symbolic(Call),State#state.state]),
+    = apply(State#state.state_module,return_value,[symbolic(Call),State#state.state]),
   ?LOG
      ("~p: return_value(~s) -> ~p~n",
       [State#state.name,print_call(Call),ReturnValue]),

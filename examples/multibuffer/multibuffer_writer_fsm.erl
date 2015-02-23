@@ -36,7 +36,11 @@ print_started_job_info(Job,Id,State,GlobalState) ->
     {_,CallType,[Arg]} -> io_lib:format("~p:~p(~p)",[Id,CallType,Arg])
   end.
 
-print_state(Id,_State,_IsBlocked) ->      
-  io_lib:format("~p:w",[Id]).
+print_state(Id,_State, IsBlocked) ->      
+  if
+    IsBlocked -> io_lib:format("~p:w",[Id]);
+    true -> ""
+  end.
+
 
 

@@ -31,6 +31,7 @@ init(PreMachineSpec,PreOptions) ->
     proplists:get_value(started_fun,Options,void),
   GlobalState =
     proplists:get_value(global_state,Options,void),
+  io:format("Options are ~p StartFun=~p~n",[Options,StartFun]),
   MachineSpec =
     lists:foldl
       (fun ({N,MachineWithMachineInit},Acc) when is_integer(N) ->

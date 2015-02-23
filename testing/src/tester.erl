@@ -303,11 +303,14 @@ accept_one_incoming(State,FinishedJobs) ->
     (lists:map(fun (NewState) -> {NewState,FinishedJobs} end, NewStates)).
     
 %% Terminate when no non-finished states remain
-finish_jobs(_,[],FinishedStates,_WhatToCheck,_) ->
-  ?LOG("WC=~p Finished=~p~n",[WhatToCheck,FinishedStates]),
+finish_jobs(_,[],FinishedStates,WhatToCheck,_) ->
+  ?LOG
+     ("WC=~p Finished=~p~n",
+      [WhatToCheck,FinishedStates]),
   {ok,lists:usort(FinishedStates)};
 finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
-  ?LOG("WC=~p States:~n~p~nFinished=~p~n",[WhatToCheck,StatesAndJobs,FinishedStates]),
+  ?LOG("WC=~p States:~n~p~nFinished=~p~n",
+       [WhatToCheck,StatesAndJobs,FinishedStates]),
   {NewStatesAndJobs,NewFinishedStates} =
     %% Recurse over the list of possible states (and finished jobs in each state)
     lists:foldl
@@ -486,12 +489,12 @@ job_is_executable(Job,IndState,State,WhatToCheck) ->
     andalso ((WhatToCheck==safety) orelse job_priority_enabled_is_true(Job,IndState,State)).
 
 job_returns_correct_value(Job,IndState,State) ->
-  try (State#state.dataSpec):return_value(IndState#onestate.sdata,resource_call(Job#job.call)) of
-      Value -> 
-      Value =:= Job#job.result
-  catch _:_ ->
+  case (State#state.dataSpec):return_value(resource_call(Job#job.call),IndState#onestate.sdata) of
+    underspecified ->
       (State#state.dataSpec):return
-	(IndState#onestate.sdata,resource_call(Job#job.call),Job#job.result)
+	(IndState#onestate.sdata,resource_call(Job#job.call),Job#job.result);
+    Value -> 
+      Value =:= Job#job.result
   end.
 
 job_cpre_is_true(Job,IndState,State) ->

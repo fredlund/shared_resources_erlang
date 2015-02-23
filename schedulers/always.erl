@@ -7,7 +7,7 @@
 -export([init/2,new_waiting/3,priority_enabled/4,post_waiting/4]).
 
 init(_,_) ->
-  {ok,void}.
+  void.
 
 new_waiting(_Call,State,_DataState) ->
   {void,State}.

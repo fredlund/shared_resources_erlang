@@ -23,7 +23,6 @@ cpre({put,[R]},State) ->
 cpre({get,[N]},State) ->
   length(State#state.seq) >= N.
 
-
 post({put,[R]},State) ->
   State#state{seq=State#state.seq++R};
 
@@ -39,9 +38,16 @@ return(_State,{put,_},Result) ->
   end.
 
 %% A concrete return value for get
-return_value(State,{get,[N]}) ->
-  {Prefix,_} = lists:split(N,State#state.seq),
-  Prefix.
+return_value(Call,State) ->
+  case Call of
+    {get,[N]} -> 
+      {Prefix,_} = lists:split(N,State#state.seq),
+      Prefix;
+    _ ->
+      underspecified
+  end.
+      
+      
 
 
 
