@@ -1,14 +1,14 @@
 -module(multbuf3).
 -compile(export_all).
 
-start(Max) ->
+start([Max],Options) ->
   case whereis(multibuffer) of
     undefined ->
       register(multibuffer,spawn(fun () -> multibuffer(Max,[],[]) end));
     _ ->
       exit(whereis(multibuffer),killed),
       timer:sleep(5),
-      start(Max)
+      start([Max],Options)
   end.
 
 multibuffer(Max,L,Queue) ->

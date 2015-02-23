@@ -104,13 +104,9 @@ test(Max,Imp,Prio,Options) ->
 	   {7,{multibuffer_writer_fsm,[Max,Imp]}}]},
   tester:test
     (Options++[{no_par,true},
-	       {implementation,{Imp,[Max]}},
-	       {start_fun,fun start/2}],
+	       {implementation,{Imp,[Max]}}],
      DataSpec,Prio,TestingSpec).
 
-start(State,Options) ->
-  {Implementation,_} = proplists:get_value(implementation,Options),
-  State#fstate{global_state=Implementation}.
 
   
   
