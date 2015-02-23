@@ -6,17 +6,20 @@
 
 prop_gen() ->
   ?LET
-     (Scheduler,
-      oneof([{fcfs,[]},{always,[]}]),
+     ({ParValue,Scheduler},
+      {bool(),oneof([{fcfs,[]},{always,[]}])},
       begin
 	Max = 7,
 	Options = 
 	  [{start_fun,start(Scheduler,Max)},
-	   {no_par,true},
+	   {no_par,ParValue},
 	   {needs_java,false}],
 	Generator = 
 	  {fsms,[{7,{multibuffer_reader_fsm,[Max,?MODULE]}},
 		 {7,{multibuffer_writer_fsm,[Max,?MODULE]}}]},
+	io:format
+	  ("Testing resource with scheduler ~p: no_par=~p~n",
+	   [Scheduler,ParValue]),
 	tester:test
 	  (Options,
 	   {multibuffer,[Max]},
