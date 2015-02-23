@@ -4,7 +4,6 @@
 
 start_java(Options) ->
   CP = proplists:get_value(cp,Options,[]),
-  ets:insert(?MODULE,{cp,CP}),
   try
     java:start_node
       ([{java_verbose,"SEVERE"},
