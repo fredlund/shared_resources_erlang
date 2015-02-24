@@ -1,0 +1,36 @@
+src:
+	Contains a generic implementation of a shared resource in Erlang.
+	The implementation is parametric on a particular definition
+	of a shared resource, and a scheduler.
+
+testing/src:
+	Contains a framework for testing shared resources:
+
+	tester.erl: main testing module 
+		    (testing is parameteric on a shared resource,
+		    a scheduler, and a module that generates test cases)
+	fsms.erl:   support for generating test cases from a set of
+		    finite state machines running in parallel
+
+schedulers:
+	Example general (not depending on a particular resource) schedulers
+
+examples:
+
+examples/multibuffer:
+	A multibuffer example.
+	multibuffer.erl:	resource specification
+	multibuffer_test.erl:	main file for starting testing
+examples/robots:
+	An example with robots in a warehouse.
+	robots.erl:		resource specification
+	robots_test.erl:	main file for starting testing
+	robot_fsm.erl		a robot finite-state-machine used by
+				testing/src/fsms.erl to generate
+				test cases.
+
+qa:
+	Quality assurance. Some simple tests that test the generic 
+	implementation using the testing framework.
+
+	

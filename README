@@ -3,7 +3,14 @@ written in the Erlang for testing shared resources.
 
 The model checker has been written by Lars-Åke Fredlund
 (Facultad de Informática, Universidad Politécnica de Madrid, Spain) 
-with contributions by Raul Alborodo (IMDEA software).
+with contributions by Raúl Alborodo (IMDEA software).
+
+Prerequisites:
+- To use the testing tool the Quviq QuickCheck testing tool is required
+(see http://www.quviq.com)
+- To check shared resources coded in Java we recommend the use
+of the JavaErlang library
+(https://github.com/fredlund/JavaErlang)
 
 For more information please consult the documentation in:
 
