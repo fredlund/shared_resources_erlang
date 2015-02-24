@@ -1,0 +1,15 @@
+The Shared Resources (Erlang) Testing tool is a set of utilities
+written in the Erlang for testing shared resources.
+
+The model checker has been written by Lars-Åke Fredlund
+(Facultad de Informática, Universidad Politécnica de Madrid, Spain) 
+with contributions by Raul Alborodo (IMDEA software).
+
+For more information please consult the documentation in:
+
+- The source code repository at
+  https://bitbucket.org/fredlund1/shared_resources_erlang
+- Information about shared resources:
+  http://babel.ls.fi.upm.es/~rnnalborodo/sr_web/
+
+
