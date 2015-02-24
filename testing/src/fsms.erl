@@ -174,8 +174,8 @@ permit_par(State,NPars) ->
   case proplists:get_value(max_par,State#fstate.options,?MAX_CONCURRENT) of
     false ->
       false;
-    N when is_integer(N), N>=0 ->
-      NPars >= N
+    MaxPar when is_integer(MaxPar), MaxPar>=0 ->
+      MaxPar >= NPars
   end.
 
 limit_states(State,TesterState) ->
