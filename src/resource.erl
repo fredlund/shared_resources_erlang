@@ -45,7 +45,7 @@
 	  name :: atom() | pid()
 	}).
 
--type call() :: {'call',atom(),[any()]}.
+-type call() :: {atom(),[any()]}.
 
 -export_type([call/0]).
 

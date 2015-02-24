@@ -280,10 +280,10 @@ accept_one_incoming(State,FinishedJobs) ->
     (lists:map(fun (NewState) -> {NewState,FinishedJobs} end, NewStates)).
     
 %% Terminate when no non-finished states remain
-finish_jobs(_,[],FinishedStates,WhatToCheck,_) ->
+finish_jobs(_,[],FinishedStates,_WhatToCheck,_) ->
   ?LOG
      ("WC=~p Finished=~p~n",
-      [WhatToCheck,FinishedStates]),
+      [_WhatToCheck,FinishedStates]),
   {ok,lists:usort(FinishedStates)};
 finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
   ?LOG("WC=~p States:~n~p~nFinished=~p~n",

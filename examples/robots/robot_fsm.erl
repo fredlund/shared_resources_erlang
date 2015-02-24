@@ -35,7 +35,7 @@ command(Id,#rstate{next=Next,implementation=Implementation},_GlobalState) ->
      Next
  end.
 
-next_state(Id,State=#rstate{next=Next,n_naves=N_NAVES,implementation=Implementation},GS,Job) ->
+next_state(Id,State=#rstate{n_naves=N_NAVES,implementation=Implementation},GS,Job) ->
   NavesLimit =
     N_NAVES-1,
   NewNext =
@@ -55,12 +55,12 @@ peso(P) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%     
 	
-print_finished_job_info(Job,Id,State,GlobalState) ->
+print_finished_job_info(Job,_Id,_State,_GlobalState) ->
   case Job#job.call of
     {_,_,[R,_,_]} -> io_lib:format("~p",[R])
   end.
 
-print_started_job_info(Job,Id,State,GlobalState) ->
+print_started_job_info(Job,_Id,_State,_GlobalState) ->
   case Job#job.call of
     {_,CallType,[R,N,P]} -> io_lib:format("~p(~p,~p,~p)",[CallType,R,N,P])
   end.

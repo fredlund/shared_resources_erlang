@@ -30,7 +30,7 @@ priority_enabled(_Call,{Size,_Time,_Call},State,DataState) ->
        end,
        State#state.queue).
 
-post_waiting(Call,Item,State,_DataState) ->
+post_waiting(_Call,Item,State,_DataState) ->
   State#state{queue=State#state.queue--[Item]}.
 
 

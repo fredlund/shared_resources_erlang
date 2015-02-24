@@ -9,7 +9,7 @@
 -record(mstate,{max,implementation}).
 
 
-init(Id,[Max,Implementation]) ->
+init(_Id,[Max,Implementation]) ->
   #mstate{max=Max,implementation=Implementation}.
 
 precondition(_Id,_State,_GS,_Call) ->
@@ -24,10 +24,10 @@ next_state(_Id,State,GS,_Job) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%     
 	
-print_finished_job_info(Job,Id,State,GlobalState) ->
+print_finished_job_info(_Job,Id,_State,_GlobalState) ->
   io_lib:format("~p",[Id]).
 
-print_started_job_info(Job,Id,State,GlobalState) ->
+print_started_job_info(Job,Id,_State,_GlobalState) ->
   case Job#job.call of
     {_,CallType,[Arg]} -> io_lib:format("~p:~p(~p)",[Id,CallType,Arg])
   end.

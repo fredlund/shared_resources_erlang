@@ -2,7 +2,7 @@
 
 -compile(export_all).
 
-start(Args,Options) ->
+start(_Args,Options) ->
   NodeId = test_utils:start_java(Options),
   case java:new(NodeId,'ControlAccesoNavesMonitor',[]) of
     Exc = {java_exception,_} -> 
@@ -13,10 +13,10 @@ start(Args,Options) ->
       Controller
   end.
 
-enter(Robot,Nave,Peso) ->
+enter(_Robot,Nave,Peso) ->
   java:call(tester:get_data(controller),solicitarEntrar,[Nave,Peso]).
 
-exit(Robot,Nave,Peso) ->
+exit(_Robot,Nave,Peso) ->
   java:call(tester:get_data(controller),solicitarSalir,[Nave,Peso]).
 
 

@@ -144,7 +144,7 @@ jobs_to_machines(Jobs) ->
 	 Machine
      end, Jobs).
 
-next_state(State,_TesterState,Result,[Commands]) ->
+next_state(State,_TesterState,Result,[_Commands]) ->
   {NewJobs,FinishedJobs} =
     Result,
   RemainingNewMachines = 
@@ -155,7 +155,7 @@ next_state(State,_TesterState,Result,[Commands]) ->
   NewState =
     lists:foldl
       (fun (Job,S) ->
-	   {I,Command} = Job#job.callinfo,
+	   {I,_Command} = Job#job.callinfo,
 	   {_,{Machine,MachineState}} =
 	     lists:keyfind(I,1,S#fstate.machines),
 	   {NewMachineState,NewGlobalState} =
