@@ -568,6 +568,12 @@ prop_ok(Options,DataSpec,WaitSpec,TestingSpec) ->
 	    try java:terminate(get_data(node)) catch _:_ -> ok end,
 	    if
 	      Res == ok ->
+		case proplists:get_value(print_testcase,Options,false) of
+		  true ->
+		    print_testcase(Cmds,H,DS,Res);
+		  false ->
+		    ok
+		end,
 		true;
 	      true ->
 		print_counterexample(Cmds,H,DS,Res),
@@ -634,23 +640,29 @@ eqc_printer(Format,String) ->
   end.
 
 print_counterexample(Cmds,H,FailingState,Reason) -> 
-  try
     io:format
       ("~n~nTest failed with reason ~p~n",
        [Reason]),
-    {FailingCommandSequence,_} =
+  print_testcase1(Cmds,H,FailingState,Reason).
+
+print_testcase(Cmds,H,State,Result) ->
+  print_testcase1(Cmds,H,State,Result).
+
+print_testcase1(Cmds,H,State,Result) ->
+  try
+    {CommandSequence,_} =
       lists:split(length(H)+1,Cmds),
     ReturnValues = 
-      case Reason of
+      case Result of
 	{exception,_} ->
-	  (lists:map(fun result_value_from_history/1, H))++[Reason];
+	  (lists:map(fun result_value_from_history/1, H))++[Result];
 	_ ->
 	  (lists:map(fun result_value_from_history/1, H))
       end,
     io:format("~nCommand sequence:~n"),
     io:format("-----------------~n~n"),
     print_commands
-      (lists:zip(tl(FailingCommandSequence),ReturnValues),FailingState),
+      (lists:zip(tl(CommandSequence),ReturnValues),State),
     io:format("~n~n")
   catch _:Exception ->
       io:format

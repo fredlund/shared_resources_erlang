@@ -105,7 +105,7 @@ command1(State,TesterState,NPars) ->
 		   [Command];
 		 false ->
 		   ?LET(NextCommands,
-			command1(NewState,TesterState,NPars),
+			command1(NewState,TesterState,NPars+1),
 			[Command|NextCommands])
 	       end
 	   end)
