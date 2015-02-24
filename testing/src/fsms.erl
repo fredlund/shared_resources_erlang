@@ -17,7 +17,7 @@ initial_state() ->
 
 init(PreMachineSpec,PreOptions) ->
   Options =
-    case proplists:get_value(no_par,PreOptions,false) of
+    case proplists:get_value(no_par,PreOptions,undefined) of
       true ->
 	[{max_par,1}|PreOptions];
       false ->
