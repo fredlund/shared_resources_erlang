@@ -9,7 +9,7 @@
 -record(rstate,{n_naves,next,controller,implementation}).
 
 
--define(PESO_FACTOR,11).
+-define(PESO_FACTOR,10).
 
 
 init(Id,[N_NAVES,Implementation]) ->
