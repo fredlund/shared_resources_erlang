@@ -69,13 +69,18 @@ do_cmds_pre(State) ->
   State#state.started.
 
 do_cmds_args(State) ->
+  WaitTime = 
+    case proplists:get_value(wait_time,State#state.options) of
+      undefined -> ?COMPLETION_TIME;
+      Other when is_integer(Other), Other>0 -> Other
+    end,
   Commands = (State#state.testingSpec):command(State#state.test_state,State),
-  [Commands,State#state.testingSpec].
+  [Commands,WaitTime,State#state.testingSpec].
 
-do_cmds_pre(State,[Commands,_]) ->
+do_cmds_pre(State,[Commands|_]) ->
   (State#state.testingSpec):precondition(State,State#state.test_state,filter_commands(Commands)).
 
-do_cmds(Commands,TestingSpec) ->
+do_cmds(Commands,WaitTime,TestingSpec) ->
   ParentPid =
     self(),
   NewJobs =
@@ -96,7 +101,7 @@ do_cmds(Commands,TestingSpec) ->
     NewJobs==[] ->
       {[],[]};
     true ->
-      FinishedJobs = wait_for_jobs(),
+      FinishedJobs = wait_for_jobs(WaitTime),
       {non_void_jobs(NewJobs),non_void_jobs(FinishedJobs)}
   end.
 
@@ -162,7 +167,7 @@ do_cmds_post(State,Args,Result) ->
   end
   end.
 
-do_cmds_next(State,Result,[Commands,_]) ->
+do_cmds_next(State,Result,[Commands|_]) ->
   try
     {NewJobs,FinishedJobs} = Result,
     if
@@ -212,8 +217,8 @@ get_data(Key) ->
   [{Key,Value}] = ets:lookup(?MODULE,Key),
   Value.
 
-wait_for_jobs() ->
-  timer:sleep(?COMPLETION_TIME),
+wait_for_jobs(WaitTime) ->
+  timer:sleep(WaitTime),
   receive_completions().
 
 receive_completions() ->
