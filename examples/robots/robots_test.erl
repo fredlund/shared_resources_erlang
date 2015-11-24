@@ -16,7 +16,7 @@ test() ->
   TestingSpec = 
     {fsms,[{10,{robot_fsm,[4,robot_java_impl]}}]},  
   Options =
-    [{max_par,0},{id,Id},{cp,CP},
+    [{max_par,1},{id,Id},{cp,CP},
      {print_testcase,true},
      {implementation,{robot_java_impl,[]}},
      {global_state,void}],  

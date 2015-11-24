@@ -7,6 +7,9 @@
 	 command/2,strip_call_info/1,next_state/4]).
 -export([print_finished_job_info/2,print_started_job_info/2,print_state/1]).
 
+%%-define(debug,true).
+-include("../../src/debug.hrl").
+
 -define(MAX_CONCURRENT,3).
 -define(MAX_STATES,400).
 
@@ -90,9 +93,20 @@ command(State,TesterState) ->
 command1(State,TesterState) ->
   command1(State,TesterState,1).
 command1(State,TesterState,NPars) ->
+  ?LOG
+     ("fsms:command - blocked=~p~nmachines=~p~n",
+      [State#fstate.blocked,
+       State#fstate.machines]),
   case length(State#fstate.blocked)<length(State#fstate.machines) 
     andalso permit_par(State,NPars) of
-    false -> [];
+    false -> 
+      ?LOG
+	 ("fsms:command1 - no command can be generated;~n"
+	  ++"length(blocked)=~p length(machines)=~p permit_par()=~p~n",
+	  [length(State#fstate.blocked),
+	   length(State#fstate.machines), 
+	   permit_par(State,NPars)]),
+      [];
     true ->
       ?LET({Command,NewState},
 	   gen_mach_cmd(State),
@@ -115,6 +129,9 @@ gen_mach_cmd(State) ->
     lists:filter
       (fun ({I,_}) -> not(lists:member(I,State#fstate.blocked)) end,
        State#fstate.machines),
+  ?LOG
+    ("fsms:gen_mach_cmd - length(NonBlocked) = ~p~n",
+     [length(NonBlocked)]),
   case NonBlocked of
     [] ->
       {void,State};
@@ -122,6 +139,10 @@ gen_mach_cmd(State) ->
       ?LET({MachId,{Machine,MachineState}},
 	   oneof(NonBlocked),
 	   begin
+	     ?LOG
+		("fsms:gen_mach_cmd - selected one machine ~p~nmach: ~p~n"
+		 ++"machinestate=~p~n",
+		 [MachId,Machine,MachineState]),
 	     NewBlocked = [MachId|State#fstate.blocked],
 	     NewState = State#fstate{blocked=NewBlocked},
 	     case Machine:command(MachId,MachineState,State#fstate.global_state) of

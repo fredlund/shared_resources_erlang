@@ -6,6 +6,9 @@
 -include_lib("eqc/include/eqc_component.hrl").
 -include_lib("eqc/include/eqc_dynamic_cluster.hrl").
 
+%% Super fragile below
+-record(eqc_statem_history,{state, args, features, result}).
+
 %%-define(debug,true).
 -include("../../src/debug.hrl").
 
@@ -74,6 +77,10 @@ do_cmds_args(State) ->
       undefined -> ?COMPLETION_TIME;
       Other when is_integer(Other), Other>0 -> Other
     end,
+  ?LOG
+     ("tester:do_cmds_args - will call ~p:command to get new commands~n"
+      ++"Test state = ~p~nState=~p~n",
+      [(State#state.testingSpec),State#state.test_state,State]),
   Commands = (State#state.testingSpec):command(State#state.test_state,State),
   [Commands,WaitTime,State#state.testingSpec].
 
@@ -680,7 +687,9 @@ print_testcase1(Cmds,H,State,Result) ->
 result_value_from_history({_,_,_,Result}) ->
   Result;
 result_value_from_history({_,_,Result}) ->
-  Result.
+  Result;
+result_value_from_history(Record) when is_record(Record,eqc_statem_history) ->
+  Record#eqc_statem_history.result.
 
 print_commands([],_State) ->
   ok;

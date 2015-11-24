@@ -4,6 +4,9 @@
 
 -include_lib("eqc/include/eqc.hrl").
 
+%%-define(debug,true).
+-include("../../src/debug.hrl").
+
 -include("../../testing/src/tester.hrl").
 
 -record(rstate,{n_naves,next,controller,implementation}).
@@ -28,6 +31,7 @@ precondition(Id,
 	  end.
 
 command(Id,#rstate{next=Next,implementation=Implementation},_GlobalState) ->
+ ?LOG("robot_fsm:command next=~p~n",[Next]),
  case Next of
    {Implementation,enter,[Id,Nave,Weight]} ->
      {Implementation,enter,[Id,Nave,peso(Weight)]};
