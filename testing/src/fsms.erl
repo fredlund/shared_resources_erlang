@@ -94,9 +94,11 @@ command1(State,TesterState) ->
   command1(State,TesterState,1).
 command1(State,TesterState,NPars) ->
   ?LOG
-     ("fsms:command - blocked=~p~nmachines=~p~n",
+     ("fsms:command - blocked=~p~nmachines=~p permit_par(_,~p)=~p~n",
       [State#fstate.blocked,
-       State#fstate.machines]),
+       State#fstate.machines,
+       NPars,
+       permit_par(State,NPars)]),
   case length(State#fstate.blocked)<length(State#fstate.machines) 
     andalso permit_par(State,NPars) of
     false -> 
@@ -115,6 +117,7 @@ command1(State,TesterState,NPars) ->
 	     _ ->
 	       case limit_states(State,TesterState) of
 		 true ->
+		   ?LOG("limiting states..~n",[]),
 		   [Command];
 		 false ->
 		   ?LET(NextCommands,
@@ -203,7 +206,8 @@ limit_states(State,TesterState) ->
     false ->
       false;
     N when is_integer(N), N>0 ->
-      TesterState >= N
+      ?LOG("Max states is ~p, TesterState is ~p~n",[N,TesterState]),
+      length(TesterState#state.states) >= N
   end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
