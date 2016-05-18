@@ -348,16 +348,18 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
   if
     NewStatesAndJobs==[], NewFinishedStates==[], WhatToCheck==safety ->
       io:format
-	("~n*** Error: there are calls that have been completed by the implementation "++
-	   "which cannot be completed by the model (without considering priority)~n"),
+	("~n*** Error: there are calls ~p that have been completed by the implementation "++
+	   "which cannot be completed by the model (without considering priority)~n",
+	 [StatesAndJobs]),
       print_test_state(OrigState),
       maybe_print_model_state(OrigState),
       false;
 
     NewStatesAndJobs==[], NewFinishedStates==[] -> 
       io:format
-	("~n*** Error: there are calls that have been completed by the implementation "++
-	   "which cannot be completed by the model (when considering priority)~n"),
+	("~n*** Error: there are calls ~p that have been completed by the implementation "++
+	   "which cannot be completed by the model (when considering priority)~n",
+	[StatesAndJobs]),
       print_test_state(OrigState),
       maybe_print_model_state(OrigState),
       false;
