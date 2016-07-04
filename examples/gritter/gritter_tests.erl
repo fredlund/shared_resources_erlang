@@ -43,7 +43,8 @@ innerprop(N,Class,Dir,LibPath) ->
      ,{waiting_spec,shr_always}
     ],
   GeneratorOption = 
-    [{test_gen_spec,{shr_gnr_fsms,[{N,gritter_gnr_fsm}]}}],
+    [{test_gen_spec,{shr_gnr_fsms,[{N,gritter_gnr_fsm2}]}}],
+%%    [{test_gen_spec,{shr_gnr_fsms,[{N,gritter_gnr_fsm}]}}],
 %%    [{test_gen_spec,{gritter_gnr,N}}],
   CorrOption = 
     [{test_corr_spec,shr_corr_resource}],
