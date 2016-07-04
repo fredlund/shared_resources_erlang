@@ -27,7 +27,7 @@
 -include("debug.hrl").
 
 %% Allow to redefine it via options
--define(COMPLETION_TIME,100).
+-define(COMPLETION_TIME,300).
 
 -include("tester.hrl").
 
