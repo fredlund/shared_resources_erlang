@@ -1,0 +1,25 @@
+
+- Cualquier llamada pendiente puede ser seleccionada.
++ Do we enforce progress? (I.e., if the implementation does not do a permitted
+call, should we signal an error).
+
+- Estricto orden de llegada entre aquellas llamadas pendientes.
+- Strict ARRIVAL order between enabled calls
+- Strict ENABLED order between enabled calls (i.e., enabled for longer is choosen first)
+Does not make very much sense, as things are basically evaluated or non-enabled in every step.
+
+
+- Prioridad a alguna de las operaciones.
+- El más pequeño primero / el más grande primero.
+- Combinando el más pequeño / el más grande en insertar y extraer.
+- Se va modificando la prioridad en un rond-robin (primero extraer 1,
+segundo  extraer 2, ...).
+- Lo mismo para extraer.
+- El round robin puede hacer de mayor a menor o de menor a mayor.
+- El cambio de turno puede hacerse siempre que se atienda (starvation).
+- El cambio de turno puede hacer sólo cuando se atienda a uno al que
+indique el turno y el resto se atiende por el siguiente al turno.
+
+- PROBLEM (limits of observability):
+we cannot observe the exact timing of calls, so if calls terminate simultaneously we always
+assume that the correct call terminated first. 
