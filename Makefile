@@ -1,35 +1,41 @@
 COMPILER=erlc
 
-vpath %.erl src examples schedulers examples examples/readers-writers examples/robots examples/multibuffer testing/src qa
+vpath %.erl src src/schedulers
+
+SPECSOURCES = $(wildcard src/specs/*.erl)
 
 BEAMS = $(patsubst src/%.erl,ebin/%.beam,$(wildcard src/*.erl))
-BEAMS += $(patsubst schedulers/%.erl,ebin/%.beam,$(wildcard schedulers/*.erl))
-BEAMS += $(patsubst examples/%.erl,ebin/%.beam,$(wildcard examples/*.erl))
-BEAMS += $(patsubst examples/multibuffer/%.erl,ebin/%.beam,$(wildcard examples/multibuffer/*.erl))
-BEAMS += $(patsubst examples/readers-writers/%.erl,ebin/%.beam,$(wildcard examples/readers-writers/*.erl))
-BEAMS += $(patsubst examples/robots/%.erl,ebin/%.beam,$(wildcard examples/robots/*.erl))
-BEAMS += $(patsubst testing/src/%.erl,ebin/%.beam,$(wildcard testing/src/*.erl))
-EFLAGS = +debug_info 
-BEAMS += $(patsubst qa/%.erl,ebin/%.beam,$(wildcard qa/*.erl))
+BEAMS += $(patsubst src/schedulers/%.erl,ebin/%.beam,$(wildcard src/schedulers/*.erl))
+SPECBEAMS = $(patsubst src/specs/%.erl,ebin/%.beam,$(wildcard src/specs/*.erl))
+
+HEADERS = $(wildcard src/*.hrl)
 EFLAGS = +debug_info 
 
-all: ebin main
+all: ebin specs main
+	(cd examples; make)
 
 main: ${BEAMS}
 
 ebin:
 	mkdir -p ebin
 
-ebin/%.beam: %.erl
+specs: $(SPECBEAMS)
+
+$(SPECBEAMS): $(SPECSOURCES)
+	$(COMPILER) -pa ebin $(EFLAGS) -o ebin $(SPECSOURCES)
+
+ebin/%.beam: %.erl $(HEADERS) $(SPECBEAMS)
 	$(COMPILER) -pa ebin $(EFLAGS) -o ebin $<
 
 dialyzer: ebin main
-	dialyzer ebin/*beam
+	dialyzer ebin/*beam examples/*/ebin
 
 docs:
 	make edoc
 
 clean:
-	rm -f ebin/*.beam 
+	rm -f ebin/*.beam 	
+	(cd examples; make clean)
+
 
 

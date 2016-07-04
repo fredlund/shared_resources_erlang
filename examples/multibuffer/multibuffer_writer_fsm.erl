@@ -1,22 +1,23 @@
 -module(multibuffer_writer_fsm).
 
--compile(export_all).
+-export([initial_state/3,precondition/4,command/3,next_state/4]).
+-export([print_started_job_info/4, print_finished_job_info/4, print_state/3]).
+
+-behaviour(shr_fsm).
 
 -include_lib("eqc/include/eqc.hrl").
 
--include("../../testing/src/tester.hrl").
-
--record(mstate,{max,implementation}).
+-record(mstate,{max}).
 
 
-init(_Id,[Max,Implementation]) ->
-  #mstate{max=Max,implementation=Implementation}.
+initial_state(_Id,[Max],_) ->
+  {ok,#mstate{max=Max}}.
 
 precondition(_Id,_State,_GS,_Call) ->
   true.
 
-command(_Id,#mstate{max=Max,implementation=Implementation},_) ->
-  {Implementation,put,[nats(Max div 2)]}.
+command(_Id,#mstate{max=Max},_) ->
+  {multibuffer,put,[nats(Max div 2)]}.
 
 next_state(_Id,State,GS,_Job) ->
   {State,GS}.
@@ -24,15 +25,15 @@ next_state(_Id,State,GS,_Job) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 nats(N) ->
-  ?LET(Num,eqc_gen:choose(1,N),lists:duplicate(Num,nat())).
+  ?LET(Num,eqc_gen:choose(0,N),lists:duplicate(Num,nat())).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%     
 	
-print_finished_job_info(_Job,Id,_State,_GlobalState) ->
+print_finished_job_info(_Call,Id,_State,_GlobalState) ->
   io_lib:format("~p",[Id]).
 
-print_started_job_info(Job,Id,_State,_GlobalState) ->
-  case Job#job.call of
+print_started_job_info(Call,Id,_State,_GlobalState) ->
+  case Call of
     {_,CallType,[Arg]} -> io_lib:format("~p:~p(~p)",[Id,CallType,Arg])
   end.
 
