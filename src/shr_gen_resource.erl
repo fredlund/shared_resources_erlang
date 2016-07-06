@@ -1,7 +1,6 @@
-%% An inefficient but general implementation of a shared resource, 
-%% with priorities.
-%%
-%% A resource is implemented as a process.
+%% @doc This module provides an inefficient but general implementation 
+%% of a shared resource, with priorities.
+%% A resource is implemented as a gen_server process.
 
 -module(shr_gen_resource).
 -behaviour(gen_server).
@@ -19,6 +18,12 @@
 
 -type call() :: {atom(),[any()]}.
 -export_type([call/0]).
+
+-type module_or_module_init() :: atom() | {atom(),[any()]}.
+-type option() ::
+	{data_spec, module_or_module_init()}
+      | {waiting_spec, module_or_module_init()}
+      | any().
 
 -record(call_record,
 	{
@@ -202,16 +207,54 @@ return_to_caller(Result,CallRecord) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+%% @doc A call to a shared resource implemented using the 
+%% shr_gen_resource module.
 -spec call(atom()|pid(),{atom(),[any()]}) -> any().
 call(Resource,{F,Args}) when is_atom(F), is_list(Args) ->
   gen_server:call(Resource,{F,Args}).
 
+%% @doc Starts a shared resource.
+%% The options argument provides necessary parameters for the resource
+%% such as defining the implementation module, and the module
+%% defining call priorities. The option list is treated as a property list.
+%%
+%% Concretely the option ``data_spec'' names
+%% the resource implementation module,
+%% and the ``waiting_spec'' option names the module defining call priorities.
+-spec start([any()],[option()]) -> {ok,pid()}.
 start(Args, Options) ->
   gen_server:start(?MODULE, Args, Options).
+%% @doc Starts a shared resource, with a registered name.
+%% The options argument provides necessary options for the resource
+%% such as defining the implementation module, and the module
+%% defining call priorities. The option list is treated as a property list.
+%%
+%% Concretely the option ``data_spec'' names
+%% the resource implementation module,
+%% and the ``waiting_spec'' option names the module defining call priorities.
+-spec start(atom(),[any()],[option()]) -> {ok,pid()}.
 start(Name, Args, Options) ->
   gen_server:start(Name, ?MODULE, Args, Options).
+%% @doc Starts and links to a shared resource.
+%% The options argument provides necessary options for the resource
+%% such as defining the implementation module, and the module
+%% defining call priorities. The option list is treated as a property list.
+%%
+%% Concretely the option ``data_spec'' names
+%% the resource implementation module,
+%% and the ``waiting_spec'' option names the module defining call priorities.
+-spec start_link([any()],[option()]) -> {ok,pid()}.
 start_link(Args, Options) ->
   gen_server:start_link(?MODULE, Args, Options).
+%% @doc Starts and links to a shared resource, with a registered name.
+%% The options argument provides necessary options for the resource
+%% such as defining the implementation module, and the module
+%% defining call priorities. The option list is treated as a property list.
+%%
+%% Concretely the option ``data_spec'' names
+%% the resource implementation module,
+%% and the ``waiting_spec'' option names the module defining call priorities.
+-spec start_link(atom(),[any()],[option()]) -> {ok,pid()}.
 start_link(Name, Args, Options) ->
   gen_server:start_link(Name, ?MODULE, Args, Options).
 

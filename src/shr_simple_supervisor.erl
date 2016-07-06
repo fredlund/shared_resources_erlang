@@ -1,3 +1,15 @@
+%% @doc This module provides a simple supervisor behaviour,
+%% where a set of processes are started, and if any process
+%% terminates, the supervisor itself fails. That is,
+%% processes are not restarted upon failure.
+%%
+%% A difference to the normal supervisor behaviour is that
+%% the behaviour permits adding existing processes to the supervisor
+%% tree in a simple manner.
+%%
+%% A limitation is that currently only one shr_simple_supervisor process
+%% can be active at any time; this is quite easy to fix.
+
 -module(shr_simple_supervisor).
 
 -export([init/1,handle_call/3,handle_info/2,terminate/2]).
@@ -10,6 +22,11 @@
 
 %%-define(debug,true).
 -include("debug.hrl").
+
+-type supervisor_ret() ::  {ok,[pid()],any()} 
+			 | {ok,pid(),any()}
+			 | {ok,[pid()]}
+			 | {ok,pid()}.
 
 -define(GEN_SERVER,gen_server).
 
@@ -140,10 +157,6 @@ terminate(_Reason, State) ->
 find_process(Pid,Processes) ->
   lists:filter(fun (P) -> P#process.pid==Pid end, Processes).
 
-%% We start the gen_server from a fresh process to ensure
-%% that the gen_server is not shutdown when the parent process
-%% terminates. The moment when the parent process terminates
-%% is not so well-defined for QuickCheck tests...
 start_server() ->
   ?TIMEDLOG("starting server~n",[]),
   Parent = self(),
@@ -175,16 +188,45 @@ do_kill(State) ->
      State#state.processes),
   State#state{processes=[], terminated=State#state.processes, timeout=void}.
 
+%% @doc Spawns a process executing the argument function, 
+%% and starts supervising it.
+-spec add_childfun(fun(() -> any())) -> any().
 add_childfun(Spec) ->
   ?GEN_SERVER:call(?MODULE,{addfun,[],Spec}).
+%% @doc Spawns a process executing the argument function, 
+%% with the name provided by the name argument,
+%% and starts supervising it.
+-spec add_childfun(atom(),fun(() -> any())) -> any().
 add_childfun(Name,Spec) ->
   ?GEN_SERVER:call(?MODULE,{addfun,Name,Spec}).
 
+%% @doc Executes the function argument (either an anynomous function, or a 
+%% {Module,FunAtom,Args} triple), which should return a list of pids to 
+%% supervisor (enclosed by an ok atom, and possibly with a third field).
+%% The pids returned are included in the supervision tree.
+-spec add_childproc(fun(() -> supervisor_ret()) | {atom(),atom(),[any()]}) -> any().
 add_childproc(Spec) ->
   ?GEN_SERVER:call(?MODULE,{addproc,[],Spec}).
+-spec add_childproc(atom(),fun(() -> supervisor_ret()) | {atom(),atom(),[any()]}) -> any().
+%% @doc Executes the function argument (either an anynomous function, or a 
+%% {Module,FunAtom,Args} triple), which should return a list of pids to 
+%% supervisor (enclosed by an ok atom, and possibly with a third field).
+%% The pids returned are included in the supervision tree. The name argument 
+%% gives a symbolic name to the new supervised pids.
 add_childproc(Name,Spec) ->
   ?GEN_SERVER:call(?MODULE,{addproc,Name,Spec}).
 
+%% @doc Starts, or restarts if running, a shr_simple_supervisor.
+%% The ``ReportTo'' argument is a pid to which the supervisor sends
+%% a failure report, if a supervisor process fails.
+%%
+%% Internally the supervisor is implemented as a gen_server. However,
+%% note that the gen_server is started from a fresh process to ensure
+%% that the gen_server is not shutdown when the parent process
+%% terminates. The moment when the parent process terminates
+%% is not so well-defined for e.g. QuickCheck tests.
+%%
+-spec restart(pid()) -> ok.
 restart(ReportTo) ->  
   ?TIMEDLOG("restart(~p)~n",[ReportTo]),
   case whereis(?MODULE) of
@@ -194,6 +236,8 @@ restart(ReportTo) ->
       ?GEN_SERVER:call(?MODULE,{restart,ReportTo})
   end.
 
+%% @doc Checks if the shr_simple_supervisor is alive.
+-spec is_alive() -> bool().
 is_alive() ->
   ?GEN_SERVER:call(?MODULE,is_alive).
 

@@ -33,6 +33,11 @@ dialyzer: ebin main
 docs:
 	make edoc
 
+edoc:
+	mkdir -p doc/doc
+	cp doc/overview.edoc doc/doc
+	erl -noshell -run edoc_run files '["src/shr_calls.erl","src/shr_gen_resource.erl","src/shr_simple_supervisor.erl"]' '[{sort_functions,false},{dir,"doc/doc"}]'
+
 clean:
 	rm -f ebin/*.beam 	
 	(cd examples; make clean)

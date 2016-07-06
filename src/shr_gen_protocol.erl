@@ -3,6 +3,9 @@
 %% Probably this should be a gen_server instead.
 %% However, the module is not a standard one, as
 %% it returns two processes instead of one.
+%%
+%% This should be generalised into a set of resources and
+%% a set of environments.
 
 -export([start/2, start/3, start_link/2, start_link/3]).
 
