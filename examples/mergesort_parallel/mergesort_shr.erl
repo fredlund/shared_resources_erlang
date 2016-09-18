@@ -12,7 +12,6 @@
 -include("../../src/debug.hrl").
 
 initial_state(_,Options) ->
-  io:format("Options are ~p~n",[Options]),
   OutputBufSize = proplists:get_value(output_buf_size,Options),
   InputBufSpecs = proplists:get_value(input_buf_spec,Options),
   InputBufs =
@@ -113,14 +112,17 @@ new_state(InputBufs,OutputBuf) ->
     ,output_buf=OutputBuf
     }.
 
-num_input_bufs(#state{input_bufs=InputBufs}) ->
-  size(InputBufs).
+num_input_bufs(State) ->
+  size(input_bufs(State)).
 
-input_buf(N,#state{input_bufs=InputBufs}) ->
-  element(N,InputBufs).
+input_bufs(#state{input_bufs=InputBufs}) ->
+  InputBufs.
 
-set_input_buf(N,Buf,State=#state{input_bufs=InputBufs}) ->
-  State#state{input_bufs=setelement(N,Buf,InputBufs)}.
+input_buf(N,State) ->
+  element(N,input_bufs(State)).
+
+set_input_buf(N,Buf,State) ->
+  State#state{input_bufs=setelement(N,input_bufs(State),Buf)}.
 
 output_buf(#state{output_buf=OutputBuf}) ->
   OutputBuf.
@@ -158,24 +160,24 @@ set_contents(Contents,Buf) ->
 first_element(Buf) ->
   Contents = contents(Buf),
   Element = hd(Contents),
-  NewBuf = set_contents(tl(Contents),Contents),
+  NewBuf = set_contents(tl(Contents),Buf),
   {Element,NewBuf}.
 
 strip_first(Buf) ->
   {_Element,NewBuf} = first_element(Buf),
   NewBuf.
 
-try_to_move(State=#state{output_buf=OutputBuf}) ->
-  case OutputBuf#buf.max_size > length(OutputBuf#buf.contents) of
+try_to_move(State) ->
+  OutputBuf = output_buf(State),
+  case max_size(OutputBuf) > buf_size(OutputBuf) of
     true ->
-      case find_min_element(tuple_to_list(State#state.input_bufs),State) of
+      case find_min_element(tuple_to_list(input_bufs(State)),State) of
 	nope ->
 	  State;
 	eod ->
-	  OutputBuf = output_buf(State),
 	  set_output_buf(set_eod(OutputBuf),State);
 	{Element,NewState} ->
-	  NewState#state{output_buf=add_element(Element,OutputBuf)}
+	  set_output_buf(add_element(Element,OutputBuf),NewState)
       end;
     false ->
       State
@@ -201,15 +203,15 @@ find_min_element(InputBufs,State) ->
 		 {First,NewBuf} = first_element(InputBuf),
 		 case Acc of
 		   eod ->
-		     set_input_buf(I,NewBuf,State);
+		     {First,set_input_buf(I,NewBuf,State)};
 		   {OldValue,_} ->
 		     if
 		       First<OldValue ->
-			 set_input_buf(I,NewBuf,State);
+			 {First,set_input_buf(I,NewBuf,State)};
 		       true ->
 			 Acc
 		     end
 		 end
 	     end
 	 end
-     end, eod, InputBufs).
+     end, eod, lists:zip(lists:seq(1,length(InputBufs)),InputBufs)).
