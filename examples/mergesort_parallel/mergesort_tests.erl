@@ -38,12 +38,14 @@ sim(Config) ->
   Controllers = 
     lists:map
       (fun ({component,N,InputSizes,OutputSize}) ->
-	   Opts = [{output_buf_size,OutputSize},{input_buf_spec,InputSizes}],
+	   Opts = 
+	     [{output_buf_size,OutputSize},{input_buf_spec,InputSizes}]
+	     ++ControllerOpts,
 	   [Controller] = 
 	      shr_simple_supervisor:add_childproc
 		(mergesort_shr, 
 		 fun () ->
-		     shr_gen_resource:start_link(ControllerOpts,Opts)
+		     shr_gen_resource:start_link(Opts,[])
 		 end),
 	   {N,Controller}
        end, Components),

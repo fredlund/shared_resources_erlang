@@ -19,15 +19,15 @@ run(Config,Controllers) ->
   lists:foreach
     (fun ({output,N}) ->
 	 spawn_link(fun () -> outputs(controller(N,Controllers),Self) end)
-     end, mergesorts_tests:outputs(Config)),
+     end, mergesort_tests:outputs(Config)),
   lists:foreach
     (fun ({input,N,M}) ->
 	 spawn_link(fun () -> inputs(controller(N,Controllers),M) end)
      end, mergesort_tests:inputs(Config)),
-  lists:foreach(fun (_) -> receive done -> ok end end, mergesorts_tests:outputs(Config)).
+  lists:foreach(fun (_) -> receive done -> ok end end, mergesort_tests:outputs(Config)).
 
 controller(N,Controllers) ->
-  case lists:keysearch(N,1,Controllers) of
+  case lists:keyfind(N,1,Controllers) of
     {_,Controller} -> 
       Controller
   end.
