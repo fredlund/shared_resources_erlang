@@ -8,7 +8,7 @@
 -record(buf,{max_size,contents,eod}).
 -record(state,{input_bufs,output_buf}).
 
-%%-define(debug,true).
+-define(debug,true).
 -include("../../src/debug.hrl").
 
 initial_state(_,Options) ->
@@ -21,26 +21,27 @@ initial_state(_,Options) ->
   new_state(InputBufs,OutputBuf).
 
 pre(_Msg={input,[N,_]},State) ->
-  ?TIMEDLOG("~p~n",[_Msg]),
+  ?TIMEDLOG("pre: ~p~n",[_Msg]),
   N =< num_input_bufs(State) andalso 
     begin
       InputBuf = input_buf(N,State),
       not(eod(InputBuf))
     end;
 pre(_Msg,_) ->
-  ?TIMEDLOG("~p~n",[_Msg]),
+  ?TIMEDLOG("pre: ~p~n",[_Msg]),
   true.
 
 cpre(_Msg={input,[N,_]},State) ->
-  ?TIMEDLOG("~p~n",[_Msg]),
+  ?TIMEDLOG("cpre: ~p state=~s~n",[_Msg,print_state(State)]),
   Buf = input_buf(N,State),
   buf_size(Buf) < max_size(Buf);
 cpre(_Msg={output,_},State) ->
+  ?TIMEDLOG("cpre: ~p state=~s~n",[_Msg,print_state(State)]),
   OutputBuf = output_buf(State),
   buf_size(OutputBuf)>0.
 
 post(_Msg={input,[N,Element]},_Return,State) ->
-  ?TIMEDLOG("~p~n",[_Msg]),
+  ?TIMEDLOG("post: ~p~n",[_Msg]),
   InputBuf = input_buf(N,State),
   if
     Element==eod ->
@@ -56,11 +57,12 @@ post(_Msg={input,[N,Element]},_Return,State) ->
       end
   end;
 post(_Msg={output,_},_Return,State) ->
-  ?TIMEDLOG("~p~n",[_Msg]),
+  ?TIMEDLOG("post: ~p~n",[_Msg]),
   OutputBuf = output_buf(State),
   set_output_buf(strip_first(OutputBuf),State).
 
-return(State,{output,_},Result) ->
+return(State,_Msg={output,_},Result) ->
+  ?TIMEDLOG("return: ~p~n",[_Msg]),
   OutputBuf = output_buf(State),
   Contents = contents(OutputBuf),
   if
@@ -78,7 +80,8 @@ not_exception(Result) ->
     _ -> true
   end.
 
-return_value({output,_},State) ->
+return_value(_Msg={output,_},State) ->
+  ?TIMEDLOG("return_value: ~p~n",[_Msg]),
   OutputBuf = output_buf(State),
   Contents = contents(OutputBuf),
   if
@@ -92,18 +95,18 @@ return_value(_,_) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-print_state(#state{input_bufs=InputBufs,output_buf=OutputBuf}) ->
+print_state(State) ->
   io_lib:format
     ("{inputs=~s,~noutput=~s}~n",
      [lists:foldl
       (fun (Buf,Acc) ->
 	   io_lib:format("~s~s",[Acc,buf_print(Buf)])
-       end, "", InputBufs),
-      buf_print(OutputBuf)
+       end, "", tuple_to_list(input_bufs(State))),
+      buf_print(output_buf(State))
      ]).
 
-buf_print(#buf{max_size=MaxSize,contents=Contents,eod=Eod}) ->
-  io_lib:format("<~p,~p,~p>",[MaxSize,Contents,Eod]).
+buf_print(Buf) ->
+  io_lib:format("<~p,~p,~p>",[max_size(Buf),contents(Buf),eod(Buf)]).
       
 new_state(InputBufs,OutputBuf) ->
   #state
