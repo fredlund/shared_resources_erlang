@@ -44,28 +44,37 @@ cpre(_Msg={input,[N,_]},State) ->
 cpre(_Msg={output,_},State) ->
   ?TIMEDLOG("cpre: ~p state=~s~n",[_Msg,print_state(State)]),
   OutputBuf = output_buf(State),
-  buf_size(OutputBuf)>0.
+  BufSize = buf_size(OutputBuf),
+  Eod = eod(OutputBuf),
+  (BufSize > 0) orelse ((BufSize == 0) andalso Eod).
 
 post(_Msg={input,[N,Element]},_Return,State) ->
   ?TIMEDLOG("post: ~p~n",[_Msg]),
   InputBuf = input_buf(N,State),
-  case Element of
-    eod ->
-      set_input_buf(N,set_eod(InputBuf),State);
-    {data,Data} ->
-      NewState = set_input_buf(N,add_element(Data,InputBuf),State),
-      OutputBuf = output_buf(NewState),
-      case is_full(OutputBuf) of
-	true -> 
-	  NewState;
-	false ->
-	  try_to_move(NewState)
-      end
+  NewState =
+    case Element of
+      eod ->
+	set_input_buf(N,set_eod(InputBuf,true),State);
+      {data,Data} ->
+	set_input_buf(N,add_element(Data,InputBuf),State)
+    end,
+  OutputBuf = output_buf(NewState),
+  case max_size(OutputBuf) == buf_size(OutputBuf) of
+    true -> 
+      NewState;
+    false ->
+      try_to_move(NewState)
   end;
 post(_Msg={output,_},_Return,State) ->
   ?TIMEDLOG("post: ~p~n",[_Msg]),
   OutputBuf = output_buf(State),
-  set_output_buf(strip_first(OutputBuf),State).
+  BufSize = buf_size(OutputBuf),
+  if
+    BufSize == 0 -> 
+      set_output_buf(set_eod(OutputBuf,false),State);
+    true ->
+      try_to_move(set_output_buf(strip_first(OutputBuf),State))
+  end.
 
 return(State,_Msg={output,_},Result) ->
   ?TIMEDLOG("return: ~p~n",[_Msg]),
@@ -112,7 +121,7 @@ print_state(State) ->
      ]).
 
 buf_print(Buf) ->
-  io_lib:format("<~p,~p,~p>",[max_size(Buf),contents(Buf),eod(Buf)]).
+  io_lib:format("<~p,~w,~p>",[max_size(Buf),contents(Buf),eod(Buf)]).
       
 new_state(InputBufs,OutputBuf) ->
   #state
@@ -148,17 +157,14 @@ buf_size(#buf{contents=Contents}) ->
 max_size(#buf{max_size=MaxBufSize}) ->
   MaxBufSize.
 
-is_full(Buf) ->
-  max_size(Buf) == buf_size(Buf).
-
 add_element(Element,Buf = #buf{contents=Contents}) ->
   Buf#buf{contents=Contents++[Element]}.
 
 eod(#buf{eod=Eod}) ->
   Eod.
 
-set_eod(Buf) ->
-  Buf#buf{eod=true}.
+set_eod(Buf,Value) ->
+  Buf#buf{eod=Value}.
     
 contents(#buf{contents=Contents}) ->
   Contents.
@@ -180,11 +186,13 @@ try_to_move(State) ->
   OutputBuf = output_buf(State),
   case max_size(OutputBuf) > buf_size(OutputBuf) of
     true ->
-      case find_min_element(tuple_to_list(input_bufs(State)),State) of
+      MinElement = find_min_element(tuple_to_list(input_bufs(State)),State),
+      io:format("min(~s) = ~p~n",[print_state(State),MinElement]),
+      case MinElement of
 	nope ->
 	  State;
 	eod ->
-	  set_output_buf(set_eod(OutputBuf),State);
+	  set_output_buf(set_eod(OutputBuf,true),State);
 	{Element,NewState} ->
 	  set_output_buf(add_element(Element,OutputBuf),NewState)
       end;
@@ -196,18 +204,13 @@ find_min_element(InputBufs,State) ->
   lists:foldl
     (fun ({I,InputBuf},Acc) ->
 	 case Acc of
-	   nope ->
-	     nop;
+	   nope -> Acc;
 	   _ ->
 	     BufSize = buf_size(InputBuf),
 	     Eod = eod(InputBuf),
 	     if
-	       Acc==nope ->
-		 Acc;
-	       BufSize==0, Eod==true -> 
-		 Acc;
-	       BufSize==0, Eod==false ->
-		 nope;
+	       BufSize==0, Eod==true -> Acc;
+	       BufSize==0, Eod==false -> nope;
 	       true ->
 		 {First,NewBuf} = first_element(InputBuf),
 		 case Acc of

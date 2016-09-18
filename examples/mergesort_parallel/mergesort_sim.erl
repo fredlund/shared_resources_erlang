@@ -6,23 +6,23 @@
 -include("../../src/debug.hrl").
 
 run(Config,Controllers) ->
-  {A,B,C} = os:timestamp(),
-  random:seed(A,B,C),
   Self = self(),
   lists:foreach
     (fun ({link,N,M,I}) ->
-	 spawn_link
+	 spawn_link_init_random
 	   (fun () -> 
 		links(controller(N,Controllers),M,controller(I,Controllers)) 
 	    end)
      end, mergesort_tests:links(Config)),
   lists:foreach
     (fun ({output,N}) ->
-	 spawn_link(fun () -> outputs(controller(N,Controllers),Self) end)
+	 spawn_link_init_random
+	   (fun () -> outputs(controller(N,Controllers),Self) end)
      end, mergesort_tests:outputs(Config)),
   lists:foreach
     (fun ({input,N,M}) ->
-	 spawn_link(fun () -> inputs(controller(N,Controllers),M) end)
+	 spawn_link_init_random
+	   (fun () -> inputs(controller(N,Controllers),M) end)
      end, mergesort_tests:inputs(Config)),
   lists:foreach(fun (_) -> receive done -> ok end end, mergesort_tests:outputs(Config)).
 
@@ -31,6 +31,14 @@ controller(N,Controllers) ->
     {_,Controller} -> 
       Controller
   end.
+
+spawn_link_init_random(Fun) ->
+  spawn_link
+    (fun () ->
+	 {A,B,C} = os:timestamp(),
+	 random:seed(A,B,C),
+	 Fun()
+     end).
 
 inputs(N,M) ->
   inputs(N,M,choose(0,10),choose(0,10)).
