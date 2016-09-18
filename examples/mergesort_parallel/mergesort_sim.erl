@@ -38,18 +38,18 @@ inputs(_N,_M,_Min,0) ->
   ok;
 inputs(N,M,Min,Count) ->
   NewMin = choose(Min,Min+3),
-  shr_calls:call(N,{input,M,NewMin}),
+  shr_calls:call(N,{input,[M,NewMin]}),
   inputs(N,M,NewMin,Count-1).
 
 outputs(N,Self) ->
-  case shr_calls:call(N,output) of
+  case shr_calls:call(N,{output,[]}) of
     eod -> Self!done;
     _ -> outputs(N,Self)
   end.
 
 links(N,M,I) ->
-  Result = shr_calls:call(N,output),
-  shr_calls:call(M,{input,I,Result}),
+  Result = shr_calls:call(N,{output,[]}),
+  shr_calls:call(M,{input,[I,Result]}),
   links(N,M,I).
 
 choose(From,To) ->
