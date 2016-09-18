@@ -20,9 +20,15 @@ initial_state(_,Options) ->
     new_buffer(OutputBufSize),
   new_state(InputBufs,OutputBuf).
 
-pre(_Msg={input,[N,_]},State) ->
+pre(_Msg={input,[N,Element]},State) ->
   ?TIMEDLOG("pre: ~p~n",[_Msg]),
-  N =< num_input_bufs(State) andalso 
+  case Element of
+    eod -> true;
+    {data,_} -> true;
+    _ -> false
+  end 
+    andalso N =< num_input_bufs(State) 
+    andalso 
     begin
       InputBuf = input_buf(N,State),
       not(eod(InputBuf))
@@ -43,11 +49,11 @@ cpre(_Msg={output,_},State) ->
 post(_Msg={input,[N,Element]},_Return,State) ->
   ?TIMEDLOG("post: ~p~n",[_Msg]),
   InputBuf = input_buf(N,State),
-  if
-    Element==eod ->
+  case Element of
+    eod ->
       set_input_buf(N,set_eod(InputBuf),State);
-    true ->
-      NewState = set_input_buf(N,add_element(Element,InputBuf),State),
+    {data,Data} ->
+      NewState = set_input_buf(N,add_element(Data,InputBuf),State),
       OutputBuf = output_buf(NewState),
       case is_full(OutputBuf) of
 	true -> 

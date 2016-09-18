@@ -39,8 +39,8 @@ inputs(N,M,_Min,0) ->
   shr_calls:call(N,{input,[M,eod]});
 inputs(N,M,Min,Count) ->
   NewMin = choose(Min,Min+3),
-  io:format("~p: input(~p,~p)~n",[N,M,NewMin]),
-  shr_calls:call(N,{input,[M,NewMin]}),
+  io:format("~p: input(~p,~p)~n",[N,M,{data,NewMin}]),
+  shr_calls:call(N,{input,[M,{data,NewMin}]}),
   inputs(N,M,NewMin,Count-1).
 
 outputs(N,Self) ->
