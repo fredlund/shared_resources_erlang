@@ -34,17 +34,23 @@ controller(N,Controllers) ->
 
 inputs(N,M) ->
   inputs(N,M,choose(0,10),choose(0,10)).
-inputs(_N,_M,_Min,0) ->
-  ok;
+inputs(N,M,_Min,0) ->
+  io:format("~p: input(~p,~p)~n",[N,M,eod]),
+  shr_calls:call(N,{input,[M,eod]});
 inputs(N,M,Min,Count) ->
   NewMin = choose(Min,Min+3),
+  io:format("~p: input(~p,~p)~n",[N,M,NewMin]),
   shr_calls:call(N,{input,[M,NewMin]}),
   inputs(N,M,NewMin,Count-1).
 
 outputs(N,Self) ->
-  case shr_calls:call(N,{output,[]}) of
-    eod -> Self!done;
-    _ -> outputs(N,Self)
+  Result = shr_calls:call(N,{output,[]}),
+  io:format("~p: output(~p)~n",[N,Result]),
+  case Result of
+    eod -> 
+      Self!done;
+    _ -> 
+      outputs(N,Self)
   end.
 
 links(N,M,I) ->
