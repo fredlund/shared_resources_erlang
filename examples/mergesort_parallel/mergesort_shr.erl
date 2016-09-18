@@ -11,7 +11,8 @@
 %%-define(debug,true).
 -include("../../src/debug.hrl").
 
-initial_state(_,Options) ->
+initial_state(Options,_) ->
+  io:format("Options are ~p~n",[Options]),
   OutputBufSize = proplists:get_value(output_buf_size,Options),
   InputBufSpecs = proplists:get_value(input_buf_spec,Options),
   InputBufs =

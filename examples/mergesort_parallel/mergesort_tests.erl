@@ -38,7 +38,7 @@ sim(Config) ->
   Controllers = 
     lists:map
       (fun ({component,N,InputSizes,OutputSize}) ->
-	   Opts = [{output_buf_size=OutputSize},{input_buf_spec=InputSizes}],
+	   Opts = [{output_buf_size,OutputSize},{input_buf_spec,InputSizes}],
 	   [Controller] = 
 	      shr_simple_supervisor:add_childproc
 		(mergesort_shr, 
@@ -126,19 +126,19 @@ valid_config(Config) ->
     lists:foldl
       (fun (Output,Acc) ->
 	   ComponentNum = output_component(Output),
-	   sets:delete_element(ComponentNum,Acc)
-       end, Outputs),
+	   sets:del_element(ComponentNum,Acc)
+       end, ComponentNumbers, Outputs),
   0 = sets:size(RemainingOutputs),
   Inputs = inputs(Config),
   lists:foreach
     (fun (Input) ->
 	 InputComponent = input_component(Input),
-	 true = sets:is_element(InputComponent)
+	 true = sets:is_element(InputComponent,ComponentNumbers)
      end, Inputs).
 
-covers_inputs(Inputs,{component,_,Inputs,_}) ->
-  NumInputs = length(Inputs),
-  [] = 
+covers_inputs(Inputs,{component,_,InputSpec,_}) ->
+  NumInputs = length(InputSpec),
+  [] ==
     lists:foldl
       (fun (Input,Acc) ->
 	   InputNum = input_num(Input),
