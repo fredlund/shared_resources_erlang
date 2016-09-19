@@ -6,6 +6,7 @@
 -include("../../src/debug.hrl").
 
 run(Config,Controllers) ->
+  init_random(),
   Self = self(),
   lists:foreach
     (fun ({link,N,M,I}) ->
@@ -19,10 +20,11 @@ run(Config,Controllers) ->
 	 spawn_link_init_random
 	   (fun () -> outputs(controller(N,Controllers),Self) end)
      end, mergesort_tests:outputs(Config)),
+  Rounds = choose(1,10),
   lists:foreach
     (fun ({input,N,M}) ->
 	 spawn_link_init_random
-	   (fun () -> inputs(controller(N,Controllers),M) end)
+	   (fun () -> inputs(controller(N,Controllers),M,Rounds) end)
      end, mergesort_tests:inputs(Config)),
   lists:foreach(fun (_) -> receive done -> ok end end, mergesort_tests:outputs(Config)).
 
@@ -35,13 +37,15 @@ controller(N,Controllers) ->
 spawn_link_init_random(Fun) ->
   spawn_link
     (fun () ->
-	 {A,B,C} = os:timestamp(),
-	 random:seed(A,B,C),
+	 init_random(),
 	 Fun()
      end).
 
-inputs(N,M) ->
-  inputs(N,M,choose(0,10),choose(0,10)).
+inputs(N,M,0) -> 
+  shr_calls:call(N,{input,[M,-1]});
+inputs(N,M,Rounds) when Rounds>0 ->
+  inputs(N,M,choose(0,10),choose(0,10)),
+  inputs(N,M,Rounds-1).
 inputs(N,M,_Min,0) ->
   io:format("~p: input(~p,~p)~n",[N,M,eod]),
   shr_calls:call(N,{input,[M,eod]});
@@ -55,7 +59,7 @@ outputs(N,Self) ->
   Result = shr_calls:call(N,{output,[]}),
   io:format("~p: output(~p)~n",[N,Result]),
   case Result of
-    eod -> 
+    -1 -> 
       Self!done;
     _ -> 
       outputs(N,Self)
@@ -69,4 +73,9 @@ links(N,M,I) ->
 choose(From,To) ->
   From+random:uniform(To-From)-1.
 
+init_random() ->
+  {A,B,C} = os:timestamp(),
+  random:seed(A,B,C).
+
+  
 		
