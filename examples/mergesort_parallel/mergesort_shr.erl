@@ -8,7 +8,7 @@
 -record(buf,{max_size,contents,eod}).
 -record(state,{input_bufs,output_buf}).
 
--define(debug,true).
+%%-define(debug,true).
 -include("../../src/debug.hrl").
 
 initial_state(_,Options) ->
@@ -187,7 +187,6 @@ try_to_move(State) ->
   case max_size(OutputBuf) > buf_size(OutputBuf) of
     true ->
       MinElement = find_min_element(tuple_to_list(input_bufs(State)),State),
-      io:format("min(~s) = ~p~n",[print_state(State),MinElement]),
       case MinElement of
 	nope ->
 	  State;
@@ -214,15 +213,8 @@ find_min_element(InputBufs,State) ->
 	       true ->
 		 {First,NewBuf} = first_element(InputBuf),
 		 case Acc of
-		   eod ->
-		     {First,set_input_buf(I,NewBuf,State)};
-		   {OldValue,_} ->
-		     if
-		       First<OldValue ->
-			 {First,set_input_buf(I,NewBuf,State)};
-		       true ->
-			 Acc
-		     end
+		   {OldValue,_} when OldValue=<First -> Acc;
+		   _ -> {First,set_input_buf(I,NewBuf,State)}
 		 end
 	     end
 	 end
