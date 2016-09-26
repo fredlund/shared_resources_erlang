@@ -103,18 +103,20 @@ handle_info(timeout,State) ->
       (fun (Action,AccState) ->
 	   Robot = #robot{id=Action#action.id,weight=Action#action.weight},
 	   Warehouse = Action#action.warehouse,
+	   NewState =
+	     if
+	       Action#action.action_type==entering ->
+		 add_robot_to_warehouse(Robot,Warehouse,AccState);
+	       true ->
+		 if
+		   Warehouse==State#state.num_warehouses-1 -> 
+		     AccState;
+		   true -> 
+		     add_robot_to_corridor(Robot,Warehouse+1,AccState)
+		 end
+	     end,
 	   gen_server:reply(Action#action.from,ok),
-	   if
-	     Action#action.action_type==entering ->
-	       add_robot_to_warehouse(Robot,Warehouse,AccState);
-	     true ->
-	       if
-		 Warehouse==State#state.num_warehouses-1 -> 
-		   AccState;
-		 true -> 
-		   add_robot_to_corridor(Robot,Warehouse+1,AccState)
-	       end
-	   end
+	   NewState
        end, ResultState, EnabledActions),
   ?TIMEDLOG("handle_info => ~p~n",[FinalState]),
   case get_new_timer(FinalState) of
