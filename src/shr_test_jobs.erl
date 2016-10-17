@@ -39,6 +39,7 @@
 	  ,test_corr_state
 	  ,test_gen_module
 	  ,test_corr_module
+	  ,test_observers_states
 	  ,completion_time
 	  ,is_environment_port
 	  ,start_fun
@@ -46,6 +47,9 @@
 	  ,jobs_alive
 	  ,counter
 	}).
+
+-record(observer,{name,module,state}).
+
 
 api_spec() ->
   #api_spec{}.
@@ -58,19 +62,24 @@ init_state(Options) ->
   ?TIMEDLOG("init_state. Options are~n~p~n",[Options]),
   TestGenSpec = proplists:get_value(test_gen_spec,Options),
   TestCorrSpec = proplists:get_value(test_corr_spec,Options),
+  TestObserverSpecs = proplists:get_value(test_observers_spec,Options,[]),
   StartFun = proplists:get_value(start_fun,Options),
   StopFun = proplists:get_value(stop_fun,Options),
+  
   IsEnvironmentPort =
     case proplists:get_value(is_environment_port,Options) of
       undefined -> fun (_) -> false end;
       F when is_function(F) -> F
     end,
+  {ok,TestObserversState} = 
+    observer_initial_states(TestObserverSpecs,Options),
   #state
     {
      started=false
     ,options=Options
     ,test_gen_state=shr_utils:initial_state(TestGenSpec,Options)
     ,test_corr_state=shr_utils:initial_state(TestCorrSpec,Options)
+    ,test_observers_states=TestObserversState
     ,test_gen_module=shr_utils:module(TestGenSpec)
     ,test_corr_module=shr_utils:module(TestCorrSpec)
     ,is_environment_port = IsEnvironmentPort
@@ -79,6 +88,30 @@ init_state(Options) ->
     ,jobs_alive=[]
     ,completion_time=proplists:get_value(completion_time,Options,?COMPLETION_TIME)
     }.
+
+observer_initial_states(TestObserverSpecs,Options) ->
+  NameModuleInits = 
+    lists:map
+      (fun ({Name,Module}) ->
+	   {Name,Module,[]};
+	   ({Name,Module,Init}) ->
+	   {Name,Module,Init}
+       end, TestObserverSpecs),
+  lists:foldl
+    (fun ({Name,Module,Init},{RAcc,ISAcc}) ->
+	 case Module:init(Init,Options) of
+	   {ok,InitialState} ->
+	     Observer = 
+	       #observer{name=Name,module=Module,state=InitialState},
+	     {RAcc,[Observer|ISAcc]};
+	   Other ->
+	     io:format
+	       ("*** Error: protocol observer ~p does not return a "++
+		  "valid initial state: ~p~n",
+		[Name,Other]),
+	     {failed,ISAcc}
+	 end
+     end, {ok,[]}, NameModuleInits).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -276,13 +309,22 @@ try
 	 [Pid,ExitReason]),
       false;
     [] ->
-      (State#state.test_corr_module):postcondition
+      case
+	(State#state.test_corr_module):postcondition
 	(State#state.test_corr_state,
 	 call(filter_environment_commands(State,Commands)),
 	 {filter_environment_jobs(State,NewJobs),
 	  filter_environment_jobs(State,FinishedJobs)},
-	 State)
-  end
+	 State) of
+	true ->
+	  case observers_next_states
+	    (State#state.test_observers_states,NewJobs, FinishedJobs) of
+	    {ok, _} -> true;
+	    {fail, _} -> false
+	  end;
+	false -> false
+      end
+    end
   catch _:Reason ->
       io:format
 	("*** Model error: ~p:do_cmds_post raised an exception ~p in state~n  ~p~n"
@@ -303,6 +345,9 @@ do_cmds_next(State,Result={NewJobs,FinishedJobs},[Commands|_]) ->
 	(State#state.test_gen_state,{NewJobs,FinishedJobs},
 	 raw(Commands),
 	 State#state.test_corr_state),
+    {ok, NewTestObserversStates} =
+      observers_next_states 
+	(State#state.test_observers_states, NewJobs, FinishedJobs),
     NewTestCorrState =
       (State#state.test_corr_module):next_state
 	(State#state.test_corr_state,
@@ -314,6 +359,7 @@ do_cmds_next(State,Result={NewJobs,FinishedJobs},[Commands|_]) ->
       {
       test_gen_state=NewTestGenState
       ,test_corr_state=NewTestCorrState
+      ,test_observers_states=NewTestObserversStates
      }
   catch _:Reason ->
       io:format
@@ -328,6 +374,22 @@ do_cmds_next(State,Result={NewJobs,FinishedJobs},[Commands|_]) ->
       throw(bad_state_machine)
   end.
 
+observers_next_states(ModuleStates,NewJobs,FinishedJobs) ->
+  lists:foldl
+    (fun (Observer,{RAcc,SAcc}) ->
+	 #observer{name=Name,module=Module,state=State} = Observer,
+	 case Module:next_state(NewJobs, FinishedJobs, State) of
+	   {ok,NextState} ->
+	     {RAcc,[Observer#observer{state=NextState}|SAcc]};
+	   Other ->
+	     io:format
+	       ("*** Error: protocol observer ~p signalled a testing failure "++
+		  "for the new jobs~n  ~p~nand the finished jobs~n  ~p~n"++
+		  "Error was ~p~n",
+		[Name,NewJobs,FinishedJobs,Other]),
+	     {failed,SAcc}
+	 end
+     end, {ok,[]}, ModuleStates).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
