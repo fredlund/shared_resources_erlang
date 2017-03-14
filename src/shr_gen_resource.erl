@@ -5,7 +5,7 @@
 -module(shr_gen_resource).
 -behaviour(gen_server).
 
--export([start/2,start/3,start_link/2,start_link/3,call/2,operations/1]).
+-export([start/3,start/4,start_link/3,start_link/4,call/2,operations/1]).
 
 -export([init/1,handle_call/3,terminate/2]). 
 -export([handle_cast/2,handle_info/2,code_change/3]).
@@ -20,10 +20,6 @@
 -export_type([call/0]).
 
 -type module_or_module_init() :: atom() | {atom(),[any()]}.
--type option() ::
-	{data_spec, module_or_module_init()}
-      | {waiting_spec, module_or_module_init()}
-      | any().
 
 -record(call_record,
 	{
@@ -44,9 +40,7 @@
 	  wait_module :: atom()
 	}).
 
-init(Options) ->
-  StateSpec = proplists:get_value(data_spec,Options),
-  WaitSpec = proplists:get_value(waiting_spec,Options),
+init([StateSpec,WaitSpec|Options]) ->
   StateMod = shr_utils:module(StateSpec),
   WaitMod = shr_utils:module(WaitSpec),
   State = shr_utils:initial_state(StateSpec,Options),
@@ -232,9 +226,9 @@ operations(Resource) ->
 %% Concretely the option ``data_spec'' names
 %% the resource implementation module,
 %% and the ``waiting_spec'' option names the module defining call priorities.
--spec start([any()],[option()]) -> {ok,pid()}.
-start(Args, Options) ->
-  gen_server:start(?MODULE, Args, Options).
+-spec start(module_or_module_init(),module_or_module_init(),[any()]) -> {ok,pid()}.
+start(DataSpec,WaitSpec,Options) ->
+  gen_server:start(?MODULE, [DataSpec,WaitSpec], []).
 %% @doc Starts a shared resource, with a registered name.
 %% The options argument provides necessary options for the resource
 %% such as defining the implementation module, and the module
@@ -243,9 +237,9 @@ start(Args, Options) ->
 %% Concretely the option ``data_spec'' names
 %% the resource implementation module,
 %% and the ``waiting_spec'' option names the module defining call priorities.
--spec start(atom(),[any()],[option()]) -> {ok,pid()}.
-start(Name, Args, Options) ->
-  gen_server:start(Name, ?MODULE, Args, Options).
+-spec start(atom(),module_or_module_init(),module_or_module_init(),[any()]) -> {ok,pid()}.
+start(Name, DataSpec, WaitSpec, Options) ->
+  gen_server:start(Name, ?MODULE, [DataSpec,WaitSpec|Options], []).
 %% @doc Starts and links to a shared resource.
 %% The options argument provides necessary options for the resource
 %% such as defining the implementation module, and the module
@@ -254,9 +248,9 @@ start(Name, Args, Options) ->
 %% Concretely the option ``data_spec'' names
 %% the resource implementation module,
 %% and the ``waiting_spec'' option names the module defining call priorities.
--spec start_link([any()],[option()]) -> {ok,pid()}.
-start_link(Args, Options) ->
-  gen_server:start_link(?MODULE, Args, Options).
+-spec start_link(module_or_module_init(),module_or_module_init(),[any()]) -> {ok,pid()}.
+start_link(DataSpec, WaitSpec, Options) ->
+  gen_server:start_link(?MODULE, [DataSpec,WaitSpec|Options], []).
 %% @doc Starts and links to a shared resource, with a registered name.
 %% The options argument provides necessary options for the resource
 %% such as defining the implementation module, and the module
@@ -265,9 +259,9 @@ start_link(Args, Options) ->
 %% Concretely the option ``data_spec'' names
 %% the resource implementation module,
 %% and the ``waiting_spec'' option names the module defining call priorities.
--spec start_link(atom(),[any()],[option()]) -> {ok,pid()}.
-start_link(Name, Args, Options) ->
-  gen_server:start_link(Name, ?MODULE, Args, Options).
+-spec start_link(atom(),module_or_module_init(),module_or_module_init(),[any()]) -> {ok,pid()}.
+start_link(Name, DataSpec, WaitSpec, Options) ->
+  gen_server:start_link(Name, ?MODULE, [DataSpec,WaitSpec|Options], []).
 
 
 print_call({F,Args}) ->
