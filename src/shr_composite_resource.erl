@@ -1,6 +1,6 @@
 -module(shr_composite_resource).
 
--export([start/2,start/3,start_link/2,start_link/3,call/2,operations/1]).
+-export([start/3,start/4,start_link/3,start_link/4,call/2,operations/1]).
 
 -export([init/1,handle_call/3,terminate/2]). 
 -export([handle_cast/2,handle_info/2,code_change/3]).
@@ -10,21 +10,21 @@
 
 -record(state,{operations=[],resources=[],external_mapping,links=[],calls=[]}).
 
-init([SystemSpec|Options]) ->
+init([SystemSpec,Args|Options]) ->
   check_systemspec(SystemSpec),
-  {ok,start_systemspec(SystemSpec,Options)}.
+  {ok,start_systemspec(SystemSpec,Args,Options)}.
 
-start(SystemSpec, Options) ->
-  gen_server:start(?MODULE, [SystemSpec|Options]).
+start(SystemSpec, Args, Options) ->
+  gen_server:start(?MODULE, [SystemSpec,Args|Options]).
 
-start(Name, SystemSpec, Options) ->
-  gen_server:start(Name, ?MODULE, [SystemSpec|Options]).
+start(Name, SystemSpec, Args, Options) ->
+  gen_server:start(Name, ?MODULE, [SystemSpec,Args|Options]).
 
-start_link(SystemSpec, Options) ->
-  gen_server:start_link(?MODULE, [SystemSpec|Options]).
+start_link(SystemSpec, Args, Options) ->
+  gen_server:start_link(?MODULE, [SystemSpec,Args|Options]).
 
-start_link(Name, SystemSpec, Options) ->
-  gen_server:start_link(Name, ?MODULE, [SystemSpec|Options]).
+start_link(Name, SystemSpec, Args, Options) ->
+  gen_server:start_link(Name, ?MODULE, [SystemSpec,Args|Options]).
 
 handle_call(Command,From,State) ->
   ?TIMEDLOG("handle_call(~p) in ~p~n",[Command,State]),
@@ -62,15 +62,23 @@ check_systemspec(SystemSpec) ->
     SystemSpec,
   ok.
 
-start_systemspec(SystemSpec,_Options) ->
-  {system, Operations, Resources, Processes, ExternalMapping, Linking} =
+start_systemspec(SystemSpec,Args,_Options) ->
+  {system, 
+   Parameters, 
+   Operations, 
+   Resources, 
+   Processes, 
+   ExternalMapping, 
+   Linking} =
     SystemSpec,
+  ParameterMap = 
+    lists:zip(Parameters,Args),
   ResourceMap = 
-    lists:map
-      (fun ({Rid,{DataSpec,WaitSpec,Args}}) -> 
+    lists:foldl
+      (fun ({Rid,{DataSpec,WaitSpec,Args}},Map) -> 
 	   {ok,Pid} = shr_gen_resource:start_link(DataSpec,WaitSpec,Args),
-	   {Rid,Pid}
-       end, Resources),
+	   [{Rid,Pid}|Map]
+       end, ParameterMap, Resources),
   lists:foreach
     (fun ({Module,Fun,PreArgs}) ->
 	 Args = subst(ResourceMap,PreArgs),
