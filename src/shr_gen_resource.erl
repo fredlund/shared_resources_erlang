@@ -5,7 +5,7 @@
 -module(shr_gen_resource).
 -behaviour(gen_server).
 
--export([start/2,start/3,start_link/2,start_link/3,call/2]).
+-export([start/2,start/3,start_link/2,start_link/3,call/2,operations/1]).
 
 -export([init/1,handle_call/3,terminate/2]). 
 -export([handle_cast/2,handle_info/2,code_change/3]).
@@ -57,15 +57,20 @@ init(Options) ->
     state=State, waitstate=WaitState,
     calls=[]}}.
 
-handle_call(Call,From,State) ->
-  ?TIMEDLOG("handle_call(~p) in ~p~n",[Call,State]),
-  case pre(Call,State) of
-    true ->
-      CallRecord = #call_record{call=Call,from=From},
-      NewState = add_callrecord(CallRecord,State),
-      {noreply,compute_new_state(NewState)};
-    false ->
-      {noreply,State}
+handle_call(Command,From,State) ->
+  ?TIMEDLOG("handle_call(~p) in ~p~n",[Command,State]),
+  case Command of
+    operations -> 
+      {reply, apply(State#state.state_module,operations,[]), State};
+    Call ->
+      case pre(Call,State) of
+	true ->
+	  CallRecord = #call_record{call=Call,from=From},
+	  NewState = add_callrecord(CallRecord,State),
+	  {noreply,compute_new_state(NewState)};
+	false ->
+	  {noreply,State}
+      end
   end.
 
 compute_new_state(State) ->
@@ -212,6 +217,12 @@ return_to_caller(Result,CallRecord) ->
 -spec call(atom()|pid(),{atom(),[any()]}) -> any().
 call(Resource,{F,Args}) when is_atom(F), is_list(Args) ->
   gen_server:call(Resource,{F,Args}).
+
+%% @doc Returns a list with the operations the resource provides.
+%% shr_gen_resource module.
+-spec operations(atom()|pid()) -> [atom()].
+operations(Resource) ->
+  gen_server:call(Resource,operations).
 
 %% @doc Starts a shared resource.
 %% The options argument provides necessary parameters for the resource
