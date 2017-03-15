@@ -21,7 +21,7 @@
 -include_lib("eqc/include/eqc_dynamic_cluster.hrl").
 
 %% Super fragile below
--record(eqc_statem_history,{state, args, features, result}).
+-record(eqc_statem_history,{state, args, features, result, f1}).
 
 %%-define(debug,true).
 -include("debug.hrl").
@@ -374,7 +374,7 @@ observers_next_states(ModuleStates,NewJobs,FinishedJobs) ->
 filter_environment_commands(_State,Commands) ->
   lists:filter
     (fun (Command) ->
-	 not(shr_register:has_attribute(environment,Command#command.port))
+	 not(shr_register:has_attribute(Command#command.port,environment))
      end, Commands).
 
 wait_for_jobs(NewJobs,WaitTime,Counter) ->
@@ -442,7 +442,7 @@ filter_environment_jobs(_State,Jobs) ->
   lists:filter
     (fun (Job) -> 
 	 {Port,_,_} = Job#job.call,
-	 not(shr_register:has_attribute(environment,Port))
+	 not(shr_register:has_attribute(Port,environment))
      end,
      Jobs).
 
@@ -544,8 +544,30 @@ result_value_from_history({_,_,_,Result}) ->
   Result;
 result_value_from_history({_,_,Result}) ->
   Result;
-result_value_from_history(Record) when is_record(Record,eqc_statem_history) ->
-  Record#eqc_statem_history.result.
+result_value_from_history(Other) ->
+  if
+    is_record(Other,eqc_statem_history) ->
+      Other#eqc_statem_history.result;
+    true ->
+      io:format
+	("*** WARNING: don't know how to extract the result from "++
+	   "the statement history~n"),
+      if 
+	is_tuple(Other) ->
+	  io:format
+	    ("... it is a tuple of size ~p with elements~n",
+	     [size(Other)]),
+	  lists:foreach
+	    (fun (I) ->
+		 io:format("~p: ~p~n",[I,element(I,Other)])
+	     end, lists:seq(1,size(Other)));
+	true ->
+	  io:format
+	    ("... it is a value of the shape~n~p~n",
+	     [Other])
+      end,
+      void
+  end.
 
 ensure_boolean(true) ->
   true;

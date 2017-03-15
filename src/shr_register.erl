@@ -20,13 +20,24 @@ start_link() ->
 handle_call({register,Name,Pid,Attributes},_From,State) ->
   case is_process_alive(Pid) of
     false -> 
+      ?TIMEDLOG
+	 ("register: pid ~p is not alive when registering name ~p~n",
+	  [Pid,Name]),
       {reply, {exception,badarg}, State};
     true ->
       case lists:keyfind(Name,1,State) of
-	T when is_tuple(T) -> {reply, {exception,badarg}, State};
+	T when is_tuple(T) -> 
+	  ?TIMEDLOG
+	     ("register: name ~p is already registered in ~p; new pid ~p~n",
+	      [Name,T,Pid]),
+	  {reply, {exception,badarg}, State};
 	false ->
 	  case lists:keyfind(Pid,2,State) of
-	    T when is_tuple(T) -> {reply, {exception,badarg}, State};
+	    T when is_tuple(T) -> 
+	      ?TIMEDLOG
+		 ("register: pid ~p is already registered in ~p; new name ~p~n",
+		  [Pid,T,Name]),
+	      {reply, {exception,badarg}, State};
 	    false ->
 	      NewState = lists:keystore(Name, 1, State, {Name,Pid,Attributes}),
 	      monitor(process, Pid),
@@ -37,7 +48,9 @@ handle_call({register,Name,Pid,Attributes},_From,State) ->
   end;
 handle_call({unregister,Name},_From,State) ->
   case lists:keyfind(Name,1,State) of
-    false -> {reply, {exception,badarg}, State};
+    false -> 
+      ?TIMEDLOG("unregister: name ~p does not exist~n",[Name]),
+      {reply, {exception,badarg}, State};
     T when is_tuple(T) -> 
       {reply, true, lists:keydelete(Name,1,State)}
   end;
@@ -51,6 +64,7 @@ handle_call({whereis,Name},_From,State) ->
 handle_call({has_attribute,Name,Attribute},_From,State) ->
   case lists:keyfind(Name,1,State) of
     false ->
+      ?TIMEDLOG("has_attribute: name ~p does not exist~n",[Name]),
       {reply, {exception,badarg}, State};
     {_,_,Attributes} ->
       {reply, lists:member(Attribute,Attributes), State}
@@ -58,6 +72,7 @@ handle_call({has_attribute,Name,Attribute},_From,State) ->
 handle_call({attributes,Name},_From,State) ->
   case lists:keyfind(Name,1,State) of
     false ->
+      ?TIMEDLOG("attributes: name ~p does not exist~n",[Name]),
       {reply, {exception,badarg}, State};
     {_,_,Attributes} ->
       {reply, Attributes, State}
@@ -65,6 +80,7 @@ handle_call({attributes,Name},_From,State) ->
 handle_call({add_attribute,Name,Attribute},_From,State) ->
   case lists:keyfind(Name,1,State) of
     false ->
+      ?TIMEDLOG("add_attribute: name ~p does not exist~n",[Name]),
       {reply, {exception,badarg}, State};
     {_,Pid,Attributes} ->
       {reply, true, lists:keystore(Name,1,State,{Name,Pid,[Attribute|Attributes]})}
