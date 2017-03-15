@@ -8,7 +8,7 @@
 
 -module(shr_calls).
 
--define(debug,true).
+%%-define(debug,true).
 -include("debug.hrl").
 
 -define(TAG,'$gen_call').

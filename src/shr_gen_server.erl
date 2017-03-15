@@ -31,7 +31,7 @@
 
 -module(shr_gen_server).
 
--define(debug,true).
+%%-define(debug,true).
 -include("debug.hrl").
 
 -export([start_link/3,start_link/4,start_link/5,

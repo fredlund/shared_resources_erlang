@@ -374,8 +374,16 @@ observers_next_states(ModuleStates,NewJobs,FinishedJobs) ->
 filter_environment_commands(_State,Commands) ->
   lists:filter
     (fun (Command) ->
-	 not(shr_register:has_attribute(Command#command.port,environment))
+	 not(is_environment(Command#command.port))
      end, Commands).
+
+%% Heuristic check for environments
+is_environment(environment) ->
+  true;
+is_environment({environment,_}) ->
+  true;
+is_environment(_) ->
+  false.
 
 wait_for_jobs(NewJobs,WaitTime,Counter) ->
   JobsAlive = shr_utils:get({?MODULE,jobs_alive}),
@@ -442,7 +450,7 @@ filter_environment_jobs(_State,Jobs) ->
   lists:filter
     (fun (Job) -> 
 	 {Port,_,_} = Job#job.call,
-	 not(shr_register:has_attribute(Port,environment))
+	 not(is_environment(Port))
      end,
      Jobs).
 
