@@ -89,8 +89,10 @@ innerprop({Implementation,Scheduler,EnforceProgress}) ->
 		    (Implementation, 
 		     fun () -> Implementation:start_link([NumReaders+NumWriters,Capacity],[]) end),
 		[_|APIs] = Result,
-		lists:map
-		  (fun ({Id,Pid}) -> {{multibuffer,Id},Pid} end,
+		lists:foreach
+		  (fun ({Id,Pid}) -> 
+		       shr_register:register({multibuffer,Id},Pid) 
+		   end,
 		   lists:zip(lists:seq(1,length(APIs)),APIs))
 	    end}],
 	Limit =

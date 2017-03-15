@@ -12,7 +12,7 @@
 
 -module(shr_simple_supervisor).
 
--export([init/1,handle_call/3,handle_info/2,terminate/2]).
+-export([init/1,handle_call/3,handle_info/2,handle_cast/2,code_change/3,terminate/2]).
 -export([add_childfun/1,add_childfun/2,add_childproc/1,add_childproc/2,restart/1,is_alive/0]).
 
 -record(state,{processes,terminated,timeout,reportTo}).
@@ -118,6 +118,12 @@ handle_info(Msg={'EXIT',Pid,Reason},State) ->
       end,
       update_timeout(State)
   end.
+
+handle_cast(_,State) ->
+  {noreply,State}.
+
+code_change(_,State,_) ->
+  {ok,State}.
 
 inform_about_exit(Pid,Reason,#state{reportTo=ReportTo}) ->
   if
@@ -237,7 +243,7 @@ restart(ReportTo) ->
   end.
 
 %% @doc Checks if the shr_simple_supervisor is alive.
--spec is_alive() -> bool().
+-spec is_alive() -> boolean().
 is_alive() ->
   ?GEN_SERVER:call(?MODULE,is_alive).
 

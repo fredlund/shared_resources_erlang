@@ -11,10 +11,32 @@
 init(_) -> {ok,[]}.
 
 start() ->
-  gen_server:start({local,?MODULE},?MODULE,[],[]).
+  ?TIMEDLOG
+     ("start: will register name ~p for shr_register process~n",
+      [?MODULE]),
+  Result = gen_server:start({local,?MODULE},?MODULE,[],[]),
+  case Result of
+    {ok,_} -> ok;
+    Other -> 
+      io:format
+	("*** Error: shr_register:start_link failed with ~p~n",
+	 [Other])
+  end,
+  Result.
 
 start_link() ->
-  gen_server:start_link({local,?MODULE},?MODULE,[],[]).
+  ?TIMEDLOG
+     ("start_link: will register name ~p for shr_register process~n",
+      [?MODULE]),
+  Result = gen_server:start_link({local,?MODULE},?MODULE,[],[]),
+  case Result of
+    {ok,_} -> ok;
+    Other -> 
+      io:format
+	("*** Error: shr_register:start_link failed with ~p~n",
+	 [Other])
+  end,
+  Result.
 
 handle_call({register,Name,Pid},_From,State) ->
   case is_process_alive(Pid) of

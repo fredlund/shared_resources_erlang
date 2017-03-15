@@ -17,9 +17,6 @@
 startup(Options) ->
   ?TIMEDLOG("starting up -- options are~n  ~p~n",[Options]),
 
-  shr_register:start_link(),
-  shr_simple_supervisor:restart(self()),
-
   %% We need an environment
   [Environment] = 
     shr_simple_supervisor:add_childproc
