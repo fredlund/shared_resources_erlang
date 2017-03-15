@@ -21,7 +21,7 @@
 -include_lib("eqc/include/eqc_dynamic_cluster.hrl").
 
 %% Super fragile below
--record(eqc_statem_history,{state, args, features, result, f1}).
+-record(eqc_statem_history,{state, args, features, f1, result}).
 
 %%-define(debug,true).
 -include("debug.hrl").
