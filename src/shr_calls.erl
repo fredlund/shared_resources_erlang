@@ -27,7 +27,7 @@ call(Pid,Msg) ->
     ("call(~p,~p)~n",
      [Pid,Msg]),
   Reference = erlang:make_ref(),
-  Pid!{?TAG,{self(),Reference},Msg},
+  send(Pid,{?TAG,{self(),Reference},Msg}),
   receive
     {Reference,Value} ->
       ?TIMEDLOG
@@ -45,7 +45,7 @@ async_call(Pid,Msg) ->
     ("call(~p,~p)~n",
      [Pid,Msg]),
   Reference = erlang:make_ref(),
-  Pid!{?TAG,{self(),Reference},Msg},
+  send(Pid,{?TAG,{self(),Reference},Msg}),
   Reference.
 
 is_return_call(Call,Reference) ->
@@ -70,7 +70,7 @@ forward_call(Pid,Msg,From) ->
   ?TIMEDLOG
     ("call(~p,~p)~n",
      [Pid,Msg]),
-  Pid!{?TAG,From,Msg}.
+  send(Pid,{?TAG,From,Msg}).
 
 %% @doc Retrieves the message from a communication sent using the ``call/2''
 %% function (or a gen_server call).
@@ -82,7 +82,7 @@ msg({?TAG,{_Pid,_Ref},Msg}) ->
 %% to the message first argument.
 -spec reply(message(),any()) -> any().
 reply({?TAG,{Pid,Ref},_Msg},Value) ->
-  Pid!{Ref,Value}.
+  send(Pid,{Ref,Value}).
 
 %% @doc Returns true if the argument has been sent using call/2
 %% (or a gen_server call).
@@ -91,4 +91,14 @@ is_call({?TAG,{_Pid,_Ref},__Msg}) ->
   true;
 is_call(_) ->
   false.
+
+send(Pid,Msg) when is_pid(Pid) ->
+  Pid!Msg;
+send(Name,Msg) ->
+  case shr_register:whereis(Name) of
+    undefined ->
+      error(badarg);
+    Pid when is_pid(Pid) ->
+      send(Pid,Msg)
+  end.
 

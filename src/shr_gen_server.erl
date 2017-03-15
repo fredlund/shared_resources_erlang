@@ -84,10 +84,13 @@ doStart(Name, Module, Args, ParentPid) ->
     end,
   ?TIMEDLOG("going to register name ~p for ~p~n", [Name,self()]),
   RegisterReply =
-    try register(Name,self()) of _ -> {ok,started}
+    try shr_register:register(Name,self()) of _ -> {ok,started}
     catch _ -> 
-	try whereis(Name) of NamePid -> {error,{already_started,NamePid}}
-	catch _ -> {error,unknown} end
+	try shr_register:whereis(Name) of NamePid -> 
+	    {error,{already_started,NamePid}}
+	catch _ -> 
+	    {error,unknown} 
+	end
     end,
   ParentPid!RegisterReply, 
   case RegisterReply of

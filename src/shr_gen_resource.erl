@@ -202,7 +202,7 @@ post_waiting(Call,Info,State) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 return_to_caller(Result,CallRecord) ->
-  gen_server:reply(CallRecord#call_record.from,Result).
+  shr_gen_server:reply(CallRecord#call_record.from,Result).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -210,13 +210,13 @@ return_to_caller(Result,CallRecord) ->
 %% shr_gen_resource module.
 -spec call(atom()|pid(),{atom(),[any()]}) -> any().
 call(Resource,{F,Args}) when is_atom(F), is_list(Args) ->
-  gen_server:call(Resource,{F,Args}).
+  shr_gen_server:call(Resource,{F,Args}).
 
 %% @doc Returns a list with the operations the resource provides.
 %% shr_gen_resource module.
 -spec operations(atom()|pid()) -> [atom()].
 operations(Resource) ->
-  gen_server:call(Resource,operations).
+  shr_gen_server:call(Resource,operations).
 
 %% @doc Starts a shared resource.
 %% The options argument provides necessary parameters for the resource
@@ -228,7 +228,7 @@ operations(Resource) ->
 %% and the ``waiting_spec'' option names the module defining call priorities.
 -spec start(module_or_module_init(),module_or_module_init(),[any()]) -> {ok,pid()}.
 start(DataSpec,WaitSpec,Options) ->
-  gen_server:start(?MODULE, [DataSpec,WaitSpec], []).
+  shr_gen_server:start(?MODULE, [DataSpec,WaitSpec], []).
 %% @doc Starts a shared resource, with a registered name.
 %% The options argument provides necessary options for the resource
 %% such as defining the implementation module, and the module
@@ -239,7 +239,7 @@ start(DataSpec,WaitSpec,Options) ->
 %% and the ``waiting_spec'' option names the module defining call priorities.
 -spec start(atom(),module_or_module_init(),module_or_module_init(),[any()]) -> {ok,pid()}.
 start(Name, DataSpec, WaitSpec, Options) ->
-  gen_server:start(Name, ?MODULE, [DataSpec,WaitSpec|Options], []).
+  shr_gen_server:start(Name, ?MODULE, [DataSpec,WaitSpec|Options], []).
 %% @doc Starts and links to a shared resource.
 %% The options argument provides necessary options for the resource
 %% such as defining the implementation module, and the module
@@ -250,7 +250,7 @@ start(Name, DataSpec, WaitSpec, Options) ->
 %% and the ``waiting_spec'' option names the module defining call priorities.
 -spec start_link(module_or_module_init(),module_or_module_init(),[any()]) -> {ok,pid()}.
 start_link(DataSpec, WaitSpec, Options) ->
-  gen_server:start_link(?MODULE, [DataSpec,WaitSpec|Options], []).
+  shr_gen_server:start_link(?MODULE, [DataSpec,WaitSpec|Options], []).
 %% @doc Starts and links to a shared resource, with a registered name.
 %% The options argument provides necessary options for the resource
 %% such as defining the implementation module, and the module
@@ -261,7 +261,7 @@ start_link(DataSpec, WaitSpec, Options) ->
 %% and the ``waiting_spec'' option names the module defining call priorities.
 -spec start_link(atom(),module_or_module_init(),module_or_module_init(),[any()]) -> {ok,pid()}.
 start_link(Name, DataSpec, WaitSpec, Options) ->
-  gen_server:start_link(Name, ?MODULE, [DataSpec,WaitSpec|Options], []).
+  shr_gen_server:start_link(Name, ?MODULE, [DataSpec,WaitSpec|Options], []).
 
 
 print_call({F,Args}) ->

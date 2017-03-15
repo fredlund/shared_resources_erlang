@@ -15,16 +15,16 @@ init([SystemSpec,Args|Options]) ->
   {ok,start_systemspec(SystemSpec,Args,Options)}.
 
 start(SystemSpec, Args, Options) ->
-  gen_server:start(?MODULE, [SystemSpec,Args|Options]).
+  shr_gen_server:start(?MODULE, [SystemSpec,Args|Options]).
 
 start(Name, SystemSpec, Args, Options) ->
-  gen_server:start(Name, ?MODULE, [SystemSpec,Args|Options]).
+  shr_gen_server:start(Name, ?MODULE, [SystemSpec,Args|Options]).
 
 start_link(SystemSpec, Args, Options) ->
-  gen_server:start_link(?MODULE, [SystemSpec,Args|Options]).
+  shr_gen_server:start_link(?MODULE, [SystemSpec,Args|Options]).
 
 start_link(Name, SystemSpec, Args, Options) ->
-  gen_server:start_link(Name, ?MODULE, [SystemSpec,Args|Options]).
+  shr_gen_server:start_link(Name, ?MODULE, [SystemSpec,Args|Options]).
 
 handle_call(Command,From,State) ->
   ?TIMEDLOG("handle_call(~p) in ~p~n",[Command,State]),
@@ -52,10 +52,10 @@ terminate(_,_) ->
   ok.
 
 call(Resource,{F,Args}) when is_atom(F), is_list(Args) ->
-  gen_server:call(Resource,{F,Args}).
+  shr_gen_server:call(Resource,{F,Args}).
 
 operations(Resource) ->
-  gen_server:call(Resource,operations).
+  shr_gen_server:call(Resource,operations).
 
 check_systemspec(SystemSpec) ->
   {system, Operations, Resources, Processes, ExternalMapping, Linking} =

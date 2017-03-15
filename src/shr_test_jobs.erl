@@ -135,22 +135,20 @@ start(Options,StartFun) ->
   shr_utils:put({?MODULE,counter},Counter + 1),
   shr_utils:put({?MODULE,jobs_alive},[]),
   shr_simple_supervisor:restart(self()),
-  Ports =
-    if
-      is_function(StartFun) ->
-	StartFun(Options);
-      true ->
-	[]
-    end,
-  {Counter,Ports}.
+  if
+    is_function(StartFun) ->
+      StartFun(Options);
+    true ->
+      []
+  end,
+  Counter.
 
 start_post(_State,_,_Result) ->
   true.
 
 start_next(State,
-	   {Counter,Ports},
+	   Counter,
 	   [Options,_]) ->
-  shr_utils:put(ports,Ports),
   State#state
     {
     started=true
@@ -221,8 +219,7 @@ do_cmds(Commands,WaitTime) ->
 	     try shr_simple_supervisor:add_childfun
 		   ({job,F,Args},
 		    fun () ->
-			Port = find_port(Command#command.port),
-			try shr_calls:call(Port,{F,Args}) of
+			try shr_calls:call(Command#command.port,{F,Args}) of
 			    Result ->
 			    ParentPid!
 			      {PreJob#job{pid=self(),result=Result},Counter}
@@ -264,18 +261,6 @@ do_cmds(Commands,WaitTime) ->
 	("Stacktrace:~n~p~n",
 	 [erlang:get_stacktrace()]),
       throw(bad)
-  end.
-
-find_port(Port) ->
-  Register = shr_utils:get(ports),
-  case lists:keyfind(Port, 1, Register) of
-    false -> 
-      io:format
-	("*** Error: port ~p not found in register~n~p~n",
-	 [Port,Register]),
-      throw(bad);
-    {_,RealPort} ->
-      RealPort
   end.
 
 raw(Commands) when is_list(Commands) ->
