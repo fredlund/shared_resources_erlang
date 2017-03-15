@@ -116,13 +116,13 @@ loop(State,Module,Timeout) ->
     Msg ->
       ?TIMEDLOG("Module ~p got message ~p~n",[Module,Msg]),
       case Msg of
-	{call, Data, ReplyId} -> 
+	{'$gen_call', ReplyId, Data} -> 
 	  ?TIMEDLOG("Got call(~p,~p), going to execute ~p:~p~n",
 	       [Data,ReplyId,Module,handle_call]),
 	  checkResult(Module,
 		      apply(Module, handle_call, [Data,ReplyId,State]),
 		      ReplyId);
-	{cast, Data} ->
+	{'$gen_cast', Data} ->
 	  ?TIMEDLOG("Got cast ~p~n",[Msg]),
 	  checkResult(Module,
 		      apply(Module, handle_cast, [Data,State]),
@@ -164,7 +164,7 @@ checkResult(Module,Result,_ReplyId) ->
 
 reply({Pid,Tag}, Reply) ->
   ?TIMEDLOG("Sending reply ~p to ~p~n",[Reply,Pid]),
-  Pid!{reply, Tag, Reply},
+  Pid!{Tag, Reply},
   true.
 
 terminating(Module, Reason, State) ->
@@ -177,15 +177,15 @@ call(Server, Data) ->
 call(Server, Data, Timeout) ->
   CallRef = erlang:make_ref(),
   ?TIMEDLOG("Sending Message ~p to Server ~p~n",[Data,Server]),
-  Server!{call, Data, {self(),CallRef}},
+  Server!{'$gen_call', {self(),CallRef}, Data},
   receive
-    {reply, CallRef, ReturnData} -> ReturnData
+    {CallRef, ReturnData} -> ReturnData
   after Timeout ->
       throw(timeout)
   end.
 
 cast(Server, Data) ->
-  Server!{cast, Data}, ok.
+  Server!{'$gen_cast', Data}, ok.
 
 
 

@@ -6,7 +6,7 @@
 -export([num_naves/1,max_weight/1]).
 -export([print_state/1]).
 
-%%-define(debug,true).
+-define(debug,true).
 -include("../../src/debug.hrl").
 
 
