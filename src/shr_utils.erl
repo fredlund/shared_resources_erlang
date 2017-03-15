@@ -61,8 +61,8 @@ ensure_open() ->
 
 open_db() ->
   spawn(fun () ->
-	    ets:new(?MODULE,[named_table,public]),
-	    wait_forever()
+	    try ets:new(?MODULE,[named_table,public]), wait_forever()
+	    catch _:_ -> ensure_open() end
 	end),
   wait_until_stable().
 

@@ -41,7 +41,6 @@
 	  ,test_corr_module
 	  ,test_observers_states
 	  ,completion_time
-	  ,is_environment_port
 	  ,start_fun
 	  ,stop_fun
 	  ,jobs_alive
@@ -66,11 +65,6 @@ init_state(Options) ->
   StartFun = proplists:get_value(start_fun,Options),
   StopFun = proplists:get_value(stop_fun,Options),
   
-  IsEnvironmentPort =
-    case proplists:get_value(is_environment_port,Options) of
-      undefined -> fun (_) -> false end;
-      F when is_function(F) -> F
-    end,
   {ok,TestObserversState} = 
     observer_initial_states(TestObserverSpecs,Options),
   #state
@@ -82,7 +76,6 @@ init_state(Options) ->
     ,test_observers_states=TestObserversState
     ,test_gen_module=shr_utils:module(TestGenSpec)
     ,test_corr_module=shr_utils:module(TestCorrSpec)
-    ,is_environment_port = IsEnvironmentPort
     ,start_fun=StartFun
     ,stop_fun=StopFun
     ,jobs_alive=[]
@@ -378,10 +371,10 @@ observers_next_states(ModuleStates,NewJobs,FinishedJobs) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-filter_environment_commands(State,Commands) ->
+filter_environment_commands(_State,Commands) ->
   lists:filter
     (fun (Command) ->
-	 not((State#state.is_environment_port)(Command#command.port))
+	 not(shr_register:has_attribute(environment,Command#command.port))
      end, Commands).
 
 wait_for_jobs(NewJobs,WaitTime,Counter) ->
@@ -445,11 +438,11 @@ handle_exit(Pid,Reason,StackTrace,Counter,Finished,JobsAlive) ->
     true -> receive_completions(Counter,Finished,JobsAlive)
   end.
 
-filter_environment_jobs(State,Jobs) ->
+filter_environment_jobs(_State,Jobs) ->
   lists:filter
     (fun (Job) -> 
 	 {Port,_,_} = Job#job.call,
-	 not((State#state.is_environment_port)(Port))
+	 not(shr_register:has_attribute(environment,Port))
      end,
      Jobs).
 

@@ -14,8 +14,10 @@ run(N,ControllerAndEnvironment,Options) when is_integer(N), N>=1 ->
   Self = self(),
   lists:foreach
     (fun (Id) ->
-	 [Controller,Environment] =
+	 [ControllerReg,EnvironmentReg] =
 	   lists:nth(Id,ControllerAndEnvironment),
+	 Controller = element(2,ControllerReg),
+	 Environment = element(2,EnvironmentReg),
 	 spawn_link
 	   (fun () ->
 		run(Id,Controller,Environment,NumWarehouses,WeightLimit),

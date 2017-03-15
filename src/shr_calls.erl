@@ -8,7 +8,7 @@
 
 -module(shr_calls).
 
-%%-define(debug,true).
+-define(debug,true).
 -include("debug.hrl").
 
 -define(TAG,'$gen_call').
@@ -97,6 +97,7 @@ send(Pid,Msg) when is_pid(Pid) ->
 send(Name,Msg) ->
   case shr_register:whereis(Name) of
     undefined ->
+      ?TIMEDLOG("send(~p,~p) name not registered~n",[Name,Msg]),
       error(badarg);
     Pid when is_pid(Pid) ->
       send(Pid,Msg)
