@@ -31,7 +31,7 @@ sim(N) ->
   gritter_sim:run(N,Controller,[]).
   
 prop_sol_1() ->
-  ?FORALL(N,choose(3,8),innerprop(N,'GestorGritterMonitor',"classes",".")).
+  ?FORALL(N,choose(3,8),innerprop(N,'GestorGritterMonitor',"examples/gritter/classes","examples/gritter/libs")).
 
 prop_sol_1(Class,Dir,LibPath) ->
   ?FORALL(N,choose(3,8),innerprop(N,Class,Dir,LibPath)).
@@ -62,7 +62,6 @@ innerprop(N,Class,Dir,LibPath) ->
 
 start_controller(Class,Directory,LibPath) ->  
   fun (Options) ->
-      shr_simple_supervisor:restart(self()),
       MaxUids = proplists:get_value(max_uids,Options),
       ClassPath =
 	[
@@ -98,8 +97,8 @@ start_controller(Class,Directory,LibPath) ->
 			(Controller,[])
 		  end)
 	   end, lists:seq(1,MaxUids)),
-      lists:map
-	(fun ({Id,Pid}) -> {{controller,Id},Pid} end,
+      lists:foreach
+	(fun ({Id,Pid}) -> shr_register:register({controller,Id},Pid) end,
 	 lists:zip(lists:seq(1,length(Ports)),Ports))
   end.
 

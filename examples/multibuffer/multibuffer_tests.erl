@@ -123,7 +123,7 @@ should_succeed({Implementation,Scheduler,EnforceProgress}) ->
       not(EnforceProgress) orelse (Scheduler==shr_fcfs);
 
     Implementation==multbuf3 ->
-      (Scheduler=/=shr_fcfs) andalso (Scheduler=/={shr_smallest_first,[multibuffer]})
+      (Scheduler=/=shr_fcfs) andalso (Scheduler=/={shr_smallest_first,[multibuffer_shr]})
   end.
 
 implementations() ->
