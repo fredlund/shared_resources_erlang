@@ -5,15 +5,12 @@
 -export([init/1,handle_call/3,terminate/2]). 
 -export([handle_cast/2,handle_info/2,code_change/3]).
 
-%%-define(debug,true).
+-define(debug,true).
 -include("debug.hrl").
 
 init(_) -> {ok,[]}.
 
 start() ->
-  ?TIMEDLOG
-     ("start: will register name ~p for shr_register process~n",
-      [?MODULE]),
   Result = gen_server:start({local,?MODULE},?MODULE,[],[]),
   case Result of
     {ok,_} -> ok;
@@ -25,9 +22,6 @@ start() ->
   Result.
 
 start_link() ->
-  ?TIMEDLOG
-     ("start_link: will register name ~p for shr_register process~n",
-      [?MODULE]),
   Result = gen_server:start_link({local,?MODULE},?MODULE,[],[]),
   case Result of
     {ok,_} -> ok;
@@ -41,22 +35,22 @@ start_link() ->
 handle_call({register,Name,Pid},_From,State) ->
   case is_process_alive(Pid) of
     false -> 
-      ?TIMEDLOG
-	 ("register: pid ~p is not alive when registering name ~p~n",
+      io:format
+	 ("*** WARNING: register: pid ~p is not alive when registering name ~p~n",
 	  [Pid,Name]),
       {reply, {exception,badarg}, State};
     true ->
       case lists:keyfind(Name,1,State) of
 	T when is_tuple(T) -> 
-	  ?TIMEDLOG
-	     ("register: name ~p is already registered in ~p; new pid ~p~n",
+	  io:format
+	     ("*** WARNING: register: name ~p is already registered in ~p; new pid ~p~n",
 	      [Name,T,Pid]),
 	  {reply, {exception,badarg}, State};
 	false ->
 	  case lists:keyfind(Pid,2,State) of
 	    T when is_tuple(T) -> 
-	      ?TIMEDLOG
-		 ("register: pid ~p is already registered in ~p; new name ~p~n",
+	      io:format
+		 ("*** WARNING: register: pid ~p is already registered in ~p; new name ~p~n",
 		  [Pid,T,Name]),
 	      {reply, {exception,badarg}, State};
 	    false ->
@@ -70,7 +64,9 @@ handle_call({register,Name,Pid},_From,State) ->
 handle_call({unregister,Name},_From,State) ->
   case lists:keyfind(Name,1,State) of
     false -> 
-      ?TIMEDLOG("unregister: name ~p does not exist~n",[Name]),
+      io:format
+	("*** WARNING: unregister: name ~p does not exist~n",
+	 [Name]),
       {reply, {exception,badarg}, State};
     T when is_tuple(T) -> 
       {reply, true, lists:keydelete(Name,1,State)}
@@ -83,7 +79,10 @@ handle_call({whereis,Name},_From,State) ->
       {reply, Pid, State}
   end.
 
-handle_info({'DOWN',_,_,Pid,_},State) ->
+handle_info({'DOWN',_,_,Pid,_Reason},State) ->
+  ?TIMEDLOG
+    ("handle_info: process ~p died due to reason ~p (table index ~p) ~n",
+     [Pid,_Reason,lists:keyfind(Pid,2,State)]),
   {noreply,lists:keydelete(Pid,2,State)};
 handle_info(_,State) ->
   State.
