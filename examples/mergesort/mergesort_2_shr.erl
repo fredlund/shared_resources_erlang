@@ -74,7 +74,7 @@ print_state(State) ->
      [left(State),right(State)]).
 
 empty() ->
-  empty().
+  empty.
 
 is_element(Element,Element) ->
   true;
@@ -91,7 +91,7 @@ less(eod,_) ->
   false;
 less(_,eod) ->
   true;
-less(Element1,{Element2,_}) ->
+less(Element1,Element2) ->
   Element1<Element2.
 
 min(Element,eod) ->

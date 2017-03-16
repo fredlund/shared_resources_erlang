@@ -91,6 +91,7 @@ compute_new_state(State) ->
 	post_waiting(CallToExecute,Info,PostState),
       RemainingCalls =
 	NewWaitState#state.calls -- [CallInfo],
+      ?TIMEDLOG("return result ~p to ~p~n",[Result,CallRecordToExecute]),
       return_to_caller
 	(Result,
 	 CallRecordToExecute),

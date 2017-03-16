@@ -1,4 +1,4 @@
--module(mergesort_shr).
+-module(mergesort_n_shr).
 
 -behaviour(shr_data_implementation).
 

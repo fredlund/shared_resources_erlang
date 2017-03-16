@@ -22,6 +22,21 @@ buffers_2() ->
    [{{r1,out},{r3,left}}, {{r2,out},{r3,right}}]
   }.
 
+test() ->
+  throw(nyi).
+
+debug() ->
+  shr_simple_supervisor:restart(self()),
+  shr_simple_supervisor:add_childproc
+    (shr_register,
+     fun () -> shr_register:start_link() end),
+  [MergeSorter] =
+    shr_simple_supervisor:add_childproc
+      (mergesort_2,
+       fun () -> shr_gen_resource:start(mergesort_2_shr,shr_always,[]) end),
+  shr_debug:debug(MergeSorter).
+	 
+  
        
     
    
