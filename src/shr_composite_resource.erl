@@ -1,5 +1,7 @@
 -module(shr_composite_resource).
 
+-include("rsystem.hrl").
+
 -export([start/3,start/4,start_link/3,start_link/4,call/2,operations/1]).
 
 -export([init/1,handle_call/3,terminate/2]). 
@@ -15,16 +17,16 @@ init([SystemSpec,Args|Options]) ->
   {ok,start_systemspec(SystemSpec,Args,Options)}.
 
 start(SystemSpec, Args, Options) ->
-  shr_gen_server:start(?MODULE, [SystemSpec,Args|Options]).
+  shr_gen_server:start(?MODULE, [SystemSpec,Args|Options],[]).
 
 start(Name, SystemSpec, Args, Options) ->
-  shr_gen_server:start(Name, ?MODULE, [SystemSpec,Args|Options]).
+  shr_gen_server:start(Name, ?MODULE, [SystemSpec,Args|Options],[]).
 
 start_link(SystemSpec, Args, Options) ->
-  shr_gen_server:start_link(?MODULE, [SystemSpec,Args|Options]).
+  shr_gen_server:start_link(?MODULE, [SystemSpec,Args|Options],[]).
 
 start_link(Name, SystemSpec, Args, Options) ->
-  shr_gen_server:start_link(Name, ?MODULE, [SystemSpec,Args|Options]).
+  shr_gen_server:start_link(Name, ?MODULE, [SystemSpec,Args|Options],[]).
 
 handle_call(Command,From,State) ->
   ?TIMEDLOG("handle_call(~p) in ~p~n",[Command,State]),
@@ -34,7 +36,7 @@ handle_call(Command,From,State) ->
     Call = {Operation,_Args} ->
       true = lists:member(Operation,State#state.operations),
       {Rid,NewCall} = (State#state.external_mapping)(Call),
-      {Rid,Pid} = lists:keylookup(Rid,1,State#state.resources),
+      {Rid,Pid} = lists:keyfind(Rid,1,State#state.resources),
       shr_calls:forward_call(Pid,NewCall,From),
       {noreply, State}
   end.
@@ -57,50 +59,58 @@ call(Resource,{F,Args}) when is_atom(F), is_list(Args) ->
 operations(Resource) ->
   shr_gen_server:call(Resource,operations).
 
-check_systemspec(SystemSpec) ->
-  {system, Operations, Resources, Processes, ExternalMapping, Linking} =
-    SystemSpec,
-  ok.
+check_systemspec(SystemSpec) when is_record(SystemSpec,rsystem) ->
+  ok;
+check_systemspec(Other) ->
+  io:format
+    ("*** Error: system specification is on the wrong format:~n~p~n",
+     [Other]),
+  throw(badarg).
 
 start_systemspec(SystemSpec,Args,_Options) ->
-  {system, 
-   Parameters, 
-   Operations, 
-   Resources, 
-   Processes, 
-   ExternalMapping, 
-   Linking} =
-    SystemSpec,
   ParameterMap = 
-    lists:zip(Parameters,Args),
+    lists:zip(SystemSpec#rsystem.parameters,Args),
   ResourceMap = 
     lists:foldl
-      (fun ({Rid,{DataSpec,WaitSpec,Args}},Map) -> 
-	   {ok,Pid} = shr_gen_resource:start_link(DataSpec,WaitSpec,Args),
+      (fun ({Rid,ResourceSpec},Map) -> 
+	       {Module,Fun,ResourceArgs} = parse_resourceSpec(ResourceSpec),
+	   {ok,Pid} = apply(Module,Fun,ResourceArgs),
 	   [{Rid,Pid}|Map]
-       end, ParameterMap, Resources),
+       end, ParameterMap, SystemSpec#rsystem.resources),
   lists:foreach
     (fun ({Module,Fun,PreArgs}) ->
 	 Args = subst(ResourceMap,PreArgs),
 	 spawn_link(fun () -> apply(Module,Fun,Args) end)
-     end, Processes),
+     end, SystemSpec#rsystem.processes),
   lists:foreach
     (fun ({{Rid1,Op1},{Rid2,Op2}}) ->
-	 {Rid1,Pid1} = lists:keylookup(Rid1,1,ResourceMap),
-	 {Rid2,Pid2} = lists:keylookup(Rid2,1,ResourceMap),
+	 {Rid1,Pid1} = lists:keyfind(Rid1,1,ResourceMap),
+	 {Rid2,Pid2} = lists:keyfind(Rid2,1,ResourceMap),
 	 spawn_link(fun () -> link_operations(Pid1,Op1,Pid2,Op2) end)
-     end, Linking),
+     end, SystemSpec#rsystem.linking),
   #state
     {
-     operations=Operations,
+     operations=SystemSpec#rsystem.operations,
      resources=ResourceMap,
-     external_mapping=ExternalMapping,
-     links=Linking
+     external_mapping=SystemSpec#rsystem.external_mapping,
+     links=SystemSpec#rsystem.linking
     }.
 
+parse_resourceSpec(ResourceSpec) ->
+  case ResourceSpec of
+    {shr_resource,DataModule} ->
+      {shr_gen_resource,start_link,[DataModule,shr_always,[]]};
+    {shr_resource,DataModule,WaitingModule} ->
+      {shr_gen_resource,start_link,[DataModule,WaitingModule,[]]};
+    {shr_resource,DataModule,WaitingModule,Args} ->
+      {shr_gen_resource,start_link,[DataModule,WaitingModule,Args]};
+    Spec={_Module,_Fun,Args} when is_list(Args) -> 
+      Spec
+  end.
+
 link_operations(Pid1,Op1,Pid2,Op2) ->
-  Value = shr_calls:call(Pid1,Op1,[]),
-  shr_calls:call(Pid2,Op2,[Value]),
+  Value = shr_calls:call(Pid1,{Op1,[]}),
+  shr_calls:call(Pid2,{Op2,[Value]}),
   link_operations(Pid1,Op1,Pid2,Op2).
 
 subst(Map,T) when is_tuple(T) ->
@@ -108,7 +118,7 @@ subst(Map,T) when is_tuple(T) ->
 subst(Map,[Hd|Tl]) ->
   [subst(Map,Hd)|subst(Map,Tl)];
 subst(Map,Atom) when is_atom(Atom) ->
-  case lists:keylookup(Atom,1,Map) of
+  case lists:keyfind(Atom,1,Map) of
     false ->
       Atom;
     {_,Value} ->
