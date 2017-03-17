@@ -47,18 +47,10 @@ handle_call({register,Name,Pid},_From,State) ->
 	      [Name,T,Pid]),
 	  {reply, {exception,badarg}, State};
 	false ->
-	  case lists:keyfind(Pid,2,State) of
-	    T when is_tuple(T) -> 
-	      io:format
-		 ("*** WARNING: register: pid ~p is already registered in ~p; new name ~p~n",
-		  [Pid,T,Name]),
-	      {reply, {exception,badarg}, State};
-	    false ->
-	      NewState = lists:keystore(Name, 1, State, {Name,Pid}),
-	      monitor(process, Pid),
-	      ?TIMEDLOG("registered ~p as ~p~n",[Pid,Name]),
-	      {reply, true, NewState}
-	  end
+	  NewState = lists:keystore(Name, 1, State, {Name,Pid}),
+	  monitor(process, Pid),
+	  ?TIMEDLOG("registered ~p as ~p~n",[Pid,Name]),
+	  {reply, true, NewState}
       end
   end;
 handle_call({unregister,Name},_From,State) ->

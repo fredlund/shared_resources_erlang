@@ -14,7 +14,7 @@
 -export([print_jobs/2]).
 
 -export([command_parser/1]).
--export([prop_res/1, check_prop/1, eqc_printer/2]).
+-export([prop_res/1, check_prop/1, check_prop/2, eqc_printer/2]).
 
 -include_lib("eqc/include/eqc.hrl").
 -include_lib("eqc/include/eqc_component.hrl").
@@ -23,7 +23,7 @@
 %% Super fragile below
 -record(eqc_statem_history,{state, args, features, f1, result}).
 
-%%-define(debug,true).
+-define(debug,true).
 -include("debug.hrl").
 
 %% Allow to redefine it via options
@@ -466,8 +466,12 @@ filter_environment_jobs(_State,Jobs) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 check_prop(Options) ->
-  Prop = eqc:on_output(fun eqc_printer/2,prop_res(Options)),
-  Result = eqc:quickcheck(Prop),
+  check_prop(fun prop_res/1,Options).
+
+check_prop(Prop,Options) ->
+  io:format("Prop is ~p Options is ~p~n",[Prop,Options]),
+  EQCProp = eqc:on_output(fun eqc_printer/2,Prop(Options)),
+  Result = eqc:quickcheck(EQCProp),
   if
     not(Result) ->
       io:format("~n~n***FAILED~n");
