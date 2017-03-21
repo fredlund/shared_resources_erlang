@@ -35,7 +35,7 @@ prop_tri(Generator,
 not_void([],[],Options) ->
   Options;
 not_void([Option|Options],[Name|Names],PreOptions) ->
-  not_void(Options,Names,not_void_option(Name,Option,PreOptions)).
+  not_void(Options,Names,not_void_option(Option,Name,PreOptions)).
 
 not_void_option(Option,Name,PreOptions) ->
   if

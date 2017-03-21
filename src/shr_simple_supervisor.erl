@@ -166,7 +166,7 @@ find_process(Pid,Processes) ->
 start_server() ->
   ?TIMEDLOG("starting server~n",[]),
   Parent = self(),
-  spawn
+  spawn_link
     (fun () ->
 	 Result = ?GEN_SERVER:start({local,?MODULE}, ?MODULE, void, []),
 	 Parent!{?MODULE,Result}

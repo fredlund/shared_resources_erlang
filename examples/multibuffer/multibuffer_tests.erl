@@ -84,6 +84,9 @@ innerprop({Implementation,Scheduler,EnforceProgress}) ->
 	Start =
 	  [{start_fun,
 	    fun (_) ->
+		io:format
+		  ("start_fun is called~n",
+		   []),
 		Result =
 		  shr_simple_supervisor:add_childproc
 		    (Implementation, 

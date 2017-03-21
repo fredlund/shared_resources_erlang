@@ -137,9 +137,15 @@ start(Options,StartFun) ->
      ("shr_supervisor returns ~p exists: ~p~n",
       [Return,
        whereis(shr_register)]),
+  ?TIMEDLOG
+    ("start_fun is ~p~n",
+     [StartFun]),
   if
     is_function(StartFun) ->
-      StartFun(Options);
+      io:format("will call start_fun~n"),
+      Result = StartFun(Options),
+      io:format("after start_fun~n"),
+      Result;
     true ->
       []
   end,

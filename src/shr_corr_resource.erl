@@ -93,7 +93,7 @@ postcondition(State,_Args,Result,TS) ->
       io:format("postcondition raises ~p~nStacktrace:~n~p~n",
 		[Reason,
 		 erlang:get_stacktrace()]),
-      false
+      error(badresource)
   end
   end.
 
@@ -111,7 +111,7 @@ next_state(State,Result,_,_TS) ->
   catch _:_ ->
       io:format("~n*** Warning: next raises exception~n"),
       io:format("~p~n",[erlang:get_stacktrace()]),
-      State
+      error(badresource)
   end.
 
 %%valid_jobs(Jobs,State) -> 
