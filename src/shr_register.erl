@@ -5,7 +5,7 @@
 -export([init/1,handle_call/3,terminate/2]). 
 -export([handle_cast/2,handle_info/2,code_change/3]).
 
--define(debug,true).
+%%-define(debug,true).
 -include("debug.hrl").
 
 init(_) -> {ok,[]}.

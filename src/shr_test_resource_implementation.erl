@@ -1,6 +1,6 @@
 -module(shr_test_resource_implementation).
 
--define(debug,true).
+%%-define(debug,true).
 -include("debug.hrl").
 
 -export([prop_tri/7]).

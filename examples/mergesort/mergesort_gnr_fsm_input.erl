@@ -19,8 +19,8 @@ precondition(_Id,{Id,N},_,{_,_,[_,N1]}) when is_integer(N) ->
 command(_,{Id,N},_GlobalState) when is_integer(N) ->
   {mergesorter,in,[Id,eqc_gen:choose(N,1000)]}.
 
-next_state(_,{Id,N},GS,{_,_,[_Id,N]}) when is_integer(N) ->
-  {Id,N}.
+next_state(_,{Id,_N},GS,{_,_,[_Id,N]}) when is_integer(N) ->
+  {{Id,N},GS}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%     
 	

@@ -20,7 +20,7 @@ command(Id,output,_GlobalState) ->
   {mergesorter,output,[]}.
 
 next_state(Id,State,GS,{_,_,_}) ->
-  State.
+  {State,GS}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%     
 	

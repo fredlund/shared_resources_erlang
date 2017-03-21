@@ -5,51 +5,40 @@
 -export([initial_state/2,pre/2,cpre/2,post/3,return/3,return_value/2]).
 -export([print_state/1]).
 
--record(state,{left,right}).
 
 %%-define(debug,true).
 -include("../../src/debug.hrl").
 
 initial_state(_,_) ->
-  new_state().
+  new_state(4).
 
 pre(_Msg,_) ->
   ?TIMEDLOG("pre: ~p~n",[_Msg]),
   true.
 
-cpre(_Msg={left,[N]},State) ->
+cpre(_Msg={in,[N,_Element]},State) ->
   ?TIMEDLOG("cpre: ~p state=~s~n",[_Msg,print_state(State)]),
-  is_empty(left(State));
-cpre(_Msg={right,[N]},State) ->
-  ?TIMEDLOG("cpre: ~p state=~s~n",[_Msg,print_state(State)]),
-  is_empty(right(State));
+  is_empty(nth(N,State));
 cpre(_Msg={output,_},State) ->
   ?TIMEDLOG("cpre: ~p state=~s~n",[_Msg,print_state(State)]),
-  (not(is_empty(left(State)))) andalso (not(is_empty(right(State)))).
+  lists:all(fun (Element) -> not(is_empty(Element)) end, elements(State)).
 
-post(_Msg={left,[Element]},_Return,State) ->
+post(_Msg={in,[N,Element]},_Return,State) ->
   ?TIMEDLOG("post: ~p~n",[_Msg]),
-  set_left(Element,State);
-post(_Msg={right,[Element]},_Return,State) ->
-  ?TIMEDLOG("post: ~p~n",[_Msg]),
-  set_right(Element,State);
+  set_nth(Element,N,State);
 post(_Msg={output,_},_Return,State) ->
   ?TIMEDLOG("post: ~p~n",[_Msg]),
-  case is_eod(left(State)) andalso is_eod(right(State)) of
+  case lists:all(fun (Element) -> is_eod(Element) end, elements(State)) of
     true ->
-      set_left(empty(),set_right(empty(),State));
+      set_elements(lists:duplicate(length(State),eod));
     false ->
-      case less(left(State),right(State)) of
-	true ->
-	  set_left(empty(),State);
-	false ->
-	  set_right(empty(),State)
-      end
+      {NMin,_Min} = find_min(State),
+      set_nth(empty(),NMin,State)
   end.
 
 return(State,_Msg={output,_},Result) ->
   ?TIMEDLOG("return: ~p~n",[_Msg]),
-  Min = min(left(State),right(State)),
+  {_NMin,Min} = find_min(State),
   Result == Min;
 return(_,_Call,Result) ->
   not_exception(Result).
@@ -62,16 +51,15 @@ not_exception(Result) ->
 
 return_value(_Msg={output,_},State) ->
   ?TIMEDLOG("return_value: ~p~n",[_Msg]),
-  min(left(State),right(State));
+  {_NMin,Min} = find_min(State),
+  Min;
 return_value(_,_) ->
   underspecified.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 print_state(State) ->
-  io_lib:format
-    ("{left=~p,right=~p}",
-     [left(State),right(State)]).
+  io_lib:format("~p",[State]).
 
 empty() ->
   empty.
@@ -94,36 +82,32 @@ less(_,eod) ->
 less(Element1,Element2) ->
   Element1<Element2.
 
-min(Element,eod) ->
-  Element;
-min(eod,Element) ->
-  Element;
-min(Element1,Element2) ->
-  if
-    Element1<Element2 ->
-      Element1;
-    true ->
-      Element2
-  end.
+find_min(State) ->
+  lists:foldl
+    (fun ({N,Element},{NMin,Min}) ->
+	 case less(Element,Min) of
+	   true ->
+	     {N,Element};
+	   false ->
+	     {NMin,Min}
+	 end
+     end, {eod,1}, lists:zip(lists:seq(1,length(State)),State)).
 
-new_state() ->
-  #state
-    {
-     left=empty
-    ,right=empty
-    }.
+new_state(N) ->
+  set_elements(lists:duplicate(N,empty)).
 
-left(State) ->
-  State#state.left.
+elements(State) ->
+  tuple_to_list(State).
 
-right(State) ->
-  State#state.right.
+set_elements(Elements) ->
+  list_to_tuple(Elements).
 
-set_left(Element,State) ->
-  State#state{left=Element}.
+nth(N,State) ->
+  element(N,State).
 
-set_right(Element,State) ->
-  State#state{right=Element}.
+set_nth(Value,N,State) ->
+  setelement(N,State,Value).
+
 
 
 

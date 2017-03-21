@@ -35,15 +35,12 @@ test() ->
 	    [{4,mergesort_gnr_fsm_input},
 	     mergesort_gnr_fsm_output]},
 	   fun (_) ->
-	       io:format("in start_fun~n"),
-	       Result =
+	       [MergeSorter] =
 		 shr_simple_supervisor:add_childproc
 		   (implementation,
 		    fun () ->
 			shr_composite_resource:start_link(mergesort_4(),[],[])
 		    end),
-	       io:format("Result is ~p~n",[Result]),
-	       	       [MergeSorter] = Result,
 	       shr_register:register(mergesorter,MergeSorter)
 	   end,
 	   void,

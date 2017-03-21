@@ -23,7 +23,7 @@
 %% Super fragile below
 -record(eqc_statem_history,{state, args, features, f1, result}).
 
--define(debug,true).
+%%-define(debug,true).
 -include("debug.hrl").
 
 %% Allow to redefine it via options
@@ -142,10 +142,7 @@ start(Options,StartFun) ->
      [StartFun]),
   if
     is_function(StartFun) ->
-      io:format("will call start_fun~n"),
-      Result = StartFun(Options),
-      io:format("after start_fun~n"),
-      Result;
+      StartFun(Options);
     true ->
       []
   end,
