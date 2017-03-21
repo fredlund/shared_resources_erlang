@@ -1,6 +1,6 @@
 -module(shr_test_resource_implementation).
 
-%%-define(debug,true).
+-define(debug,true).
 -include("debug.hrl").
 
 -export([prop_tri/7]).
@@ -29,6 +29,7 @@ prop_tri(Generator,
 	       [start_fun,stop_fun,test_observer_spec],
 	       PreOptions)
     ],
+  ?TIMEDLOG("will execute shr_test_jobs:prop_res(~p)~n",[Options]),
   shr_test_jobs:prop_res(Options).
 
 not_void([],[],Options) ->
