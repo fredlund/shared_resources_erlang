@@ -23,13 +23,13 @@
 print_finished_job_info(Job,TS) ->
   MachId = proplists:get_value(machine_id,Job#job.info),
   {_,{Machine,MachineState,_}} = lists:keyfind(MachId,1,TS#fstate.machines),
-  try Machine:print_finished_job_info(localize_call(Job#job.call),MachId,MachineState,TS#fstate.global_state)
+  try Machine:print_finished_job_info(Job#job.call,MachId,MachineState,TS#fstate.global_state)
   catch _:_ -> io_lib:format("~p",[Job#job.call]) end.
 
 print_started_job_info(Job,TS) ->
   MachId = proplists:get_value(machine_id,Job#job.info),
   {_,{Machine,MachineState,_}} = lists:keyfind(MachId,1,TS#fstate.machines),
-  try Machine:print_started_job_info(localize_call(Job#job.call),MachId,MachineState,TS#fstate.global_state)
+  try Machine:print_started_job_info(Job#job.call,MachId,MachineState,TS#fstate.global_state)
   catch _:_ -> io_lib:format("~p",[Job#job.call]) end.
       
 print_state(State=#fstate{blocked=Blocked,machines=Machines,options=Options}) ->
@@ -86,26 +86,28 @@ initial_state(PreMachineSpecs,PreOptions) ->
   MachineSpecs =
     lists:foldl
       (fun ({N,MachineWithMachineInit},Acc) when is_integer(N) ->
-	   lists:duplicate(N,MachineWithMachineInit)++Acc;
+	   lists:map
+	     (fun (N) -> {seq,N,MachineWithMachineInit} end, lists:seq(1,N))
+	     ++Acc;
 	   (MachineWithInit,Acc) ->
-	   [MachineWithInit|Acc]
+	   [{machine,MachineWithInit}|Acc]
        end, [], PreMachineSpecs),
   #fstate
     {
       machines=
        lists:map
-	 (fun ({I,MachineSpec}) ->
+	 (fun ({I,PreMachineSpec}) ->
+	      {PreArgs,MachineSpec} =
+		case PreMachineSpec of
+		  {seq,N,Spec} -> {[N],Spec};
+		  {machine,Spec} -> {[void],Spec}
+		end,
 	      {Machine,Init} =
 		case MachineSpec of
 		  Mach when is_atom(Mach) -> {Mach,[]};
 		  {Mach,_} when is_atom(Mach) -> MachineSpec
 		end,
-	      case Machine:initial_state(I,Init,Options) of
-		{ok,InitialState} ->
-		  {I,{Machine,InitialState,[]}};
-		{ok,InitialState,MachineOptions} ->
-		  {I,{Machine,InitialState,MachineOptions}}
-	      end
+	      init_machine(I,Machine,PreArgs++[Init,Options])
 	  end, 
 	  lists:zip(lists:seq(1,length(MachineSpecs)),MachineSpecs)),
       options=Options,
@@ -115,6 +117,14 @@ initial_state(PreMachineSpecs,PreOptions) ->
       global_state=GlobalState
     }.
 
+init_machine(I,Machine,Args) ->
+  case apply(Machine,initial_state,Args) of
+    {ok,InitialState} ->
+      {I,{Machine,InitialState,[]}};
+    {ok,InitialState,MachineOptions} ->
+      {I,{Machine,InitialState,MachineOptions}}
+  end.
+
 precondition(#fstate{blocked=Blocked,machines=Machines,global_state=GlobalState},Commands,_) ->
   lists:all
     (fun ({Type,{F,Args},Info}) ->
@@ -122,7 +132,7 @@ precondition(#fstate{blocked=Blocked,machines=Machines,global_state=GlobalState}
 	 MachineId = proplists:get_value(machine_id,Info),
 	 {_,{Machine,MachineState,_Opts}} = lists:keyfind(MachineId,1,Machines),
 	    Machine:precondition
-	      (MachineId,MachineState,GlobalState,localize_call(Call))
+	      (MachineId,MachineState,GlobalState,Call)
 	   andalso not(lists:member(MachineId,Blocked))
      end, Commands).
 
@@ -194,7 +204,7 @@ gen_mach_cmd(State) ->
 		    stopped ->
 		      gen_mach_cmd(NewState);
 		    {Type,F,Args} ->
-		      {{{Type,MachId},{F,Args},[{machine_id,MachId}]},NewState}
+		      {{Type,{F,Args},[{machine_id,MachId}]},NewState}
 		  end)
 	   end)
   end.
@@ -242,7 +252,7 @@ next_state(State,Result,_Commands,_CorrState) ->
 	       (MachineId,
 		MachineState,
 		State#fstate.global_state,
-		localize_call(Job#job.call)),
+		Job#job.call),
 	   S#fstate
 	     {machines=
 		lists:keyreplace
@@ -252,5 +262,3 @@ next_state(State,Result,_Commands,_CorrState) ->
        end, State, FinishedJobs),
   NewState#fstate{blocked=NewBlocked}.
 
-localize_call({{Type,_Id},F,Args}) ->
-  {Type,F,Args}.

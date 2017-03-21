@@ -33,11 +33,15 @@ test() ->
 	shr_test_resource_implementation:prop_tri
 	  ({shr_gnr_fsms,
 	    [{4,mergesort_gnr_fsm_input},
-	     {1,mergesort_gnr_fsm_output}]},
+	     mergesort_gnr_fsm_output]},
 	   fun () ->
-	       shr_simple_supervisor:add_childproc
-		 (implementation,
-		  shr_composite_resource:start_link(mergesort_4(),[],[]))
+	       Result =
+		 shr_simple_supervisor:add_childproc
+		   (implementation,
+		    shr_composite_resource:start_link(mergesort_4(),[],[])),
+	       io:format("Result is ~p~n",[Result]),
+	       	       [MergeSorter] = Result,
+	       shr_register:register(mergesorter,MergeSorter)
 	   end,
 	   void,
 	   {mergesort_n_shr,[4]},

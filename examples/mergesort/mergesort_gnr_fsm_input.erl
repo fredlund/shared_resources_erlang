@@ -10,21 +10,21 @@
 
 -include_lib("eqc/include/eqc.hrl").
 
-initial_state(_,_,_) ->
-  {ok,0}.
+initial_state(Id,_,_) ->
+  {ok,{Id,0}}.
 
-precondition(Id,N,_,{_,_,[_Id,N1]}) when is_integer(N) ->
+precondition(_Id,{Id,N},_,{_,_,[_,N1]}) when is_integer(N) ->
   N1 >= N.
 
-command(Id,N,_GlobalState) when is_integer(N) ->
+command(_,{Id,N},_GlobalState) when is_integer(N) ->
   {mergesorter,in,[Id,eqc_gen:choose(N,1000)]}.
 
-next_state(Id,N,GS,{_,_,[_Id,N]}) when is_integer(N) ->
-  N.
+next_state(_,{Id,N},GS,{_,_,[_Id,N]}) when is_integer(N) ->
+  {Id,N}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%     
 	
-print_finished_job_info(Call,_Id,_State,_GlobalState) ->
+print_finished_job_info(Call,Id,_State,_GlobalState) ->
   case Call of
     {_,_,[Id,_]} -> io_lib:format("~p",[Id])
   end.

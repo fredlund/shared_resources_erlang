@@ -66,8 +66,10 @@ handle_call({unregister,Name},_From,State) ->
 handle_call({whereis,Name},_From,State) ->
   case lists:keyfind(Name,1,State) of
     false ->
+      ?TIMEDLOG("~p is not registered~n",[Name]),
       {reply, undefined, State};
     {_,Pid} ->
+      ?TIMEDLOG("~p is at ~p~n",[Name,Pid]),
       {reply, Pid, State}
   end.
 
