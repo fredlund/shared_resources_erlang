@@ -24,9 +24,9 @@ next_state(_,{Id,_N},GS,{_,_,[_Id,N]}) when is_integer(N) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%     
 	
-print_finished_job_info(Call,Id,_State,_GlobalState) ->
+print_finished_job_info(Call,_Id,_State,_GlobalState) ->
   case Call of
-    {_,_,[_Id,_]} -> io_lib:format("~p",[Id])
+    {_,_,[Id,_]} -> io_lib:format("~p",[Id])
   end.
 
 print_started_job_info(Call,_Id,_State,_GlobalState) ->
