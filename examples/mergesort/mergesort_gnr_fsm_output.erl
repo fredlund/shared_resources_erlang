@@ -25,9 +25,7 @@ next_state(Id,State,GS,{_,_,_}) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%     
 	
 print_finished_job_info(Call,_Id,_State,_GlobalState) ->
-  case Call of
-    {_,_,[Id,_]} -> io_lib:format("~p",[Id])
-  end.
+  io_lib:format("output",[]).
 
 print_started_job_info(Call,_Id,_State,_GlobalState) ->
   shr_utils:print_mfa(Call).
