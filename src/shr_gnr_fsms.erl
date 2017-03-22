@@ -24,13 +24,39 @@ print_finished_job_info(Job,TS) ->
   MachId = proplists:get_value(machine_id,Job#job.info),
   {_,{Machine,MachineState,_}} = lists:keyfind(MachId,1,TS#fstate.machines),
   try Machine:print_finished_job_info(Job#job.call,MachId,MachineState,TS#fstate.global_state)
-  catch _:_ -> io_lib:format("~p",[Job#job.call]) end.
+  catch Class:Reason -> 
+      case {Class,Reason} of
+	{error,undef} ->
+	  io_lib:format("~p",[Job#job.call]);
+	_ ->
+	  io:format
+	    ("~n*** WARNING: cannot print finished_job_info due to ~p:~p~n",
+	     [Class,Reason]),
+	  io:format
+	    ("Stacktrace:~n~p~n",
+	     [erlang:get_stacktrace()]),
+	  io_lib:format("~p",[Job#job.call])
+      end
+  end.
 
 print_started_job_info(Job,TS) ->
   MachId = proplists:get_value(machine_id,Job#job.info),
   {_,{Machine,MachineState,_}} = lists:keyfind(MachId,1,TS#fstate.machines),
   try Machine:print_started_job_info(Job#job.call,MachId,MachineState,TS#fstate.global_state)
-  catch _:_ -> io_lib:format("~p",[Job#job.call]) end.
+  catch Class:Reason ->
+      case {Class,Reason} of
+	{error,undef} ->
+	  io_lib:format("~p",[Job#job.call]);
+	_ ->
+	  io:format
+	    ("~n*** WARNING: cannot print started_job_info due to ~p:~p~n",
+	     [Class,Reason]),
+	  io:format
+	    ("Stacktrace:~n~p~n",
+	     [erlang:get_stacktrace()]),
+	  io_lib:format("~p",[Job#job.call])
+      end
+  end.
       
 print_state(State=#fstate{blocked=Blocked,machines=Machines,options=Options}) ->
   case proplists:get_value(fsm_printer,Options) of
@@ -204,7 +230,9 @@ gen_mach_cmd(State) ->
 		    stopped ->
 		      gen_mach_cmd(NewState);
 		    {Type,F,Args} ->
-		      {{Type,{F,Args},[{machine_id,MachId}]},NewState}
+		      {{Type,{F,Args},[{machine_id,MachId}]},NewState};
+		    {Type,F,Args,Options} ->
+		      {{Type,{F,Args},[{machine_id,MachId}|Options]},NewState}
 		  end)
 	   end)
   end.

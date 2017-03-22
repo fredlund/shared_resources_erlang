@@ -74,9 +74,10 @@ postcondition(State,_Args,Result,TS) ->
 	     {ok,NewState} -> 
 	       %% Finally check whether some non-finished job is finishable in all
 	       %% possible model states
-	       (not(proplists:get_value(enforce_progress,State#corr_res_state.options,true)))
-		 orelse 
-		 check_remaining_jobs(State,NewState#corr_res_state.states,TS)
+	       check_remaining_jobs
+		 (State,NewState#corr_res_state.states,TS,
+		  proplists:get_value
+		    (enforce_progress,State#corr_res_state.options,true))
 	   end
     end of
     false ->
@@ -273,7 +274,7 @@ print_schedule_state(ScheduleState,ScheduleSpec) ->
   catch _:_ -> io_lib:format("~p",[ScheduleState]) end.
       
 %% Check whether remaining jobs (which have not finished) can be finished by the model 
-check_remaining_jobs(OrigState,FinalStates,TS) ->
+check_remaining_jobs(OrigState,FinalStates,TS,ForceProgress) ->
   ?LOG("FinalStates=~n~p~n",[FinalStates]),
   DataModule = OrigState#corr_res_state.data_module,
   WaitingModule = OrigState#corr_res_state.waiting_module,
@@ -282,7 +283,15 @@ check_remaining_jobs(OrigState,FinalStates,TS) ->
       (fun (IndState,{S,J}) ->
 	   case executable_jobs(IndState#onestate.waiting,IndState,DataModule,WaitingModule,both) of
 	     [] -> {[IndState|S],J};
-	     Jobs -> {S,[Jobs|J]}
+	     Jobs -> 
+	       if
+		 ForceProgress -> {S,[Jobs|J]};
+		 true ->
+		   case urgent_jobs(Jobs) of
+		     [] -> {[IndState|S],J};
+		     _ -> {S,[Jobs|J]}
+		   end
+	       end
 	   end
        end, 
        {[],[]},
@@ -304,6 +313,9 @@ check_remaining_jobs(OrigState,FinalStates,TS) ->
 
 executable_jobs(Jobs,IndState,DataModule,WaitingModule,WhatToCheck) ->
   lists:filter(fun (Job) -> job_is_executable(Job,IndState,DataModule,WaitingModule,WhatToCheck) end, Jobs).
+
+urgent_jobs(Jobs) ->
+  lists:filter(fun (Job) -> job_is_urgent(Job) end, Jobs).
 
 job_eq(Job1,Job2) ->
   (Job1#job.pid==Job2#job.pid) andalso (Job1#job.call==Job2#job.call).
@@ -329,6 +341,9 @@ merge_jobs_and_states(JobsAndStates) ->
 job_is_executable(Job,IndState,DataModule,WaitingModule,WhatToCheck) ->
   job_cpre_is_true(Job,IndState,DataModule)
     andalso ((WhatToCheck==safety) orelse job_priority_enabled_is_true(Job,IndState,WaitingModule)).
+
+job_is_urgent(Job) ->
+  proplists:get_value(urgent,Job#job.info,false).
 
 job_returns_correct_value(Job,IndState,DataModule) ->
   Result=

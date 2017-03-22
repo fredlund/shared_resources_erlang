@@ -4,6 +4,7 @@
 -include("../../src/rsystem.hrl").
 
 -export([test/0]).
+-export([test2/0]).
 -export([debug/0]).
 -export([debug2/0]).
 
@@ -28,6 +29,12 @@ mergesort_4() ->
     }.
 
 test() ->
+  test(mergesort_n_shr).
+
+test2() ->
+  test(mergesort_n_buf_shr).
+
+test(Specification) ->
   shr_test_jobs:check_prop
     (fun (Options) ->
 	shr_test_resource_implementation:prop_tri
@@ -44,11 +51,11 @@ test() ->
 	       shr_register:register(mergesorter,MergeSorter)
 	   end,
 	   void,
-	   {mergesort_n_shr,[4]},
+	   {Specification,[4]},
 	   void,
 	   void,
 	   Options)
-     end,[]).
+     end,[no_par,{enforce_progress,false}]).
 
 debug() ->
   shr_simple_supervisor:restart(self()),
@@ -73,6 +80,7 @@ debug2() ->
 	   shr_composite_resource:start_link(mergesort_4(),[],[])
        end),
   shr_debug:debug(MergeSorter).
+
   
   
   

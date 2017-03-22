@@ -30,7 +30,7 @@ post(_Msg={output,_},_Return,State) ->
   ?TIMEDLOG("post: ~p~n",[_Msg]),
   case lists:all(fun (Element) -> is_eod(Element) end, elements(State)) of
     true ->
-      set_elements(lists:duplicate(length(State),eod));
+      set_elements(lists:duplicate(size(State),eod));
     false ->
       {NMin,_Min} = find_min(State),
       set_nth(empty(),NMin,State)
@@ -91,7 +91,7 @@ find_min(State) ->
 	   false ->
 	     {NMin,Min}
 	 end
-     end, {eod,1}, lists:zip(lists:seq(1,length(State)),State)).
+     end, {eod,1}, lists:zip(lists:seq(1,size(State)),elements(State))).
 
 new_state(N) ->
   set_elements(lists:duplicate(N,empty)).

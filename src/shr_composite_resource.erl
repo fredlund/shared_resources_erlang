@@ -34,8 +34,10 @@ handle_call(Command,From,State) ->
     operations -> 
       {reply, State#state.operations, State};
     Call = {Operation,_Args} ->
+      ?TIMEDLOG("handle_call: got ~p~n",[Call]),
       true = lists:member(Operation,State#state.operations),
       {Rid,NewCall} = (State#state.external_mapping)(Call),
+      ?TIMEDLOG("handle_call: mapped ~p to ~p:~p~n",[Call,Rid,NewCall]),
       {Rid,Pid} = lists:keyfind(Rid,1,State#state.resources),
       shr_calls:forward_call(Pid,NewCall,From),
       {noreply, State}
@@ -110,7 +112,9 @@ parse_resourceSpec(ResourceSpec) ->
 
 link_operations(Pid1,Op1,Pid2,Op2) ->
   Value = shr_calls:call(Pid1,{Op1,[]}),
+  ?TIMEDLOG("link(~p,~p,~p,~p) got ~p~n",[Pid1,Op1,Pid2,Op2,Value]),
   shr_calls:call(Pid2,{Op2,[Value]}),
+  ?TIMEDLOG("link(~p,~p,~p,~p) sent ~p~n",[Pid1,Op1,Pid2,Op2,Value]),
   link_operations(Pid1,Op1,Pid2,Op2).
 
 subst(Map,T) when is_tuple(T) ->
