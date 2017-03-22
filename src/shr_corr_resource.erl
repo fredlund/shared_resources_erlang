@@ -5,7 +5,7 @@
 -export([initial_state/2,postcondition/4,next_state/4]).
 
 %% private exports
--export([job_new_waiting/3, executable_jobs/5, job_next_state/6]).
+-export([job_new_waiting/3, executable_jobs/5, job_next_states/6]).
 
 %%-define(debug,true).
 -include("debug.hrl").
@@ -214,8 +214,18 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
 			      job_is_executable(QueueJob,IndState,DataModule,WaitingModule,WhatToCheck)
 			      andalso job_returns_correct_value(Job,IndState,DataModule) of
 			      true ->
-				[{job_next_state(QueueJob,Job#job.result,IndState,DataModule,WaitingModule,WhatToCheck),
-				  delete_job(Job,FJobs)}];
+				NextStates = 
+				  job_next_states
+				    (QueueJob,Job#job.result,
+				     IndState,
+				     DataModule,
+				     WaitingModule,
+				     WhatToCheck),
+				NewJobs =
+				  delete_job(Job,FJobs),
+				lists:map
+				  (fun (NextState) -> {NextState,NewJobs} end,
+				   NextStates);
 			      false ->
 				[]
 			    end;
@@ -378,34 +388,41 @@ job_new_waiting(Job,IndState,WaitingModule) ->
      waiting=lists:usort([UpdatedJob|IndState#onestate.waiting])
    }.
 
-job_next_state(Job,Result,IndState,DataModule,WaitingModule,WhatToCheck) ->
-  NewDataState =
+job_next_states(Job,Result,IndState,DataModule,WaitingModule,WhatToCheck) ->
+  NewDataStates =
     case job_pre_is_true(Job,IndState,DataModule) of
       false ->
-	IndState#onestate.sdata;
+	[IndState#onestate.sdata];
       true ->
-	DataModule:post
+	case
+	  DataModule:post
 	  (resource_call(Job#job.call),
 	   Result,
-	   IndState#onestate.sdata)
+	   IndState#onestate.sdata) of
+	  {'$shr_nondeterministic',States} -> States;
+	  State -> [State]
+	end
     end,
-  NewWaitState = 
-    if
-      WhatToCheck==both ->
-	WaitingModule:post_waiting
-	  (resource_call(Job#job.call),
-	   Job#job.waitinfo,
-	   IndState#onestate.swait,
-	   NewDataState);
-      true ->
-	IndState#onestate.swait
-    end,
-  IndState#onestate
-    {
-    swait=NewWaitState,
-    sdata=NewDataState,
-    waiting=delete_job(Job,IndState#onestate.waiting)
-   }.
+  lists:map
+    (fun (NewDataState) ->
+	 NewWaitState = 
+	   if
+	     WhatToCheck==both ->
+	       WaitingModule:post_waiting
+		 (resource_call(Job#job.call),
+		  Job#job.waitinfo,
+		  IndState#onestate.swait,
+		  NewDataState);
+	     true ->
+	       IndState#onestate.swait
+	   end,
+	 IndState#onestate
+	   {
+	   swait=NewWaitState,
+	   sdata=NewDataState,
+	   waiting=delete_job(Job,IndState#onestate.waiting)
+	  }
+     end, NewDataStates).
 
 add_new_jobs(NewJobs,State) ->
   ValidNewJobs = NewJobs,

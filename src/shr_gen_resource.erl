@@ -151,12 +151,19 @@ cpre(Call,State) ->
 
 -spec post(call(),any(),#state{}) -> #state{}.
 post(Call,Result,State) ->
-    NewDataState
+    NewDataStates
     = apply(State#state.state_module,post,[Call,Result,State#state.state]),
   ?TIMEDLOG
      ("~p: post(~s,~p) -> ~p~n",
-      [self(),print_call(Call),Result,NewDataState]),
-  State#state{state=NewDataState}.
+      [self(),print_call(Call),Result,NewDataStates]),
+  case NewDataStates of
+    {'$shr_nondeterministic',States} ->
+      N = random:uniform(length(NewDataStates)),
+      NewDataState = lists:nth(N,NewDataStates),
+      State#state{state=NewDataState};
+    _ ->
+      State#state{state=NewDataStates}
+  end.
 
 -spec return_value(call(),#state{}) -> any().
 return_value(Call,State) ->

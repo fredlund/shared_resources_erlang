@@ -74,7 +74,11 @@ repeat_until_stable(State) ->
     Jobs ->
       {Job,_RestJobs} = pick(Jobs),
       Result = DataModule:return_value(Job#job.call,IndState#onestate.sdata),
-      NextIndState = shr_corr_resource:job_next_state(Job,Result,IndState,DataModule,WaitingModule,both),
+      NextIndStates = 
+	shr_corr_resource:job_next_state
+	  (Job,Result,IndState,DataModule,WaitingModule,both),
+      N = random:uniform(length(NextIndStates)),
+      NextIndState = lists:nth(N,NextIndStates),
       repeat_until_stable(State#state{state=NextIndState})
   end.
 

@@ -3,6 +3,7 @@
 -export([print_mfa/1,set_beginning/0,milliseconds_after/0]).
 -export([put/2,get/1,ensure_open/0,open_clean_db/0]).
 -export([initial_state/2,module/1]).
+-export([nondeterministic/1]).
 
 print_mfa({M,F,Args}) ->
   io_lib:format
@@ -91,3 +92,13 @@ module(Module) when is_atom(Module) ->
   Module;
 module({Module,_}) when is_atom(Module) ->
   Module.
+
+nondeterministic(States=[_,_|_]) ->
+  {'$shr_nondeterministic',States};
+nondeterministic([State]) ->
+  State;
+nondeterministic(State) when not(is_list(State)) ->
+  State.
+
+
+
