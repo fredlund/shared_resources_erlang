@@ -5,7 +5,9 @@
 
 -export([test/0]).
 -export([test2/0]).
+-export([test3/0]).
 -export([debug/0]).
+-export([debugs/0]).
 -export([debug2/0]).
 
 mergesort_4() ->
@@ -29,12 +31,15 @@ mergesort_4() ->
     }.
 
 test() ->
-  test(mergesort_n_shr).
+  test(mergesort_n_shr,[]).
 
 test2() ->
-  test(mergesort_n_buf_shr).
+  test(mergesort_n_buf_shr,[{enforce_progress,false}]).
 
-test(Specification) ->
+test3() ->
+  test(mergesort_n_buf_shr,[{enforce_progress,true}]).
+
+test(Specification,Options) ->
   shr_test_jobs:check_prop
     (fun (Options) ->
 	shr_test_resource_implementation:prop_tri
@@ -55,7 +60,7 @@ test(Specification) ->
 	   void,
 	   void,
 	   Options)
-     end,[no_par,{enforce_progress,false}]).
+     end,[no_par|Options]).
 
 debug() ->
   shr_simple_supervisor:restart(self()),
@@ -66,6 +71,17 @@ debug() ->
     shr_simple_supervisor:add_childproc
       (mergesort_2,
        fun () -> shr_gen_resource:start(mergesort_2_shr,shr_always,[]) end),
+  shr_debug:debug(MergeSorter).
+
+debugs() ->
+  shr_simple_supervisor:restart(self()),
+  shr_simple_supervisor:add_childproc
+    (shr_register,
+     fun () -> shr_register:start_link() end),
+  [MergeSorter] =
+    shr_simple_supervisor:add_childproc
+      (mergesort_2,
+       fun () -> shr_gen_resource:start({mergesort_n_buf_shr,[4]},shr_always,[]) end),
   shr_debug:debug(MergeSorter).
 
 debug2() ->
