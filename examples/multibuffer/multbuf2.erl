@@ -28,7 +28,7 @@ multibuffer(Max,L) ->
 	  case N =< length(L) of
 	    true ->
 	      {Prefix,Suffix} = lists:split(N,L),
-	      shr_calls:reply(Call,{ok,Prefix}),
+	      shr_calls:reply(Call,Prefix),
 	      multibuffer(Max,Suffix);
 	    false ->
 	      wait_forever()

@@ -42,7 +42,7 @@ runJobs(Max,L,[Call|Rest],Seen) ->
       case N =< length(L) of
 	true ->
 	  {Prefix,Suffix} = lists:split(N,L),
-	  shr_calls:reply(Call,{ok,Prefix}),
+	  shr_calls:reply(Call,Prefix),
 	  runJobs(Max,Suffix,lists:reverse(Seen,Rest),[]);
 	false ->
 	  runJobs(Max,L,Rest,[Call|Seen])
