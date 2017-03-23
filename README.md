@@ -6,7 +6,7 @@ Our approach to testing shared resource system is based upon building a state-ba
 ### What is in this repository? ###
 
 * The toolbox, which provides a generic (but inefficient) implementation of a shared resource specification, and a testing framework for systematically testing an implementation of a shared resource. 
-* A number of example shared resource specifications and implementations, a multibuffer, a robot warehouse, a publish-and-subscribe system, and mergesort.
+* A number of example shared resource specifications and implementations, including a multibuffer, a robot warehouse, a publish-and-subscribe system, and mergesort.
 
 ### Requirements ###
 
