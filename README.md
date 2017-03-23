@@ -11,5 +11,7 @@ Our approach to testing shared resource system is based upon building a state-ba
 ### Requirements ###
 
 * [Erlang](http://www.erlang.org/)
+
+### Optional Requirements (for testing resources implemented in Java) ###
 * [JavaErlang](https://github.com/fredlund/JavaErlang)
 * [Java](http://www.oracle.com/technetwork/es/java/javase/downloads/index.html)
