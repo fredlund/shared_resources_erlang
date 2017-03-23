@@ -6,6 +6,7 @@
 -export([prop_gentest/0]).
 -export([test_combinations/0]).
 -export([check_test/1]).
+-export([debug/0]).
 
 prop_gentest() ->
   ?FORALL
@@ -84,19 +85,11 @@ innerprop({Implementation,Scheduler,EnforceProgress}) ->
 	Start =
 	  [{start_fun,
 	    fun (_) ->
-		io:format
-		  ("start_fun is called~n",
-		   []),
-		Result =
+		[BufferPid] =
 		  shr_simple_supervisor:add_childproc
 		    (Implementation, 
-		     fun () -> Implementation:start_link([NumReaders+NumWriters,Capacity],[]) end),
-		[_|APIs] = Result,
-		lists:foreach
-		  (fun ({Id,Pid}) -> 
-		       shr_register:register({multibuffer_user,Id},Pid) 
-		   end,
-		   lists:zip(lists:seq(1,length(APIs)),APIs))
+		     fun () -> Implementation:start_link([Capacity],[]) end),
+		shr_register:register(multibuffer,BufferPid)
 	    end}],
 	Limit =
 	  [{limit_card_state,
@@ -139,9 +132,8 @@ implementations() ->
 schedulers() ->
   [shr_always,shr_fcfs,{shr_queue_sched1,[multibuffer_shr]},{shr_queue_sched2,[multibuffer_shr]},{shr_smallest_first,[multibuffer_shr]}].
 
-
-  
-  
-
-
-
+debug() ->
+  shr_debug:debug
+    (fun () ->
+	 multbuf3:start_link([5],[])
+     end).

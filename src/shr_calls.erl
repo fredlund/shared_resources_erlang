@@ -97,7 +97,9 @@ send(Pid,Msg) when is_pid(Pid) ->
 send(Name,Msg) ->
   case shr_register:whereis(Name) of
     undefined ->
-      io:format("*** WARNING: send(~p,~p) name not registered~n",[Name,Msg]),
+      io:format
+	("*** WARNING: in send(~p,~p) name ~p not registered~n",
+	 [Name,Msg,Name]),
       error(badarg);
     Pid when is_pid(Pid) ->
       send(Pid,Msg)

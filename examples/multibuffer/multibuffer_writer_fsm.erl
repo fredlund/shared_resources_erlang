@@ -17,7 +17,7 @@ precondition(_Id,_State,_GS,_Call) ->
   true.
 
 command(_Id,#mstate{max=Max,myid=MyId},_) ->
-  {{multibuffer_user,MyId},put,[nats(Max div 2)]}.
+  {multibuffer,put,[nats(Max div 2)]}.
 
 next_state(_Id,State,GS,_Job) ->
   {State,GS}.
