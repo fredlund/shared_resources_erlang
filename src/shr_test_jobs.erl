@@ -14,14 +14,14 @@
 -export([print_jobs/2]).
 
 -export([command_parser/1]).
--export([prop_res/1, check_prop/1, eqc_printer/2]).
+-export([prop_res/1, check_prop/1, check_prop/2, eqc_printer/2]).
 
 -include_lib("eqc/include/eqc.hrl").
 -include_lib("eqc/include/eqc_component.hrl").
 -include_lib("eqc/include/eqc_dynamic_cluster.hrl").
 
 %% Super fragile below
--record(eqc_statem_history,{state, args, features, result}).
+-record(eqc_statem_history,{state, args, features, f1, result}).
 
 %%-define(debug,true).
 -include("debug.hrl").
@@ -41,7 +41,6 @@
 	  ,test_corr_module
 	  ,test_observers_states
 	  ,completion_time
-	  ,is_environment_port
 	  ,start_fun
 	  ,stop_fun
 	  ,jobs_alive
@@ -66,11 +65,6 @@ init_state(Options) ->
   StartFun = proplists:get_value(start_fun,Options),
   StopFun = proplists:get_value(stop_fun,Options),
   
-  IsEnvironmentPort =
-    case proplists:get_value(is_environment_port,Options) of
-      undefined -> fun (_) -> false end;
-      F when is_function(F) -> F
-    end,
   {ok,TestObserversState} = 
     observer_initial_states(TestObserverSpecs,Options),
   #state
@@ -82,7 +76,6 @@ init_state(Options) ->
     ,test_observers_states=TestObserversState
     ,test_gen_module=shr_utils:module(TestGenSpec)
     ,test_corr_module=shr_utils:module(TestCorrSpec)
-    ,is_environment_port = IsEnvironmentPort
     ,start_fun=StartFun
     ,stop_fun=StopFun
     ,jobs_alive=[]
@@ -134,23 +127,37 @@ start(Options,StartFun) ->
     end,
   shr_utils:put({?MODULE,counter},Counter + 1),
   shr_utils:put({?MODULE,jobs_alive},[]),
-  shr_simple_supervisor:restart(self()),
-  Ports =
-    if
-      is_function(StartFun) ->
-	StartFun(Options);
-      true ->
-	[]
-    end,
-  {Counter,Ports}.
+  shr_utils:setup_shr(),
+  ?TIMEDLOG
+    ("start_fun is ~p~n",
+     [StartFun]),
+  if
+    is_function(StartFun) ->
+      try StartFun(Options)
+      catch Class:Reason ->
+	  io:format
+	    ("*** Error: function ~p with options~n~p~n"++
+	       "raised an exception ~p:~p~n",
+	     [StartFun,Options,Class,Reason]),
+	  io:format
+	    ("stacktrace:~n~p~n",
+	     [erlang:get_stacktrace()]),
+	  error(bad_startfun)
+      end;
+    true ->
+      []
+  end,
+  Counter.
 
+start_post(_State,_,{'EXIT',_}) ->
+  false;
 start_post(_State,_,_Result) ->
+  io:format("Result is ~p~n",[_Result]),
   true.
 
 start_next(State,
-	   {Counter,Ports},
+	   Counter,
 	   [Options,_]) ->
-  shr_utils:put(ports,Ports),
   State#state
     {
     started=true
@@ -221,8 +228,7 @@ do_cmds(Commands,WaitTime) ->
 	     try shr_simple_supervisor:add_childfun
 		   ({job,F,Args},
 		    fun () ->
-			Port = find_port(Command#command.port),
-			try shr_calls:call(Port,{F,Args}) of
+			try shr_calls:call(Command#command.port,{F,Args}) of
 			    Result ->
 			    ParentPid!
 			      {PreJob#job{pid=self(),result=Result},Counter}
@@ -264,18 +270,6 @@ do_cmds(Commands,WaitTime) ->
 	("Stacktrace:~n~p~n",
 	 [erlang:get_stacktrace()]),
       throw(bad)
-  end.
-
-find_port(Port) ->
-  Register = shr_utils:get(ports),
-  case lists:keyfind(Port, 1, Register) of
-    false -> 
-      io:format
-	("*** Error: port ~p not found in register~n~p~n",
-	 [Port,Register]),
-      throw(bad);
-    {_,RealPort} ->
-      RealPort
   end.
 
 raw(Commands) when is_list(Commands) ->
@@ -393,11 +387,19 @@ observers_next_states(ModuleStates,NewJobs,FinishedJobs) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-filter_environment_commands(State,Commands) ->
+filter_environment_commands(_State,Commands) ->
   lists:filter
     (fun (Command) ->
-	 not((State#state.is_environment_port)(Command#command.port))
+	 not(is_environment(Command#command.port))
      end, Commands).
+
+%% Heuristic check for environments
+is_environment(environment) ->
+  true;
+is_environment({environment,_}) ->
+  true;
+is_environment(_) ->
+  false.
 
 wait_for_jobs(NewJobs,WaitTime,Counter) ->
   JobsAlive = shr_utils:get({?MODULE,jobs_alive}),
@@ -460,19 +462,23 @@ handle_exit(Pid,Reason,StackTrace,Counter,Finished,JobsAlive) ->
     true -> receive_completions(Counter,Finished,JobsAlive)
   end.
 
-filter_environment_jobs(State,Jobs) ->
+filter_environment_jobs(_State,Jobs) ->
   lists:filter
     (fun (Job) -> 
 	 {Port,_,_} = Job#job.call,
-	 not((State#state.is_environment_port)(Port))
+	 not(is_environment(Port))
      end,
      Jobs).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 check_prop(Options) ->
-  Prop = eqc:on_output(fun eqc_printer/2,prop_res(Options)),
-  Result = eqc:quickcheck(Prop),
+  check_prop(fun prop_res/1,Options).
+
+check_prop(Prop,Options) ->
+  io:format("Prop is ~p Options is ~p~n",[Prop,Options]),
+  EQCProp = eqc:on_output(fun eqc_printer/2,Prop(Options)),
+  Result = eqc:quickcheck(EQCProp),
   if
     not(Result) ->
       io:format("~n~n***FAILED~n");
@@ -566,8 +572,30 @@ result_value_from_history({_,_,_,Result}) ->
   Result;
 result_value_from_history({_,_,Result}) ->
   Result;
-result_value_from_history(Record) when is_record(Record,eqc_statem_history) ->
-  Record#eqc_statem_history.result.
+result_value_from_history(Other) ->
+  if
+    is_record(Other,eqc_statem_history) ->
+      Other#eqc_statem_history.result;
+    true ->
+      io:format
+	("*** WARNING: don't know how to extract the result from "++
+	   "the statement history~n"),
+      if 
+	is_tuple(Other) ->
+	  io:format
+	    ("... it is a tuple of size ~p with elements~n",
+	     [size(Other)]),
+	  lists:foreach
+	    (fun (I) ->
+		 io:format("~p: ~p~n",[I,element(I,Other)])
+	     end, lists:seq(1,size(Other)));
+	true ->
+	  io:format
+	    ("... it is a value of the shape~n~p~n",
+	     [Other])
+      end,
+      void
+  end.
 
 ensure_boolean(true) ->
   true;

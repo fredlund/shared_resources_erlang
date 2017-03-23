@@ -3,6 +3,11 @@
 -export([print_mfa/1,set_beginning/0,milliseconds_after/0]).
 -export([put/2,get/1,ensure_open/0,open_clean_db/0]).
 -export([initial_state/2,module/1]).
+-export([nondeterministic/1]).
+-export([setup_shr/0]).
+
+%%-define(debug,true).
+-include("debug.hrl").
 
 print_mfa({M,F,Args}) ->
   io_lib:format
@@ -61,8 +66,8 @@ ensure_open() ->
 
 open_db() ->
   spawn(fun () ->
-	    ets:new(?MODULE,[named_table,public]),
-	    wait_forever()
+	    try ets:new(?MODULE,[named_table,public]), wait_forever()
+	    catch _:_ -> ensure_open() end
 	end),
   wait_until_stable().
 
@@ -91,3 +96,25 @@ module(Module) when is_atom(Module) ->
   Module;
 module({Module,_}) when is_atom(Module) ->
   Module.
+
+nondeterministic(States=[_,_|_]) ->
+  {'$shr_nondeterministic',States};
+nondeterministic([State]) ->
+  State;
+nondeterministic(State) when not(is_list(State)) ->
+  State.
+
+setup_shr() ->
+  shr_simple_supervisor:restart(self()),
+  ?TIMEDLOG("starting shr_register~n",[]),
+  Return = 
+    shr_simple_supervisor:add_childproc
+      (shr_register,
+       fun () -> shr_register:start_link() end),
+  ?TIMEDLOG
+     ("shr_supervisor returns ~p exists: ~p~n",
+      [Return,
+       whereis(shr_register)]).
+
+  
+

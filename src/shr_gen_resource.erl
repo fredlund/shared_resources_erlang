@@ -5,7 +5,7 @@
 -module(shr_gen_resource).
 -behaviour(gen_server).
 
--export([start/2,start/3,start_link/2,start_link/3,call/2]).
+-export([start/3,start/4,start_link/3,start_link/4,call/2,operations/1]).
 
 -export([init/1,handle_call/3,terminate/2]). 
 -export([handle_cast/2,handle_info/2,code_change/3]).
@@ -20,10 +20,6 @@
 -export_type([call/0]).
 
 -type module_or_module_init() :: atom() | {atom(),[any()]}.
--type option() ::
-	{data_spec, module_or_module_init()}
-      | {waiting_spec, module_or_module_init()}
-      | any().
 
 -record(call_record,
 	{
@@ -44,9 +40,7 @@
 	  wait_module :: atom()
 	}).
 
-init(Options) ->
-  StateSpec = proplists:get_value(data_spec,Options),
-  WaitSpec = proplists:get_value(waiting_spec,Options),
+init([StateSpec,WaitSpec|Options]) ->
   StateMod = shr_utils:module(StateSpec),
   WaitMod = shr_utils:module(WaitSpec),
   State = shr_utils:initial_state(StateSpec,Options),
@@ -57,15 +51,20 @@ init(Options) ->
     state=State, waitstate=WaitState,
     calls=[]}}.
 
-handle_call(Call,From,State) ->
-  ?TIMEDLOG("handle_call(~p) in ~p~n",[Call,State]),
-  case pre(Call,State) of
-    true ->
-      CallRecord = #call_record{call=Call,from=From},
-      NewState = add_callrecord(CallRecord,State),
-      {noreply,compute_new_state(NewState)};
-    false ->
-      {noreply,State}
+handle_call(Command,From,State) ->
+  ?TIMEDLOG("handle_call(~p) in ~p~n",[Command,State]),
+  case Command of
+    operations -> 
+      {reply, apply(State#state.state_module,operations,[]), State};
+    Call ->
+      case pre(Call,State) of
+	true ->
+	  CallRecord = #call_record{call=Call,from=From},
+	  NewState = add_callrecord(CallRecord,State),
+	  {noreply,compute_new_state(NewState)};
+	false ->
+	  {noreply,State}
+      end
   end.
 
 compute_new_state(State) ->
@@ -92,6 +91,7 @@ compute_new_state(State) ->
 	post_waiting(CallToExecute,Info,PostState),
       RemainingCalls =
 	NewWaitState#state.calls -- [CallInfo],
+      ?TIMEDLOG("return result ~p to ~p~n",[Result,CallRecordToExecute]),
       return_to_caller
 	(Result,
 	 CallRecordToExecute),
@@ -151,12 +151,19 @@ cpre(Call,State) ->
 
 -spec post(call(),any(),#state{}) -> #state{}.
 post(Call,Result,State) ->
-    NewDataState
+    NewDataStates
     = apply(State#state.state_module,post,[Call,Result,State#state.state]),
   ?TIMEDLOG
      ("~p: post(~s,~p) -> ~p~n",
-      [self(),print_call(Call),Result,NewDataState]),
-  State#state{state=NewDataState}.
+      [self(),print_call(Call),Result,NewDataStates]),
+  case NewDataStates of
+    {'$shr_nondeterministic',States} ->
+      N = random:uniform(length(NewDataStates)),
+      NewDataState = lists:nth(N,NewDataStates),
+      State#state{state=NewDataState};
+    _ ->
+      State#state{state=NewDataStates}
+  end.
 
 -spec return_value(call(),#state{}) -> any().
 return_value(Call,State) ->
@@ -203,7 +210,7 @@ post_waiting(Call,Info,State) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 return_to_caller(Result,CallRecord) ->
-  gen_server:reply(CallRecord#call_record.from,Result).
+  shr_gen_server:reply(CallRecord#call_record.from,Result).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -211,7 +218,13 @@ return_to_caller(Result,CallRecord) ->
 %% shr_gen_resource module.
 -spec call(atom()|pid(),{atom(),[any()]}) -> any().
 call(Resource,{F,Args}) when is_atom(F), is_list(Args) ->
-  gen_server:call(Resource,{F,Args}).
+  shr_gen_server:call(Resource,{F,Args}).
+
+%% @doc Returns a list with the operations the resource provides.
+%% shr_gen_resource module.
+-spec operations(atom()|pid()) -> [atom()].
+operations(Resource) ->
+  shr_gen_server:call(Resource,operations).
 
 %% @doc Starts a shared resource.
 %% The options argument provides necessary parameters for the resource
@@ -221,9 +234,9 @@ call(Resource,{F,Args}) when is_atom(F), is_list(Args) ->
 %% Concretely the option ``data_spec'' names
 %% the resource implementation module,
 %% and the ``waiting_spec'' option names the module defining call priorities.
--spec start([any()],[option()]) -> {ok,pid()}.
-start(Args, Options) ->
-  gen_server:start(?MODULE, Args, Options).
+-spec start(module_or_module_init(),module_or_module_init(),[any()]) -> {ok,pid()}.
+start(DataSpec,WaitSpec,Options) ->
+  shr_gen_server:start(?MODULE, [DataSpec,WaitSpec], []).
 %% @doc Starts a shared resource, with a registered name.
 %% The options argument provides necessary options for the resource
 %% such as defining the implementation module, and the module
@@ -232,9 +245,9 @@ start(Args, Options) ->
 %% Concretely the option ``data_spec'' names
 %% the resource implementation module,
 %% and the ``waiting_spec'' option names the module defining call priorities.
--spec start(atom(),[any()],[option()]) -> {ok,pid()}.
-start(Name, Args, Options) ->
-  gen_server:start(Name, ?MODULE, Args, Options).
+-spec start(atom(),module_or_module_init(),module_or_module_init(),[any()]) -> {ok,pid()}.
+start(Name, DataSpec, WaitSpec, Options) ->
+  shr_gen_server:start(Name, ?MODULE, [DataSpec,WaitSpec|Options], []).
 %% @doc Starts and links to a shared resource.
 %% The options argument provides necessary options for the resource
 %% such as defining the implementation module, and the module
@@ -243,9 +256,9 @@ start(Name, Args, Options) ->
 %% Concretely the option ``data_spec'' names
 %% the resource implementation module,
 %% and the ``waiting_spec'' option names the module defining call priorities.
--spec start_link([any()],[option()]) -> {ok,pid()}.
-start_link(Args, Options) ->
-  gen_server:start_link(?MODULE, Args, Options).
+-spec start_link(module_or_module_init(),module_or_module_init(),[any()]) -> {ok,pid()}.
+start_link(DataSpec, WaitSpec, Options) ->
+  shr_gen_server:start_link(?MODULE, [DataSpec,WaitSpec|Options], []).
 %% @doc Starts and links to a shared resource, with a registered name.
 %% The options argument provides necessary options for the resource
 %% such as defining the implementation module, and the module
@@ -254,9 +267,9 @@ start_link(Args, Options) ->
 %% Concretely the option ``data_spec'' names
 %% the resource implementation module,
 %% and the ``waiting_spec'' option names the module defining call priorities.
--spec start_link(atom(),[any()],[option()]) -> {ok,pid()}.
-start_link(Name, Args, Options) ->
-  gen_server:start_link(Name, ?MODULE, Args, Options).
+-spec start_link(atom(),module_or_module_init(),module_or_module_init(),[any()]) -> {ok,pid()}.
+start_link(Name, DataSpec, WaitSpec, Options) ->
+  shr_gen_server:start_link(Name, ?MODULE, [DataSpec,WaitSpec|Options], []).
 
 
 print_call({F,Args}) ->

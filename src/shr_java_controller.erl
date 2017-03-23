@@ -3,37 +3,92 @@
 %%-define(debug,true).
 -include("debug.hrl").
 
--export([start_link_client/2]).
--export([null_converter/1,std_converter/1]).
+-export([start/2,start_link/2]).
+-export([init/1,handle_call/3,terminate/2]). 
+-export([handle_cast/2,handle_info/2,code_change/3]).
 
-start_link_client(Controller,Options) ->
+-export([call/2]).
+
+-record(state,{value_converter,free_pids,controller}).
+
+
+start(Controller,Options) ->
+  start(Controller,false,Options).
+
+start_link(Controller,Options) ->
+  start(Controller,true,Options).
+
+start(Controller,Link,Options) ->
   ValueConverter =
     case proplists:get_value(result_converter,Options) of
-      Fun when is_function(Fun) -> Fun;
+      ValueConv when is_function(ValueConv) -> ValueConv;
       _ -> fun std_converter/1
     end,
-  Pid = spawn_link(fun () -> java_caller1(Controller,ValueConverter) end),
-  {ok,[Pid]}.
+  Fun = 
+    if
+      Link -> start_link;
+      true -> start
+    end,
+  Result = 
+    gen_server:Fun({local,?MODULE},?MODULE,[Controller,ValueConverter],[]),
+  case Result of
+    {ok,_} -> ok;
+    Other -> 
+      io:format
+	("*** Error: ~p:start_link failed with ~p~n",
+	 [?MODULE,Other])
+  end,
+  Result.
 
-java_caller1(Controller,ValueConverter) ->
+init([Controller,ValueConverter]) ->
+  {ok,#state{value_converter=ValueConverter,free_pids=[],controller=Controller}}.
+
+handle_call(Msg={_Method,_Args},From,State) ->
+  {Pid,NewState} = find_free_pid(State),
+  Pid!{call,Msg,From,self()},
+  {noreply,NewState}.
+  
+handle_info({reply,Value,From,Pid},State) ->
+  gen_server:reply(From,Value),
+  {noreply,State#state{free_pids=[Pid|State#state.free_pids]}};
+handle_info(_,State) ->
+  {noreply,State}.
+
+find_free_pid(State) ->
+  case State#state.free_pids of
+    [Pid|Rest] ->
+      {Pid,State#state{free_pids=Rest}};
+    _ ->
+      Pid = spawn_link(fun () -> java_caller(State) end),
+      {Pid,State}
+  end.
+      
+java_caller(State) ->
   receive
-    Call ->
-      ?TIMEDLOG("got call ~p~n",[Call]),
-      {Method,Args} = shr_calls:msg(Call),
+    {call,{Method,Args},From,Parent} ->
       ?TIMEDLOG("will call java:call(~p,~p,~p)~n",[Controller,Method,Args]),
-      try convert(java:call(Controller,Method,Args),ValueConverter) of
-	  Result ->
+      try 
+	convert
+	  (java:call(State#state.controller,Method,Args),
+	   State#state.value_converter) of
+	Result ->
 	  ?TIMEDLOG("result of ~p is ~p~n",[Call,Result]),
-	  shr_calls:reply(Call,Result),
-	  java_caller1(Controller,ValueConverter)
+	  Parent!{reply,Result,From,self()},
+	  java_caller(State)
       catch throw:{java_exception,Exc} ->
-	  shr_calls:reply(Call,convert(Exc,ValueConverter)),
-	  java_caller1(Controller,ValueConverter)
+	  Parent!{reply,convert(Exc,State#state.value_converter),From,self()},
+	  java_caller(State)
       end
   end.
 
-null_converter(Result) ->
-  Result.
+handle_cast(_,State) ->
+  {noreply,State}.
+
+code_change(_,State,_) ->
+  {ok,State}.
+
+terminate(_,_) ->
+  ok.
 
 convert(Result,void) ->
   Result;
@@ -66,6 +121,9 @@ std_converter(Result) ->
       end;
     false -> Result
   end.
+
+call(Msg,Args) ->
+  gen_server:call(?MODULE,{Msg,Args}).
 
       
 		  

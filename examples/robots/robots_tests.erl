@@ -22,6 +22,9 @@ sim(N,NumWarehouses,MaxWeight) ->
 
   %% Start the supervisor
   shr_simple_supervisor:restart(self()),
+  shr_simple_supervisor:add_childproc
+    (shr_register,
+     fun () -> shr_register:start_link() end),
 
   %% Start Controller, Environment, ProtocolMachines
   ProtocolPorts = robots_startup:startup(CommonOpts),

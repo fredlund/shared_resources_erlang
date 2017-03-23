@@ -14,6 +14,7 @@
 -define(TAG,'$gen_call').
 
 -export([is_call/1,call/2,msg/1,reply/2]).
+-export([async_call/2,is_return_call/2,return_value/1,return_reference/1,forward_call/3]).
 
 -type procname() :: pid() | atom() | {atom(),atom()}.
 -type message() :: {?TAG, {pid(),reference()}, any()}.
@@ -26,7 +27,7 @@ call(Pid,Msg) ->
     ("call(~p,~p)~n",
      [Pid,Msg]),
   Reference = erlang:make_ref(),
-  Pid!{?TAG,{self(),Reference},Msg},
+  send(Pid,{?TAG,{self(),Reference},Msg}),
   receive
     {Reference,Value} ->
       ?TIMEDLOG
@@ -34,6 +35,42 @@ call(Pid,Msg) ->
 	  [Pid,Msg,Value]),
       Value
   end.
+
+%% @doc Calls a process (either a gen_server or a process using the calling
+%% discipline of this module), and returns the reference used
+%% for the call.
+-spec async_call(procname(),any()) -> any().
+async_call(Pid,Msg) ->
+  ?TIMEDLOG
+    ("call(~p,~p)~n",
+     [Pid,Msg]),
+  Reference = erlang:make_ref(),
+  send(Pid,{?TAG,{self(),Reference},Msg}),
+  Reference.
+
+is_return_call(Call,Reference) ->
+  case Call of
+    {Reference,_Value} -> true;
+    _ -> false
+  end.
+
+return_reference(Call) ->
+  case Call of
+    {Reference,_Value} ->
+       Reference
+  end.
+
+return_value(Call) ->
+  case Call of
+    {_Reference,Value} ->
+       Value
+  end.
+
+forward_call(Pid,Msg,From) ->
+  ?TIMEDLOG
+    ("call(~p,~p)~n",
+     [Pid,Msg]),
+  send(Pid,{?TAG,From,Msg}).
 
 %% @doc Retrieves the message from a communication sent using the ``call/2''
 %% function (or a gen_server call).
@@ -45,13 +82,26 @@ msg({?TAG,{_Pid,_Ref},Msg}) ->
 %% to the message first argument.
 -spec reply(message(),any()) -> any().
 reply({?TAG,{Pid,Ref},_Msg},Value) ->
-  Pid!{Ref,Value}.
+  send(Pid,{Ref,Value}).
 
 %% @doc Returns true if the argument has been sent using call/2
 %% (or a gen_server call).
--spec is_call(any()) -> bool().
+-spec is_call(any()) -> boolean().
 is_call({?TAG,{_Pid,_Ref},__Msg}) ->
   true;
 is_call(_) ->
   false.
+
+send(Pid,Msg) when is_pid(Pid) ->
+  Pid!Msg;
+send(Name,Msg) ->
+  case shr_register:whereis(Name) of
+    undefined ->
+      io:format
+	("*** WARNING: in send(~p,~p) name ~p not registered~n",
+	 [Name,Msg,Name]),
+      error(badarg);
+    Pid when is_pid(Pid) ->
+      send(Pid,Msg)
+  end.
 

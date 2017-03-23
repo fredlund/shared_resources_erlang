@@ -6,6 +6,7 @@
 -export([prop_gentest/0]).
 -export([test_combinations/0]).
 -export([check_test/1]).
+-export([debug/0]).
 
 prop_gentest() ->
   ?FORALL
@@ -84,14 +85,11 @@ innerprop({Implementation,Scheduler,EnforceProgress}) ->
 	Start =
 	  [{start_fun,
 	    fun (_) ->
-		Result =
+		[BufferPid] =
 		  shr_simple_supervisor:add_childproc
 		    (Implementation, 
-		     fun () -> Implementation:start_link([NumReaders+NumWriters,Capacity],[]) end),
-		[_|APIs] = Result,
-		lists:map
-		  (fun ({Id,Pid}) -> {{multibuffer,Id},Pid} end,
-		   lists:zip(lists:seq(1,length(APIs)),APIs))
+		     fun () -> Implementation:start_link([Capacity],[]) end),
+		shr_register:register(multibuffer,BufferPid)
 	    end}],
 	Limit =
 	  [{limit_card_state,
@@ -121,7 +119,7 @@ should_succeed({Implementation,Scheduler,EnforceProgress}) ->
       not(EnforceProgress) orelse (Scheduler==shr_fcfs);
 
     Implementation==multbuf3 ->
-      (Scheduler=/=shr_fcfs) andalso (Scheduler=/={shr_smallest_first,[multibuffer]})
+      (Scheduler=/=shr_fcfs) andalso (Scheduler=/={shr_smallest_first,[multibuffer_shr]})
   end.
 
 implementations() ->
@@ -132,11 +130,10 @@ implementations() ->
   ].
 
 schedulers() ->
-  [shr_always,shr_fcfs,{shr_queue_sched1,[multibuffer]},{shr_queue_sched2,[multibuffer]},{shr_smallest_first,[multibuffer]}].
+  [shr_always,shr_fcfs,{shr_queue_sched1,[multibuffer_shr]},{shr_queue_sched2,[multibuffer_shr]},{shr_smallest_first,[multibuffer_shr]}].
 
-
-  
-  
-
-
-
+debug() ->
+  shr_debug:debug
+    (fun () ->
+	 multbuf3:start_link([5],[])
+     end).

@@ -5,7 +5,7 @@
 -export([initial_state/2,postcondition/4,next_state/4]).
 
 %% private exports
--export([job_new_waiting/3, executable_jobs/5, job_next_state/6]).
+-export([job_new_waiting/3, executable_jobs/5, job_next_states/6]).
 
 %%-define(debug,true).
 -include("debug.hrl").
@@ -74,9 +74,10 @@ postcondition(State,_Args,Result,TS) ->
 	     {ok,NewState} -> 
 	       %% Finally check whether some non-finished job is finishable in all
 	       %% possible model states
-	       (not(proplists:get_value(enforce_progress,State#corr_res_state.options,true)))
-		 orelse 
-		 check_remaining_jobs(State,NewState#corr_res_state.states,TS)
+	       check_remaining_jobs
+		 (State,NewState#corr_res_state.states,TS,
+		  proplists:get_value
+		    (enforce_progress,State#corr_res_state.options,true))
 	   end
     end of
     false ->
@@ -93,7 +94,7 @@ postcondition(State,_Args,Result,TS) ->
       io:format("postcondition raises ~p~nStacktrace:~n~p~n",
 		[Reason,
 		 erlang:get_stacktrace()]),
-      false
+      error(badresource)
   end
   end.
 
@@ -111,7 +112,7 @@ next_state(State,Result,_,_TS) ->
   catch _:_ ->
       io:format("~n*** Warning: next raises exception~n"),
       io:format("~p~n",[erlang:get_stacktrace()]),
-      State
+      error(badresource)
   end.
 
 %%valid_jobs(Jobs,State) -> 
@@ -213,8 +214,18 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
 			      job_is_executable(QueueJob,IndState,DataModule,WaitingModule,WhatToCheck)
 			      andalso job_returns_correct_value(Job,IndState,DataModule) of
 			      true ->
-				[{job_next_state(QueueJob,Job#job.result,IndState,DataModule,WaitingModule,WhatToCheck),
-				  delete_job(Job,FJobs)}];
+				NextStates = 
+				  job_next_states
+				    (QueueJob,Job#job.result,
+				     IndState,
+				     DataModule,
+				     WaitingModule,
+				     WhatToCheck),
+				NewJobs =
+				  delete_job(Job,FJobs),
+				lists:map
+				  (fun (NextState) -> {NextState,NewJobs} end,
+				   NextStates);
 			      false ->
 				[]
 			    end;
@@ -273,7 +284,7 @@ print_schedule_state(ScheduleState,ScheduleSpec) ->
   catch _:_ -> io_lib:format("~p",[ScheduleState]) end.
       
 %% Check whether remaining jobs (which have not finished) can be finished by the model 
-check_remaining_jobs(OrigState,FinalStates,TS) ->
+check_remaining_jobs(OrigState,FinalStates,TS,ForceProgress) ->
   ?LOG("FinalStates=~n~p~n",[FinalStates]),
   DataModule = OrigState#corr_res_state.data_module,
   WaitingModule = OrigState#corr_res_state.waiting_module,
@@ -282,7 +293,15 @@ check_remaining_jobs(OrigState,FinalStates,TS) ->
       (fun (IndState,{S,J}) ->
 	   case executable_jobs(IndState#onestate.waiting,IndState,DataModule,WaitingModule,both) of
 	     [] -> {[IndState|S],J};
-	     Jobs -> {S,[Jobs|J]}
+	     Jobs -> 
+	       if
+		 ForceProgress -> {S,[Jobs|J]};
+		 true ->
+		   case urgent_jobs(Jobs) of
+		     [] -> {[IndState|S],J};
+		     _ -> {S,[Jobs|J]}
+		   end
+	       end
 	   end
        end, 
        {[],[]},
@@ -304,6 +323,9 @@ check_remaining_jobs(OrigState,FinalStates,TS) ->
 
 executable_jobs(Jobs,IndState,DataModule,WaitingModule,WhatToCheck) ->
   lists:filter(fun (Job) -> job_is_executable(Job,IndState,DataModule,WaitingModule,WhatToCheck) end, Jobs).
+
+urgent_jobs(Jobs) ->
+  lists:filter(fun (Job) -> job_is_urgent(Job) end, Jobs).
 
 job_eq(Job1,Job2) ->
   (Job1#job.pid==Job2#job.pid) andalso (Job1#job.call==Job2#job.call).
@@ -329,6 +351,9 @@ merge_jobs_and_states(JobsAndStates) ->
 job_is_executable(Job,IndState,DataModule,WaitingModule,WhatToCheck) ->
   job_cpre_is_true(Job,IndState,DataModule)
     andalso ((WhatToCheck==safety) orelse job_priority_enabled_is_true(Job,IndState,WaitingModule)).
+
+job_is_urgent(Job) ->
+  proplists:get_value(urgent,Job#job.info,false).
 
 job_returns_correct_value(Job,IndState,DataModule) ->
   Result=
@@ -363,34 +388,41 @@ job_new_waiting(Job,IndState,WaitingModule) ->
      waiting=lists:usort([UpdatedJob|IndState#onestate.waiting])
    }.
 
-job_next_state(Job,Result,IndState,DataModule,WaitingModule,WhatToCheck) ->
-  NewDataState =
+job_next_states(Job,Result,IndState,DataModule,WaitingModule,WhatToCheck) ->
+  NewDataStates =
     case job_pre_is_true(Job,IndState,DataModule) of
       false ->
-	IndState#onestate.sdata;
+	[IndState#onestate.sdata];
       true ->
-	DataModule:post
+	case
+	  DataModule:post
 	  (resource_call(Job#job.call),
 	   Result,
-	   IndState#onestate.sdata)
+	   IndState#onestate.sdata) of
+	  {'$shr_nondeterministic',States} -> States;
+	  State -> [State]
+	end
     end,
-  NewWaitState = 
-    if
-      WhatToCheck==both ->
-	WaitingModule:post_waiting
-	  (resource_call(Job#job.call),
-	   Job#job.waitinfo,
-	   IndState#onestate.swait,
-	   NewDataState);
-      true ->
-	IndState#onestate.swait
-    end,
-  IndState#onestate
-    {
-    swait=NewWaitState,
-    sdata=NewDataState,
-    waiting=delete_job(Job,IndState#onestate.waiting)
-   }.
+  lists:map
+    (fun (NewDataState) ->
+	 NewWaitState = 
+	   if
+	     WhatToCheck==both ->
+	       WaitingModule:post_waiting
+		 (resource_call(Job#job.call),
+		  Job#job.waitinfo,
+		  IndState#onestate.swait,
+		  NewDataState);
+	     true ->
+	       IndState#onestate.swait
+	   end,
+	 IndState#onestate
+	   {
+	   swait=NewWaitState,
+	   sdata=NewDataState,
+	   waiting=delete_job(Job,IndState#onestate.waiting)
+	  }
+     end, NewDataStates).
 
 add_new_jobs(NewJobs,State) ->
   ValidNewJobs = NewJobs,
