@@ -88,18 +88,12 @@ start_controller(Class,Directory,LibPath) ->
 	_ ->
 	  ok
       end,
-      Ports =
-	lists:flatmap
-	  (fun (_) ->
-	       shr_simple_supervisor:add_childproc
-		 (fun () ->
-		      shr_java_controller:start_link_client
-			(Controller,[])
-		  end)
-	   end, lists:seq(1,MaxUids)),
-      lists:foreach
-	(fun ({Id,Pid}) -> shr_register:register({controller_user,Id},Pid) end,
-	 lists:zip(lists:seq(1,length(Ports)),Ports))
+      [ControllerResource] =
+	shr_simple_supervisor:add_childproc
+	  (fun () ->
+	       shr_java_controller:start_link(Controller,[])
+	   end),
+      shr_register:register(controller,ControllerResource)
   end.
 
 stop_java() ->

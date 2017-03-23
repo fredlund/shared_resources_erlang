@@ -94,7 +94,10 @@ terminate(_,_) ->
 
 register(Name,Pid) when is_pid(Pid) ->	   
   interpret_result(gen_server:call(?MODULE,{register,Name,Pid}));
-register(_,_) -> 
+register(Name,Other) -> 
+  io:format
+    ("*** Warning: tried to register a non-pid: register(~p,~p)~n",
+     [Name,Other]),
   interpret_result({exception, badarg}).
 
 unregister(Name) ->

@@ -133,13 +133,26 @@ start(Options,StartFun) ->
      [StartFun]),
   if
     is_function(StartFun) ->
-      StartFun(Options);
+      try StartFun(Options)
+      catch Class:Reason ->
+	  io:format
+	    ("*** Error: function ~p with options~n~p~n"++
+	       "raised an exception ~p:~p~n",
+	     [StartFun,Options,Class,Reason]),
+	  io:format
+	    ("stacktrace:~n~p~n",
+	     [erlang:get_stacktrace()]),
+	  error(bad_startfun)
+      end;
     true ->
       []
   end,
   Counter.
 
+start_post(_State,_,{'EXIT',_}) ->
+  false;
 start_post(_State,_,_Result) ->
+  io:format("Result is ~p~n",[_Result]),
   true.
 
 start_next(State,

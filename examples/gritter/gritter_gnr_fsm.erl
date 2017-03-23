@@ -26,10 +26,10 @@ command(Id,#rstate{num_readers=NumReaders,myid=MyId},_GlobalState) ->
   oneof
     (
     [
-     {{controller_user,MyId},leer,[Id]}
-     ,{{controller_user,MyId},seguir,[Id,reader(NumReaders),bool()]}
-     ,{{controller_user,MyId},dejarDeSeguir,[Id,reader(NumReaders)]}
-     ,{{controller_user,MyId},enviar,[Id,grito(),bool()]}
+     {controller,leer,[Id]}
+    ,{controller,seguir,[Id,reader(NumReaders),bool()]}
+    ,{controller,dejarDeSeguir,[Id,reader(NumReaders)]}
+    ,{controller,enviar,[Id,grito(),bool()]}
     ]
    ).
 
