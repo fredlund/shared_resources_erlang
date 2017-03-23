@@ -137,7 +137,7 @@ implementations() ->
   ].
 
 schedulers() ->
-  [shr_always,shr_fcfs,{shr_queue_sched1,[multibuffer]},{shr_queue_sched2,[multibuffer]},{shr_smallest_first,[multibuffer]}].
+  [shr_always,shr_fcfs,{shr_queue_sched1,[multibuffer_shr]},{shr_queue_sched2,[multibuffer_shr]},{shr_smallest_first,[multibuffer_shr]}].
 
 
   

@@ -8,7 +8,7 @@
 -include_lib("eqc/include/eqc.hrl").
 
 
--record(mstate,{max,myid=Id}).
+-record(mstate,{max,myid}).
 
 
 initial_state(Id,[Max],_) ->
