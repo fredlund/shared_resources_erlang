@@ -73,10 +73,10 @@ java_caller(State) ->
 	   State#state.value_converter) of
 	Result ->
 	  ?TIMEDLOG("result of ~p is ~p~n",[Call,Result]),
-	  Parent!{reply,From,Result,self()},
+	  Parent!{reply,Result,From,self()},
 	  java_caller(State)
       catch throw:{java_exception,Exc} ->
-	  Parent!{reply,From,convert(Exc,State#state.value_converter),self()},
+	  Parent!{reply,convert(Exc,State#state.value_converter),From,self()},
 	  java_caller(State)
       end
   end.
