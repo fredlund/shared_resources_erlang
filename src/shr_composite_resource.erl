@@ -1,6 +1,6 @@
 -module(shr_composite_resource).
 
--include("rsystem.hrl").
+-include("resources.hrl").
 
 -export([start/3,start/4,start_link/3,start_link/4,call/2,operations/1]).
 

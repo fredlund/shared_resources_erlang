@@ -94,7 +94,7 @@ innerprop({Implementation,Scheduler,EnforceProgress}) ->
 		[_|APIs] = Result,
 		lists:foreach
 		  (fun ({Id,Pid}) -> 
-		       shr_register:register({multibuffer,Id},Pid) 
+		       shr_register:register({multibuffer_user,Id},Pid) 
 		   end,
 		   lists:zip(lists:seq(1,length(APIs)),APIs))
 	    end}],

@@ -9,8 +9,8 @@
 %%-define(debug,true).
 -include("../../src/debug.hrl").
 
-initial_state(_,_) ->
-  new_state(4).
+initial_state([N],_) ->
+  new_state(N).
 
 pre(_Msg,_) ->
   ?TIMEDLOG("pre: ~p~n",[_Msg]),

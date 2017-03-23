@@ -4,6 +4,10 @@
 -export([put/2,get/1,ensure_open/0,open_clean_db/0]).
 -export([initial_state/2,module/1]).
 -export([nondeterministic/1]).
+-export([setup_shr/0]).
+
+%%-define(debug,true).
+-include("debug.hrl").
 
 print_mfa({M,F,Args}) ->
   io_lib:format
@@ -100,5 +104,17 @@ nondeterministic([State]) ->
 nondeterministic(State) when not(is_list(State)) ->
   State.
 
+setup_shr() ->
+  shr_simple_supervisor:restart(self()),
+  ?TIMEDLOG("starting shr_register~n",[]),
+  Return = 
+    shr_simple_supervisor:add_childproc
+      (shr_register,
+       fun () -> shr_register:start_link() end),
+  ?TIMEDLOG
+     ("shr_supervisor returns ~p exists: ~p~n",
+      [Return,
+       whereis(shr_register)]).
 
+  
 

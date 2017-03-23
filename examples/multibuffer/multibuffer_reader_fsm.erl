@@ -8,17 +8,17 @@
 -include_lib("eqc/include/eqc.hrl").
 
 
--record(mstate,{max}).
+-record(mstate,{max,myid=Id}).
 
 
-initial_state(_Id,[Max],_) ->
-  {ok,#mstate{max=Max}}.
+initial_state(Id,[Max],_) ->
+  {ok,#mstate{max=Max,myid=Id}}.
 
 precondition(_Id,_State,_GS,_Call) ->
   true.
 
-command(_Id,#mstate{max=Max},_GS) ->
-  {multibuffer,get,[choose(0,Max div 2)]}.
+command(_Id,#mstate{max=Max,myid=MyId},_GS) ->
+  {{multibuffer_user,MyId},get,[choose(0,Max div 2)]}.
 
 next_state(_Id,State,GS,_Job) ->
   {State,GS}.

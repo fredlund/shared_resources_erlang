@@ -127,16 +127,7 @@ start(Options,StartFun) ->
     end,
   shr_utils:put({?MODULE,counter},Counter + 1),
   shr_utils:put({?MODULE,jobs_alive},[]),
-  shr_simple_supervisor:restart(self()),
-  ?TIMEDLOG("starting shr_register~n",[]),
-  Return = 
-    shr_simple_supervisor:add_childproc
-      (shr_register,
-       fun () -> shr_register:start_link() end),
-  ?TIMEDLOG
-     ("shr_supervisor returns ~p exists: ~p~n",
-      [Return,
-       whereis(shr_register)]),
+  shr_utils:setup_shr(),
   ?TIMEDLOG
     ("start_fun is ~p~n",
      [StartFun]),

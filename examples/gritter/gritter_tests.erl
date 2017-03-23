@@ -98,7 +98,7 @@ start_controller(Class,Directory,LibPath) ->
 		  end)
 	   end, lists:seq(1,MaxUids)),
       lists:foreach
-	(fun ({Id,Pid}) -> shr_register:register({controller,Id},Pid) end,
+	(fun ({Id,Pid}) -> shr_register:register({controller_user,Id},Pid) end,
 	 lists:zip(lists:seq(1,length(Ports)),Ports))
   end.
 

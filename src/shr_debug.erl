@@ -5,7 +5,17 @@
 
 -export([debug/1]).
 
+debug(StartFun) when is_function(StartFun) ->
+  shr_utils:setup_shr(),
+  case shr_simple_supervisor:add_childproc(debugged,StartFun) of
+    [Pid|_] -> debug1(Pid);
+    Other -> debug1(Other)
+  end;
 debug(Resource) ->
+  shr_utils:setup_shr(),
+  debug1(Resource).
+
+debug1(Resource) ->
   Pid =
     case Resource of
       P when is_pid(P) -> 
