@@ -27,8 +27,9 @@ although with a bit more work the toolbox can be made to work on various other
 platforms including other Linux distributions, macOS and even Windows.
 
 To compile the toolbox simply execute
-'''
+```
 #!bash
 make
-'''
+```
+
 
