@@ -29,7 +29,7 @@ Moreover, it is assumed that the current working directory is at the top
 level of the toolbox, i.e., the directories src and ebin
 (among others) are visible.
 
-To compile the toolbox simply execute
+To compile the toolbox, including the examples, simply execute
 ```
 #!bash
 $ make
@@ -80,7 +80,7 @@ Failed! After 1 tests.
 ... (much more output)
 ```
 
-We found a bug in an implementation of the mergesort shared resources. However,
+We found a bug in an implementation of a mergesort shared resource. However,
 since this was an expected bug testing will continue.
 
 
