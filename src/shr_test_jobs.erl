@@ -152,7 +152,6 @@ start(Options,StartFun) ->
 start_post(_State,_,{'EXIT',_}) ->
   false;
 start_post(_State,_,_Result) ->
-  io:format("Result is ~p~n",[_Result]),
   true.
 
 start_next(State,

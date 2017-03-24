@@ -55,7 +55,6 @@ Starting Quviq QuickCheck version 1.39.2
    (Warning: You are using R18)
 Licence for University UPM Madrid reserved until {{2017,3,24},{13,44,47}}
 prop_gentest: Testing {mergesort_n_shr,false}; should succeed=false
-Result is 0
 
 *** Error: there are calls that have been completed by the implementation which cannot be completed by the model (when checking return values and without considering priority)
 Final model state:
