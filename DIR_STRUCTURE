@@ -1,36 +1,49 @@
 src:
-	Contains a generic implementation of a shared resource in Erlang.
+====
+
+	- a generic implementation of a shared resource in Erlang
+	  (shr_gen_resource.erl).
 	The implementation is parametric on a particular definition
 	of a shared resource, and a scheduler.
 
-testing/src:
-	Contains a framework for testing shared resources:
+	- a method for testing that a system
+	  correctly implements a shared resource specification
+	  (shr_test_jobs.erl):
+		- shr_gnr_fsms.erl permits generating sequences of calls
+		  to shared resources as the composition of simple state
+		  machines
 
-	tester.erl: main testing module 
-		    (testing is parameteric on a shared resource,
-		    a scheduler, and a module that generates test cases)
-	fsms.erl:   support for generating test cases from a set of
-		    finite state machines running in parallel
+	- various support code:
+	  	  - shr_debug.erl implements a simple debugger for
+		    shared resources
+		  - shr_composite_resource.erl permits implementing a
+		    shared resource as the composition of shared resources
+		  - shr_java_controller.erl permits interfacing with
+		    a shared resource implemented in Java.
 
-schedulers:
+src/schedulers:
 	Example general (not depending on a particular resource) schedulers
 
-examples:
 
-examples/multibuffer:
-	A multibuffer example.
-	multibuffer.erl:	resource specification
-	multibuffer_test.erl:	main file for starting testing
-examples/robots:
-	An example with robots in a warehouse.
+examples:
+=========
+examples/multibuffer: A multibuffer example.
+	multibuffer_shr.erl:	resource specification
+	multbuf1.erl,multbuf2.erl,multbuf3.erl: resource implementations		multibuffer_test.erl:	main file for starting testing
+
+examples/robots: An example with robots in a warehouse.
 	robots.erl:		resource specification
 	robots_test.erl:	main file for starting testing
 	robot_fsm.erl		a robot finite-state-machine used by
 				testing/src/fsms.erl to generate
 				test cases.
 
-qa:
-	Quality assurance. Some simple tests that test the generic 
-	implementation using the testing framework.
+examples/mergesort: mergesort -- provides an example that a shared resource
+		    	      	 can be implemented using a composition of
+				 shared resources
 
+
+examples/gritter: a simple publish-and-subscribe shared resource
+
+	
 	
