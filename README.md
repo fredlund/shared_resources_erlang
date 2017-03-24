@@ -14,5 +14,21 @@ Our approach to testing shared resource system is based upon building a state-ba
 * [QuickCheck](http://www.quviq.com/)
 
 ### Optional Requirements (for testing resources implemented in Java) ###
+
 * [JavaErlang](https://github.com/fredlund/JavaErlang)
 * [Java](http://www.oracle.com/technetwork/es/java/javase/downloads/index.html)
+
+### Installation and Running ###
+
+In the following it is assumed that Erlang, QuickCheck, Java and JavaErlang are
+already installed. The Erlang-based shared resource toolbox has been developed
+using Ubuntu (Linux). Installation instructions below assume running on Ubuntu
+although with a bit more work the toolbox can be made to work on various other
+platforms including other Linux distributions, macOS and even Windows.
+
+To compile the toolbox simply execute
+'''
+#!bash
+make
+'''
+
