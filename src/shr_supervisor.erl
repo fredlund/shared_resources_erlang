@@ -43,7 +43,10 @@ handle_call(Msg,From,State) ->
 handle_call1({addfun,Name,Spec},_From,State) ->
   Pid = spawn_link(Spec),
   Process = #process{pid=Pid,name=Name},
-  shr_register:register(Name,Pid),
+  if
+    Name =/= [] -> shr_register:register(Name,Pid);
+    true -> ok
+  end,
   {reply, Pid, State#state{processes=[Process|State#state.processes],terminated=[]}};
 handle_call1({addproc,Names,Spec},_From,State) ->
   Result =
