@@ -91,7 +91,7 @@ find_min(State) ->
 	   false ->
 	     {NMin,Min}
 	 end
-     end, {eod,1}, lists:zip(lists:seq(1,size(State)),elements(State))).
+     end, {1,eod}, lists:zip(lists:seq(1,size(State)),elements(State))).
 
 new_state(N) ->
   set_elements(lists:duplicate(N,empty)).
