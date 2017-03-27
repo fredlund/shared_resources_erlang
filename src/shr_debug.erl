@@ -7,7 +7,7 @@
 
 debug(StartFun) when is_function(StartFun) ->
   shr_utils:setup_shr(),
-  case shr_simple_supervisor:add_childproc(debugged,StartFun) of
+  case shr_supervisor:add_childproc(debugged,StartFun) of
     [Pid|_] -> debug1(Pid);
     Other -> debug1(Other)
   end;

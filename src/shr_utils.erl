@@ -105,10 +105,10 @@ nondeterministic(State) when not(is_list(State)) ->
   State.
 
 setup_shr() ->
-  shr_simple_supervisor:restart(self()),
+  shr_supervisor:restart(self()),
   ?TIMEDLOG("starting shr_register~n",[]),
   Return = 
-    shr_simple_supervisor:add_childproc
+    shr_supervisor:add_childproc
       (shr_register,
        fun () -> shr_register:start_link() end),
   ?TIMEDLOG

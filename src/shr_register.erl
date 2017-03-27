@@ -32,6 +32,15 @@ start_link() ->
   end,
   Result.
 
+ensure_started() ->
+  case erlang:whereis(?MODULE) of
+    undefined ->
+      try start_link()
+      catch _:_ -> timer:sleep(100), ensure_started() end;
+    _ ->
+      ok
+  end.
+
 handle_call({register,Name,Pid},_From,State) ->
   case is_process_alive(Pid) of
     false -> 
@@ -93,6 +102,7 @@ terminate(_,_) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
 register(Name,Pid) when is_pid(Pid) ->	   
+  ensure_started(),
   interpret_result(gen_server:call(?MODULE,{register,Name,Pid}));
 register(Name,Other) -> 
   io:format
@@ -101,9 +111,11 @@ register(Name,Other) ->
   interpret_result({exception, badarg}).
 
 unregister(Name) ->
+  ensure_started(),
   interpret_result(gen_server:call(?MODULE,{unregister,Name})).
 
 whereis(Name) ->
+  ensure_started(),
   interpret_result(gen_server:call(?MODULE,{whereis,Name})).
 
 interpret_result({exception, Reason}) ->

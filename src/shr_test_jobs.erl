@@ -224,7 +224,7 @@ do_cmds(Commands,WaitTime) ->
 	     Info = Command#command.options,
 	     Call = {Command#command.port,F,Args},
 	     PreJob = #job{call=Call,info=Info},
-	     try shr_simple_supervisor:add_childfun
+	     try shr_supervisor:add_childfun
 		   ({job,F,Args},
 		    fun () ->
 			try shr_calls:call(Command#command.port,{F,Args}) of

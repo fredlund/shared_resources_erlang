@@ -7,7 +7,7 @@
 %% the behaviour permits adding existing processes to the supervisor
 %% tree in a simple manner.
 %%
-%% A limitation is that currently only one shr_simple_supervisor process
+%% A limitation is that currently only one shr_supervisor process
 %% can be active at any time; this is quite easy to fix.
 
 -module(shr_supervisor).
@@ -237,7 +237,7 @@ add_childproc(Spec) ->
 add_childproc(Name,Spec) ->
   ?GEN_SERVER:call(?MODULE,{addproc,Name,Spec}).
 
-%% @doc Starts, or restarts if running, a shr_simple_supervisor.
+%% @doc Starts, or restarts if running, a shr_supervisor.
 %% The ``ReportTo'' argument is a pid to which the supervisor sends
 %% a failure report, if a supervisor process fails.
 %%
@@ -257,7 +257,7 @@ restart(ReportTo) ->
       ?GEN_SERVER:call(?MODULE,{restart,ReportTo})
   end.
 
-%% @doc Checks if the shr_simple_supervisor is alive.
+%% @doc Checks if the shr_supervisor is alive.
 -spec is_alive() -> boolean().
 is_alive() ->
   ?GEN_SERVER:call(?MODULE,is_alive).
