@@ -85,11 +85,9 @@ innerprop({Implementation,Scheduler,EnforceProgress}) ->
 	Start =
 	  [{start_fun,
 	    fun (_) ->
-		[BufferPid] =
-		  shr_simple_supervisor:add_childproc
-		    (Implementation, 
-		     fun () -> Implementation:start_link([Capacity],[]) end),
-		shr_register:register(multibuffer,BufferPid)
+		shr_supervisor:add_childproc
+		  (multibuffer, 
+		   fun () -> Implementation:start_link([Capacity],[]) end)
 	    end}],
 	Limit =
 	  [{limit_card_state,

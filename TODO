@@ -5,7 +5,6 @@ could also reduce the timeout and increase testing frequency.
 - Maybe implement an option for ignoring safety errors to find scheduling
 errors more reliably.
 
-- Permit testing of multiple resources simultaneously.
 
 
 

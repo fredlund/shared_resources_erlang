@@ -19,7 +19,7 @@ startup(Options) ->
 
   %% We need an environment
   [Environment] = 
-    shr_simple_supervisor:add_childproc
+    shr_supervisor:add_childproc
       (physical, fun () -> robots_physical:start_link(Options) end),
 
   %% We need a controller, first start the resource and then wrap it in
@@ -27,8 +27,8 @@ startup(Options) ->
   DataSpec = proplists:get_value(data_spec,Options),
   WaitingSpec = proplists:get_value(waiting_spec,Options),
   [Controller] = 
-    shr_simple_supervisor:add_childproc
-      (DataSpec, 
+    shr_supervisor:add_childproc
+      (controller, 
        fun () ->
 	   shr_gen_resource:start_link(DataSpec,WaitingSpec,Options)
        end),
@@ -40,16 +40,14 @@ startup(Options) ->
     (fun (Id) ->
 	 ?TIMEDLOG("will create machine ~p~n",[Id]),
 	 [ControllerPid,EnvironmentPid] = 
-	   shr_simple_supervisor:add_childproc
-	     ({protocol,Id},
+	   shr_supervisor:add_childproc
+	     ([{controller,Id},{environment,Id}],
 	      fun () ->
 		  shr_gen_protocol:start_link
 		    (ProtocolImplementation,
 		     [{controller,Controller},
 		      {environment,Environment}]++Options)
 	      end),
-	 shr_register:register({controller,Id},ControllerPid),
-	 shr_register:register({environment,Id},EnvironmentPid),
 	 [{{controller,Id},ControllerPid},{{environment,Id},EnvironmentPid}]
      end, lists:seq(1,proplists:get_value(num_robots,Options))).
 

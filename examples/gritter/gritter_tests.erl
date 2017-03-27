@@ -7,8 +7,7 @@
 
 sim(N) ->
 
-  %% Start the supervisor
-  shr_simple_supervisor:restart(self()),
+  shr_utils:setup_shr(),
 
   ControllerOpts = 
     [
@@ -19,7 +18,7 @@ sim(N) ->
   %% We need a controller, first start the resource and then wrap it in
   %% a generic Erlang resource implementation
   [Controller] = 
-    shr_simple_supervisor:add_childproc
+    shr_supervisor:add_childproc
       (gritter_shr, 
        fun () ->
 	   shr_gen_resource:start_link(ControllerOpts,[])
@@ -85,12 +84,11 @@ start_controller(Class,Directory,LibPath) ->
 	_ ->
 	  ok
       end,
-      [ControllerResource] =
-	shr_simple_supervisor:add_childproc
-	  (fun () ->
-	       shr_java_controller:start_link(Controller,[])
-	   end),
-      shr_register:register(controller,ControllerResource)
+      shr_supervisor:add_childproc
+	(controller,
+	 fun () ->
+	     shr_java_controller:start_link(Controller,[])
+	 end)
   end.
 
 stop_java() ->

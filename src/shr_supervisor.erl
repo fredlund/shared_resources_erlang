@@ -10,7 +10,7 @@
 %% A limitation is that currently only one shr_simple_supervisor process
 %% can be active at any time; this is quite easy to fix.
 
--module(shr_simple_supervisor).
+-module(shr_supervisor).
 
 -export([init/1,handle_call/3,handle_info/2,handle_cast/2,code_change/3,terminate/2]).
 -export([add_childfun/1,add_childfun/2,add_childproc/1,add_childproc/2,restart/1,is_alive/0]).
@@ -43,8 +43,9 @@ handle_call(Msg,From,State) ->
 handle_call1({addfun,Name,Spec},_From,State) ->
   Pid = spawn_link(Spec),
   Process = #process{pid=Pid,name=Name},
+  shr_register:register(Name,Pid),
   {reply, Pid, State#state{processes=[Process|State#state.processes],terminated=[]}};
-handle_call1({addproc,Name,Spec},_From,State) ->
+handle_call1({addproc,Names,Spec},_From,State) ->
   Result =
     case Spec of
       Fun when is_function(Fun) -> Fun();
@@ -63,15 +64,29 @@ handle_call1({addproc,Name,Spec},_From,State) ->
       Processes = 
 	lists:map
 	  (fun (Child) -> 
-	       #process{pid=Child,name=Name}
+	       #process{pid=Child}
 	   end, Children),
+      RegisterNames =
+	if
+	  is_list(Names) -> Names;
+	  true -> [Names]
+	end,
+      if
+	Names=/=[] ->
+	  lists:foreach
+	    (fun ({Name,Child}) ->
+		 shr_register:register(Name,Child)
+	     end, lists:zip(RegisterNames,Children));
+	true -> 
+	  ok
+      end,
       {reply, Children,
        State#state{processes=Processes++State#state.processes,terminated=[]}};
     Other ->
       io:format
-	("*** Error: ~p(~p) adding process from recipe ~p (with name ~p) "
+	("*** Error: ~p(~p) adding process from recipe ~p (with names ~p) "
 	 ++"returns an incorrect value~n~p~n",
-	 [?MODULE,self(),Spec,Name,Other]),
+	 [?MODULE,self(),Spec,Names,Other]),
       {reply, bad, State}
   end;
 handle_call1({restart,ReportTo},_From,State) ->

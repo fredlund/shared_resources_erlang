@@ -70,13 +70,11 @@ test_prop(N,Specification,Options) ->
 	  [{N,mergesort_gnr_fsm_input},mergesort_gnr_fsm_output]},
        start_implementation=
 	 fun (_) ->
-	     [MergeSorter] =
-	       shr_simple_supervisor:add_childproc
-		 (implementation,
-		  fun () ->
-		      shr_composite_resource:start_link(mergesort_N(N),[],[])
-		  end),
-	     shr_register:register(mergesorter,MergeSorter)
+	     shr_supervisor:add_childproc
+	       (mergesorter,
+		fun () ->
+		    shr_composite_resource:start_link(mergesort_N(N),[],[])
+		end)
 	 end,
        resource={Specification,[N]},
        options=Options
