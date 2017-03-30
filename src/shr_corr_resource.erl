@@ -277,11 +277,33 @@ maybe_print_model_state(State) ->
 
 print_model_state(ModelState,ModelSpec) ->
   try ModelSpec:print_state(ModelState)
-  catch _:_ -> io_lib:format("~p",[ModelState]) end.
+  catch 
+    _:undef ->
+      io_lib:format("~p",[ModelState]);
+    Class:Reason -> 
+      io:format
+	("*** WARNING: printing model state ~p using ~p fails due to~n~p:~p~n",
+	 [ModelState,ModelSpec,Class,Reason]),
+      io:format
+	("*** Stacktrace:~n~p~n",
+	 [erlang:get_stacktrace()]),
+      io_lib:format("~p",[ModelState]) 
+  end.
 
 print_schedule_state(ScheduleState,ScheduleSpec) ->
   try ScheduleSpec:print_state(ScheduleState)
-  catch _:_ -> io_lib:format("~p",[ScheduleState]) end.
+  catch 
+    _:undef ->
+      io_lib:format("~p",[ScheduleState]);
+    Class:Reason -> 
+      io:format
+	("*** WARNING: printing schedule state ~p using ~p fails due to~n~p:~p~n",
+	 [ScheduleState,ScheduleSpec,Class,Reason]),
+      io:format
+	("*** Stacktrace:~n~p~n",
+	 [erlang:get_stacktrace()]),
+      io_lib:format("~p",[ScheduleState]) 
+  end.
       
 %% Check whether remaining jobs (which have not finished) can be finished by the model 
 check_remaining_jobs(OrigState,FinalStates,TS,ForceProgress) ->

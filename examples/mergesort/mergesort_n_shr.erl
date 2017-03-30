@@ -62,7 +62,9 @@ return_value(_,_) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 print_state(State) ->
-  io_lib:format("~p",[State]).
+  io_lib:format
+    ("Size=~p Elements=~s",
+     [size(State),shr_utils:print_terms(tuple_to_list(State),",")]).
 
 empty() ->
   empty.
