@@ -1,6 +1,6 @@
 -module(shr_utils).
 
--export([print_mfa/1,set_beginning/0,milliseconds_after/0]).
+-export([print_mfa/1,print_terms/2,set_beginning/0,milliseconds_after/0]).
 -export([put/2,get/1,ensure_open/0,open_clean_db/0]).
 -export([initial_state/2,module/1]).
 -export([nondeterministic/1]).
