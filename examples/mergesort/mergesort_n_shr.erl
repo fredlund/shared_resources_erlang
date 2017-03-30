@@ -32,13 +32,16 @@ post(_Msg={output,_},_Return,State) ->
     true ->
       set_elements(lists:duplicate(size(State),eod));
     false ->
-      {NMin,_Min} = find_min(State),
-      set_nth(empty(),NMin,State)
+      {NMins,_Min} = find_mins(State),
+      shr_utils:nondeterministic
+	(lists:map
+	   (fun (NMin) -> set_nth(empty(),NMin,State) end,
+	    NMins))
   end.
 
 return(State,_Msg={output,_},Result) ->
   ?TIMEDLOG("return: ~p~n",[_Msg]),
-  {_NMin,Min} = find_min(State),
+  {_NMins,Min} = find_mins(State),
   Result == Min;
 return(_,_Call,Result) ->
   not_exception(Result).
@@ -51,7 +54,7 @@ not_exception(Result) ->
 
 return_value(_Msg={output,_},State) ->
   ?TIMEDLOG("return_value: ~p~n",[_Msg]),
-  {_NMin,Min} = find_min(State),
+  {_NMins,Min} = find_mins(State),
   Min;
 return_value(_,_) ->
   underspecified.
@@ -82,16 +85,16 @@ less(_,eod) ->
 less(Element1,Element2) ->
   Element1<Element2.
 
-find_min(State) ->
+find_mins(State) ->
   lists:foldl
-    (fun ({N,Element},{NMin,Min}) ->
-	 case less(Element,Min) of
-	   true ->
-	     {N,Element};
-	   false ->
-	     {NMin,Min}
+    (fun ({N,Element},{NMins,Min}) ->
+	 Less = less(Element,Min),
+	 if
+	   Element==Min -> {[N|NMins],Min};
+	   Less -> {[N],Element};
+	   true -> {NMins,Min}
 	 end
-     end, {1,eod}, lists:zip(lists:seq(1,size(State)),elements(State))).
+     end, {[1],eod}, lists:zip(lists:seq(1,size(State)),elements(State))).
 
 new_state(N) ->
   set_elements(lists:duplicate(N,empty)).
