@@ -44,7 +44,6 @@ mergesort_N(N) ->
 r(N) ->  
   list_to_atom("r"++integer_to_list(N)).
 
-
 test() ->
   test(mergesort_n_shr,[no_par]).
 
