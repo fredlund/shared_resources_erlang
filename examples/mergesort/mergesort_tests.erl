@@ -8,6 +8,7 @@
 -export([test/0]).
 -export([test2/0]).
 -export([test3/0]).
+-export([test4/0]).
 -export([debug/0]).
 -export([debug2/1]).
 -export([debug3/0]).
@@ -23,7 +24,8 @@ mergesort_N(N) ->
      operations=[in,output],
      resources=N1Resources,
      pre=fun ({in,[I,_]}) -> (I>0) andalso (I<N+1);
-	     ({output,[]}) -> true
+	     ({output,[]}) -> true;
+	     (_) -> false
 	 end,
      external_mapping=
        fun ({in,[1,Msg]}) -> {r(1),{left,[Msg]}};
@@ -53,6 +55,9 @@ test2() ->
 test3() ->
   test(mergesort_n_buf_shr,[{enforce_progress,true},no_par]).
 
+test4() ->
+  test(mergesort_n_buf_shr,[{enforce_progress,false},no_par,{generator,mergesort_gnr}]).
+
 test(Specification,Options) ->
   shr_test_jobs:check_prop
     (fun (Opts) -> 
@@ -61,12 +66,19 @@ test(Specification,Options) ->
      Options).
 
 test_prop(N,Specification,Options) ->
+  Generator = 
+    case proplists:get_value(generator,Options) of
+      undefined ->
+	{shr_gnr_fsms,[{N,mergesort_gnr_fsm_input},mergesort_gnr_fsm_output]};
+      G when is_atom(G) ->
+	{G,[N,proplists:get_value(no_par,Options,false)]};
+      G ->
+	G
+    end,
   shr_test_resource_implementation:prop_tri
     (#rtest
      {
-       generator=
-	 {shr_gnr_fsms,
-	  [{N,mergesort_gnr_fsm_input},mergesort_gnr_fsm_output]},
+       generator=Generator,
        start_implementation=
 	 fun (_) ->
 	     shr_supervisor:add_childproc

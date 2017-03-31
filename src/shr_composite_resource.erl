@@ -10,7 +10,7 @@
 %%-define(debug,true).
 -include("debug.hrl").
 
--record(state,{operations=[],resources=[],external_mapping,links=[],calls=[]}).
+-record(state,{operations=[],resources=[],pre,external_mapping,links=[],calls=[]}).
 
 init([SystemSpec,Args|Options]) ->
   ?TIMEDLOG("will initialize using specification~n~p~n",[SystemSpec]),
@@ -37,25 +37,38 @@ handle_call(Command,From,State) ->
     Call = {Operation,_Args} ->
       ?TIMEDLOG("handle_call: got ~p~n",[Call]),
       true = lists:member(Operation,State#state.operations),
-      case (State#state.external_mapping)(Call) of
-	{Rid,NewCall} ->
-	  ?TIMEDLOG("handle_call: mapped ~p to ~p:~p~n",[Call,Rid,NewCall]),
-	  case lists:keyfind(Rid,1,State#state.resources) of
-	    {Rid,Pid} ->
-	      shr_calls:forward_call(Pid,NewCall,From),
-	      {noreply, State};
+      case (State#state.pre)(Call) of
+	true ->
+	  case (State#state.external_mapping)(Call) of
+	    {Rid,NewCall} ->
+	      ?TIMEDLOG("handle_call: mapped ~p to ~p:~p~n",[Call,Rid,NewCall]),
+	      case lists:keyfind(Rid,1,State#state.resources) of
+		{Rid,Pid} ->
+		  shr_calls:forward_call(Pid,NewCall,From),
+		  {noreply, State};
+		_ ->
+		  io:format
+		    ("*** Error: rid ~p (from call ~p) is not known in~n~p~n",
+		     [Rid,Call,State#state.resources]),
+		  error(systemspec)
+	      end;
 	    _ ->
 	      io:format
-		("*** Error: rid ~p (from call ~p) is not known in~n~p~n",
-		 [Rid,Call,State#state.resources]),
+		("*** Error: no mapping for call ~p~n",
+		 [Call]),
 	      error(systemspec)
 	  end;
-	_ ->
+	false ->
 	  io:format
-	    ("*** Error: no mapping for call ~p~n",
-	     [Call]),
-	  error(systemspec)
-      end
+	    ("*** Warning: pre(~p) returns false~n",[Call]),
+	  {noreply, State}
+      end;
+    _ ->
+      io:format
+	("*** Error: shr_composite_resource:handle_call received a "++
+	   "strange message ~p~n",
+	 [Command]),
+      error(badarg)
   end.
 
 handle_info(_,State) ->
@@ -110,7 +123,8 @@ start_systemspec(SystemSpec,Args,_Options) ->
      operations=SystemSpec#rsystem.operations,
      resources=ResourceMap,
      external_mapping=SystemSpec#rsystem.external_mapping,
-     links=SystemSpec#rsystem.linking
+     links=SystemSpec#rsystem.linking,
+     pre=SystemSpec#rsystem.pre
     }.
 
 parse_resourceSpec(ResourceSpec) ->

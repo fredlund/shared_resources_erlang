@@ -12,6 +12,7 @@
 -export([start_pre/1,start_args/1,start/2,start_post/3,start_next/3]).
 -export([do_cmds_pre/1,do_cmds_args/1,do_cmds_pre/2,do_cmds/2,do_cmds_post/3,do_cmds_next/3]).
 -export([print_jobs/2]).
+-export([return_test_cases/0,print_test_cases/0]).
 
 -export([command_parser/1]).
 -export([prop_res/1, check_prop/1, check_prop/2, eqc_printer/2]).
@@ -21,7 +22,7 @@
 -include_lib("eqc/include/eqc_dynamic_cluster.hrl").
 
 %% Super fragile below
--record(eqc_statem_history,{state, args, features, f1, result}).
+-record(eqc_statem_history,{state, args, command, features, result}).
 
 %%-define(debug,true).
 -include("debug.hrl").
@@ -120,6 +121,7 @@ start_args(State) ->
 start(Options,StartFun) ->
   Id = proplists:get_value(id,Options,unknown),
   shr_utils:put(?MODULE,{id,Id}),
+  shr_utils:put(test_cases,[]),
   Counter =
     case shr_utils:get({?MODULE,counter}) of
       undefined -> 0;
@@ -495,6 +497,10 @@ prop_res(Options) ->
 		      ?MODULE,
 		      Cmds,
 		      begin
+			shr_utils:put(final_state,DS),
+			TestCase = commands_and_return_values(Cmds,H,Res),
+			TestCases = shr_utils:get(test_cases),
+			shr_utils:put(test_cases,TestCases++[TestCase]),
 			case proplists:get_value(stop_fun,Options) of
 			  Fun when is_function(Fun) ->
 			    Fun(Options);
@@ -544,19 +550,10 @@ print_testcase(Cmds,H,State,Result) ->
 
 print_testcase1(Cmds,H,State,Result) ->
   try
-    {CommandSequence,_} =
-      lists:split(length(H)+1,Cmds),
-    ReturnValues = 
-      case Result of
-	{exception,_} ->
-	  (lists:map(fun result_value_from_history/1, H))++[Result];
-	_ ->
-	  (lists:map(fun result_value_from_history/1, H))
-      end,
+    CommandResultSequence = commands_and_return_values(Cmds,H,Result),
     io:format("~nCommand sequence:~n"),
     io:format("-----------------~n~n"),
-    print_commands
-      (lists:zip(tl(CommandSequence),ReturnValues),State),
+    print_commands(CommandResultSequence,State),
     io:format("~n~n")
   catch _:Exception ->
       io:format
@@ -565,6 +562,18 @@ print_testcase1(Cmds,H,State,Result) ->
 	 [Exception,erlang:get_stacktrace()]),
       ok
   end.
+
+commands_and_return_values(Cmds,H,Result) ->
+  {CommandSequence,_} =
+    lists:split(length(H)+1,Cmds),
+  ReturnValues = 
+    case Result of
+      {exception,_} ->
+	(lists:map(fun result_value_from_history/1, H))++[Result];
+      _ ->
+	(lists:map(fun result_value_from_history/1, H))
+    end,
+  lists:zip(tl(CommandSequence),ReturnValues).
 
 result_value_from_history({_,_,_,Result}) ->
   Result;
@@ -652,13 +661,22 @@ print_commands([{Call,Result}|Rest],State) ->
 	FinishedStr++ExitedStr;
       _ -> ""
     end,
-  CallString =
+  CallString = print_call(Call,Result,State),
+  if
+    CallString=/="" ->
+      io:format("  ~s ~s~n",[CallString,ResultString]);
+    true ->
+      ok
+  end,
+  print_commands(Rest,State).
+
+print_call(Call,Result,State) ->
     case Call of
-      {_,_,do_cmds,[_Commands|_],_} ->
+      {_,_,do_cmds,[Commands|_],_} ->
 	{Jobs,_} = Result,
 	{Prefix,Postfix} = 
 	  if
-	    length(Jobs)>1 -> {"<< "," >>"};
+	    length(Commands)>1 -> {"<< "," >>"};
 	    true -> {"",""}
 	  end,
 	io_lib:format
@@ -668,14 +686,7 @@ print_commands([{Call,Result}|Rest],State) ->
 	"";
       {_,_,Name,Args,_} ->
 	io_lib:format("~p ~p",[Name,Args])
-    end,
-  if
-    CallString=/="" ->
-      io:format("  ~s ~s~n",[CallString,ResultString]);
-    true ->
-      ok
-  end,
-  print_commands(Rest,State).
+    end.
 
 print_jobs(Jobs,State) ->
   io_lib:format
@@ -700,4 +711,16 @@ print_started_job_info(Job,#state{test_gen_module=TGM,test_gen_state=TGS}) ->
   end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+return_test_cases() ->
+  shr_utils:get(test_cases).
+
+print_test_cases() ->
+  State = shr_utils:get(final_state),
+  io:format("Test cases:~n~n"),
+  lists:foreach
+    (fun ({Call,Result}) -> 
+	 io:format("~n~p~n",[print_call(Call,Result,State)]) 
+     end,
+     return_test_cases).
 
