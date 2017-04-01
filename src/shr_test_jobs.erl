@@ -121,7 +121,30 @@ start_args(State) ->
 start(Options,StartFun) ->
   Id = proplists:get_value(id,Options,unknown),
   shr_utils:put(?MODULE,{id,Id}),
-  shr_utils:put(test_cases,[]),
+  TestCases =
+    case shr_utils:get(test_cases) of
+      undefined -> 
+	shr_utils:put(failed,false),
+	shr_utils:put(test_cases,[]), 
+	[];
+      Other ->
+	Other
+    end,
+  TestCase =
+    case shr_utils:get(test_case) of
+      T = [_|_] -> T;
+      _ -> []
+    end,
+  io:format
+    ("size of test_case is ~p size of test_cases is ~p~n",
+     [length(TestCase),length(TestCases)]),
+  case shr_utils:get(test_case) of
+    TestCase=[_|_] -> 
+      shr_utils:put(test_cases,TestCases++[TestCase]);
+    _ ->
+      ok
+  end,
+  shr_utils:put(test_case,[]),
   Counter =
     case shr_utils:get({?MODULE,counter}) of
       undefined -> 0;
@@ -151,7 +174,13 @@ start(Options,StartFun) ->
   end,
   Counter.
 
-start_post(_State,_,{'EXIT',_}) ->
+start_post(_State,_,{'EXIT',Reason}) ->
+  io:format
+    ("*** Error: start raised the exception ~p~n",
+     [Reason]),
+  io:format
+    ("Stacktrace:~n~p~n",
+     [erlang:get_stacktrace()]),
   false;
 start_post(_State,_,_Result) ->
   true.
@@ -215,6 +244,13 @@ do_cmds_pre(State,[Commands|_]) ->
 do_cmds(Commands,WaitTime) ->
   try
     ?TIMEDLOG("new round: cmds = ~p~n",[Commands]),
+    case shr_utils:get(failed) of
+      false ->
+	TestCase = shr_utils:get(test_case),
+	shr_utils:put(test_case,TestCase++[Commands]);
+      _ ->
+	ok
+    end,
     ParentPid =
       self(),
     Counter =
@@ -476,7 +512,6 @@ check_prop(Options) ->
   check_prop(fun prop_res/1,Options).
 
 check_prop(Prop,Options) ->
-  io:format("Prop is ~p Options is ~p~n",[Prop,Options]),
   EQCProp = eqc:on_output(fun eqc_printer/2,Prop(Options)),
   Result = eqc:quickcheck(EQCProp),
   if
@@ -488,45 +523,45 @@ check_prop(Prop,Options) ->
   Result.
 
 prop_res(Options) ->
+  shr_utils:put(test_cases,[]),
+  shr_utils:put(test_case,[]),
   ?FORALL
      (Cmds,
       ?LET(SCmds,
 	   (eqc_dynamic_cluster:dynamic_commands(?MODULE,init_state(Options))),
 	   SCmds),
-      ?CHECK_COMMANDS({H, DS, Res},
-		      ?MODULE,
-		      Cmds,
-		      begin
-			shr_utils:put(final_state,DS),
-			TestCase = commands_and_return_values(Cmds,H,Res),
-			TestCases = shr_utils:get(test_cases),
-			shr_utils:put(test_cases,TestCases++[TestCase]),
-			case proplists:get_value(stop_fun,Options) of
-			  Fun when is_function(Fun) ->
-			    Fun(Options);
-			  _ ->
-			    ok
-			end,
-			case proplists:get_value(print_trace,DS#state.options,false) of
-			  true ->
-			    print_testcase(Cmds,H,DS,Res);
-			  false ->
-			    ok
-			end,
-			if
-	                  (Res == ok) ->
-			    case proplists:get_value(print_testcase,Options,false) of
-			      true ->
-				print_testcase(Cmds,H,DS,Res);
-			      false ->
-				ok
-			    end,
-			    true;
-			  true ->
-			    print_counterexample(Cmds,H,DS,Res),
-			    false
-			end
-		      end)).
+      ?CHECK_COMMANDS
+	 ({H, DS, Res},
+	  ?MODULE,
+	  Cmds,
+	  begin
+	    case proplists:get_value(stop_fun,Options) of
+	      Fun when is_function(Fun) ->
+		Fun(Options);
+	      _ ->
+		ok
+	    end,
+	    case proplists:get_value(print_trace,DS#state.options,false) of
+	      true ->
+		print_testcase(Cmds,H,DS,Res);
+	      false ->
+		ok
+	    end,
+	    if
+	      (Res == ok) ->
+		case proplists:get_value(print_testcase,Options,false) of
+		  true ->
+		    print_testcase(Cmds,H,DS,Res);
+		  false ->
+		    ok
+		end,
+		true;
+	      true ->
+		shr_utils:put(failed,true),
+		print_counterexample(Cmds,H,DS,Res),
+		false
+	    end
+	  end)).
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
@@ -673,20 +708,25 @@ print_commands([{Call,Result}|Rest],State) ->
 print_call(Call,Result,State) ->
     case Call of
       {_,_,do_cmds,[Commands|_],_} ->
-	{Jobs,_} = Result,
-	{Prefix,Postfix} = 
-	  if
-	    length(Commands)>1 -> {"<< "," >>"};
-	    true -> {"",""}
-	  end,
-	io_lib:format
-	  ("~s~s~s",
-	   [Prefix,print_jobs(fun print_started_job_info/2,"",Jobs,State),Postfix]);
+	print_call_commands(Commands,Result,State);
+      {_,_,do_cmds,[Commands|_],_,_} ->
+	print_call_commands(Commands,Result,State);
       {_,_,start,_,_} ->
 	"";
       {_,_,Name,Args,_} ->
 	io_lib:format("~p ~p",[Name,Args])
     end.
+
+print_call_commands(Commands,Result,State) ->
+  {Jobs,_} = Result,
+  {Prefix,Postfix} = 
+    if
+      length(Commands)>1 -> {"<< "," >>"};
+      true -> {"",""}
+    end,
+  io_lib:format
+    ("~s~s~s",
+     [Prefix,print_jobs(fun print_started_job_info/2,"",Jobs,State),Postfix]).
 
 print_jobs(Jobs,State) ->
   io_lib:format
@@ -716,11 +756,52 @@ return_test_cases() ->
   shr_utils:get(test_cases).
 
 print_test_cases() ->
-  State = shr_utils:get(final_state),
-  io:format("Test cases:~n~n"),
   lists:foreach
-    (fun ({Call,Result}) -> 
-	 io:format("~n~p~n",[print_call(Call,Result,State)]) 
-     end,
-     return_test_cases).
+    (fun (TestCase) ->
+	 io:format
+	   ("~n~s~n",
+	    [
+	     combine
+	       ("  ",
+		lists:map
+		  (fun (Cmds) ->
+		       {Commands,Prefix,Postfix} =
+			 if
+			   is_list(Cmds), length(Cmds)>1 ->
+			     if
+			       length(Cmds)>1 -> {Cmds,"<< "," >>"};
+			       true -> {hd(Cmds),"",""}
+			     end;
+			   true -> {Cmds,"",""}
+			 end,
+		       io_lib:format
+			 ("~s~s~s",
+			  [Prefix,
+			   print_commands(Commands),
+			   Postfix])
+		   end, TestCase), "\n")
+	    ])
+     end, return_test_cases()).
 
+combine(_Pre,[],_Combinator) ->
+  "";
+combine(Pre,[Hd],_Combinator) ->
+  Pre++Hd;
+combine(Pre,[Hd|Rest],Combinator) ->
+  Pre++Hd++Combinator++combine(Pre,Rest,Combinator).
+
+print_commands([]) ->
+  "";
+print_commands([Cmd]) ->
+  {F,Args} = Cmd#command.call,
+  Target = Cmd#command.port,
+  io_lib:format("~s",[shr_utils:print_mfa({Target,F,Args})]);
+print_commands([Cmd|Rest]) ->
+  io_lib:format("~s,~s",[print_commands([Cmd]),print_commands(Rest)]).
+
+
+
+
+
+
+		    
