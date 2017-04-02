@@ -39,15 +39,7 @@ output_args(_State) ->
   [mergesorter].
 
 output_next(State,Result,_Args) ->
-  {_NewJobs,FinishedJobs} = Result,
-  case lists:any(fun (Job) -> 
-		     case Job#job.call of
-		       {_,output,_} -> true
-		     end
-		 end, FinishedJobs) of
-    true -> State;
-    false -> State#state{output_blocked=true}
-  end.
+  output_unblocked(Result,State#state{output_blocked=true}).
 
 in_pre(_State) ->
   true.
@@ -60,8 +52,23 @@ in_args(State) ->
 	      [mergesorter,N,eqc_gen:choose(B,E)])
        end).
 
-in_next(State,_Result,[N,Value]) ->
-  State#state{inputs=setelement(N,State#state.inputs,Value)}.
+in_next(State,Result,[N,Value]) ->
+  output_unblocked
+    (Result,
+     State#state{inputs=setelement(N,State#state.inputs,Value)}).
+
+output_unblocked(Result,State) ->
+  {_NewJobs,FinishedJobs} = Result,
+  case lists:any(fun (Job) -> 
+		     case Job#job.call of
+		       {_,output,_} -> true;
+		       {_,output,_,_} -> true;
+		       _ -> false
+		     end
+		 end, FinishedJobs) of
+    true -> State#state{output_blocked=false};
+    false -> State
+  end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%     
 	

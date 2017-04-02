@@ -121,30 +121,6 @@ start_args(State) ->
 start(Options,StartFun) ->
   Id = proplists:get_value(id,Options,unknown),
   shr_utils:put(?MODULE,{id,Id}),
-  TestCases =
-    case shr_utils:get(test_cases) of
-      undefined -> 
-	shr_utils:put(failed,false),
-	shr_utils:put(test_cases,[]), 
-	[];
-      Other ->
-	Other
-    end,
-  TestCase =
-    case shr_utils:get(test_case) of
-      T = [_|_] -> T;
-      _ -> []
-    end,
-  io:format
-    ("size of test_case is ~p size of test_cases is ~p~n",
-     [length(TestCase),length(TestCases)]),
-  case shr_utils:get(test_case) of
-    TestCase=[_|_] -> 
-      shr_utils:put(test_cases,TestCases++[TestCase]);
-    _ ->
-      ok
-  end,
-  shr_utils:put(test_case,[]),
   Counter =
     case shr_utils:get({?MODULE,counter}) of
       undefined -> 0;
@@ -153,6 +129,13 @@ start(Options,StartFun) ->
   shr_utils:put({?MODULE,counter},Counter + 1),
   shr_utils:put({?MODULE,jobs_alive},[]),
   shr_utils:setup_shr(),
+  case shr_utils:get(test_case) of
+    TestCase=[_|_] -> 
+      shr_utils:put(test_cases,shr_utils:get(test_cases)++[TestCase]),
+      shr_utils:put(test_case,[]);
+    [] -> 
+      ok
+  end,
   ?TIMEDLOG
     ("start_fun is ~p~n",
      [StartFun]),
@@ -512,7 +495,14 @@ check_prop(Options) ->
   check_prop(fun prop_res/1,Options).
 
 check_prop(Prop,Options) ->
-  EQCProp = eqc:on_output(fun eqc_printer/2,Prop(Options)),
+  io:format("initializing variables~n"),
+  shr_utils:put(test_cases,[]),
+  shr_utils:put(test_case,[]),
+  shr_utils:put(failed,false),
+  EQCProp =
+    eqc:on_test
+    (fun () -> io:format("starting...~n"), fun () -> ok end end,
+     eqc:on_output(fun eqc_printer/2,Prop(Options))),
   Result = eqc:quickcheck(EQCProp),
   if
     not(Result) ->
@@ -523,12 +513,11 @@ check_prop(Prop,Options) ->
   Result.
 
 prop_res(Options) ->
-  shr_utils:put(test_cases,[]),
-  shr_utils:put(test_case,[]),
   ?FORALL
      (Cmds,
       ?LET(SCmds,
-	   (eqc_dynamic_cluster:dynamic_commands(?MODULE,init_state(Options))),
+	   (eqc_dynamic_cluster:dynamic_commands
+	      (?MODULE,init_state(Options))),
 	   SCmds),
       ?CHECK_COMMANDS
 	 ({H, DS, Res},
@@ -562,8 +551,6 @@ prop_res(Options) ->
 		false
 	    end
 	  end)).
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

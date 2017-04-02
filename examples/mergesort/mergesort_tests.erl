@@ -61,7 +61,7 @@ test4() ->
 test(Specification,Options) ->
   shr_test_jobs:check_prop
     (fun (Opts) -> 
-	 ?LET(N,choose(2,20),test_prop(N,Specification,Opts))
+	 ?LET(N,choose(2,5),test_prop(N,Specification,Opts))
      end,
      Options).
 
