@@ -13,6 +13,7 @@
 -export([do_cmds_pre/1,do_cmds_args/1,do_cmds_pre/2,do_cmds/2,do_cmds_post/3,do_cmds_next/3]).
 -export([print_jobs/2]).
 -export([return_test_cases/0,print_test_cases/0]).
+-export([job_exited/1]).
 
 -export([command_parser/1]).
 -export([prop_res/1, check_prop/1, check_prop/2, eqc_printer/2]).

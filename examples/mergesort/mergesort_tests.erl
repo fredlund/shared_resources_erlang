@@ -12,12 +12,19 @@
 -export([debug/0]).
 -export([debug2/1]).
 -export([debug3/0]).
+-export([run/0]).
+-export([runs/0]).
+-export([runs2/0]).
+-export([runs3/0]).
 
 mergesort_N(N) ->
+  mergesort_N(N,shr_always).
+
+mergesort_N(N,Scheduler) ->
   N1Resources = 
     lists:map
       (fun (I) ->
-	   {r(I),{shr_resource,mergesort_2_shr}}
+	   {r(I),{shr_resource,mergesort_2_shr,Scheduler}}
        end, lists:seq(1,N-1)),
   #rsystem
     {
@@ -108,6 +115,110 @@ debug3() ->
     (fun () -> 
 	 shr_gen_resource:start({mergesort_n_buf_shr,[4]},shr_always,[]) 
      end).
+
+run() ->
+  shr_utils:setup_shr(),
+  shr_supervisor:add_childproc
+    (mergesorter,
+     fun () ->
+	 shr_composite_resource:start_link(mergesort_N(2),[],[])
+     end),
+  shr_run:print_run
+    (shr_run:run
+       (
+       [
+	{mergesorter,in,[1,1]}
+       ,{mergesorter,in,[1,2]}
+       ,{mergesorter,in,[1,3]}
+       ,{mergesorter,in,[2,4]}
+       ,{mergesorter,output,[]}
+       ,{mergesorter,output,[]}
+       ],
+       [no_env_wait]
+      )).
+
+runs() ->
+  Runs =
+    (shr_run:runs
+       (
+       [
+	{mergesorter,in,[1,1]}
+       ,{mergesorter,in,[1,2]}
+       ,{mergesorter,in,[1,3]}
+       ,{mergesorter,in,[2,4]}
+       ,{mergesorter,output,[]}
+       ,{mergesorter,output,[]}
+       ],
+       fun () ->
+	   shr_supervisor:add_childproc
+	     (mergesorter,
+	      fun () ->
+		  shr_composite_resource:start_link(mergesort_N(2),[],[])
+	      end)
+       end,
+       20*1000,
+       [no_env_wait]
+      )),
+  lists:foreach
+    (fun (Run) ->
+	 io:format("~n"),
+	 shr_run:print_run(Run)
+     end, Runs).
+
+runs2() ->
+  Runs =
+    (shr_run:runs
+       (
+       [
+	{mergesorter,in,[1,1]}
+       ,{mergesorter,in,[1,2]}
+       ,{mergesorter,in,[1,3]}
+       ,{mergesorter,in,[2,4]}
+       ,{mergesorter,output,[]}
+       ,{mergesorter,output,[]}
+       ],
+       fun () ->
+	   shr_supervisor:add_childproc
+	     (mergesorter,
+	      fun () ->
+		  shr_gen_resource:start_link({mergesort_n_buf_shr,[2]},shr_always,[])	      end)
+       end,
+       20*1000,
+       [no_env_wait]
+      )),
+  lists:foreach
+    (fun (Run) ->
+	 io:format("~n"),
+	 shr_run:print_run(Run)
+     end, Runs).
+
+runs3() ->
+  Runs =
+    (shr_run:runs
+       (
+       [
+	{mergesorter,in,[1,1]}
+       ,{mergesorter,in,[1,2]}
+       ,{mergesorter,in,[1,3]}
+       ,{mergesorter,in,[2,4]}
+       ,{mergesorter,output,[]}
+       ,{mergesorter,output,[]}
+       ],
+       fun () ->
+	   shr_supervisor:add_childproc
+	     (mergesorter,
+	      fun () ->
+		  shr_composite_resource:start_link(mergesort_N(2,{shr_queue_sched2,[mergesort_2_shr]}),[],[])
+	      end)
+       end,
+       20*1000,
+       [no_env_wait]
+      )),
+  lists:foreach
+    (fun (Run) ->
+	 io:format("~n"),
+	 shr_run:print_run(Run)
+     end, Runs).
 
 prop_gentest() ->
   ?FORALL

@@ -119,7 +119,14 @@ add_callrecord(CallRecord,State) ->
 
 -spec pick_call([#call_waitinginfo{}]) -> #call_waitinginfo{}.
 pick_call(Calls) ->
-  N = random:uniform(length(Calls)),
+  if
+    Calls==[] ->
+      io:format("*** Error: calls is emtpy~n"),
+      error(bad_resource);
+    true ->
+      ok
+  end,
+  N = uniform(length(Calls)),
   lists:nth(N,Calls).
 
 -spec enabled_calls(#state{}) -> [#call_waitinginfo{}].
@@ -157,8 +164,8 @@ post(Call,Result,State) ->
      ("~p: post(~s,~p) -> ~p~n",
       [self(),print_call(Call),Result,NewDataStates]),
   case NewDataStates of
-    {'$shr_nondeterministic',States} ->
-      N = random:uniform(length(NewDataStates)),
+    {'$shr_nondeterministic',_States} ->
+      N = uniform(length(NewDataStates)),
       NewDataState = lists:nth(N,NewDataStates),
       State#state{state=NewDataState};
     _ ->
@@ -281,6 +288,26 @@ print_args([Arg]) ->
 print_args([Arg|Rest]) ->
   io_lib:format("~p,~s",[Arg,print_args(Rest)]).
 
+get_rand_state() ->
+  Ran = shr_utils:get(?MODULE),
+  case Ran of
+    undefined ->
+      State = rand:seed_s(exsplus,os:timestamp()),
+      shr_utils:put(?MODULE,State),
+      State;
+    State -> 
+      State
+  end.
+  
+uniform(N) ->
+  State = get_rand_state(),
+  {U,NewState} = rand:uniform_s(N,State),
+  shr_utils:put(?MODULE,NewState),
+  if 
+    U>=1, U=<N -> ok;
+    true -> io:format("*** Error: uniform_s(~p,~p) returns ~p~n",[N,State,U])
+  end,
+  U.
 
 
 

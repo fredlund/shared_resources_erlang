@@ -13,7 +13,7 @@
 -module(shr_supervisor).
 
 -export([init/1,handle_call/3,handle_info/2,handle_cast/2,code_change/3,terminate/2]).
--export([add_childfun/1,add_childfun/2,add_childproc/1,add_childproc/2,restart/1,is_alive/0]).
+-export([ensure_started/1,add_childfun/1,add_childfun/2,add_childproc/1,add_childproc/2,restart/1,is_alive/0]).
 
 -record(state,{processes,terminated,timeout,reportTo}).
 -record(process,{pid,name}).
@@ -198,6 +198,14 @@ start_server() ->
 	 [?MODULE,Other]),
       exit(?MODULE)
   end. 
+
+ensure_started(ReportTo) ->
+  case whereis(?MODULE) of
+    undefined ->
+      start_server();
+    Pid when is_pid(Pid) ->
+      ok
+  end.
 
 do_restart(State,ReportTo) ->
   (do_kill(State))#state{reportTo=ReportTo}.
