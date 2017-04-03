@@ -9,6 +9,7 @@
 -export([test2/0]).
 -export([test3/0]).
 -export([test4/0]).
+-export([test5/0]).
 -export([debug/0]).
 -export([debug2/1]).
 -export([debug3/0]).
@@ -64,7 +65,12 @@ test3() ->
   test(mergesort_n_buf_shr,[{enforce_progress,true},no_par]).
 
 test4() ->
-  test(mergesort_n_buf_shr,[{enforce_progress,false},no_par,{generator,mergesort_gnr}]).
+  test(mergesort_n_buf_shr,[{enforce_progress,false},no_par,{generator,mergesort_gnr},{print_testcase,true}]).
+
+test5() ->
+  shr_test_jobs:check_prop
+    (fun (Opts) -> test_prop(2,mergesort_n_buf_shr,Opts) end,
+     [{hidden,["input"]},no_par,{generator,mergesort_gnr},{print_testcase,true}]).
 
 test(Specification,Options) ->
   shr_test_jobs:check_prop

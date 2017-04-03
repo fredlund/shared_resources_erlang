@@ -5,7 +5,7 @@
 -export([initial_state/2,postcondition/4,next_state/4]).
 
 %% private exports
--export([job_new_waiting/3, executable_jobs/5, job_next_states/6]).
+-export([job_new_waiting/3, executable_jobs/4, job_next_states/5]).
 
 %%-define(debug,true).
 -include("debug.hrl").
@@ -67,18 +67,12 @@ postcondition(State,_Args,Result,TS) ->
   end,
   try
     ?LOG("Postcondition: result=~p~n",[Result]),
-    case accept_incoming(add_new_jobs(NewJobs,State),FinishedJobs,safety,State) of
+    case accept_incoming(add_new_jobs(NewJobs,State),FinishedJobs,State) of
       false -> false;
-      _ -> case accept_incoming(add_new_jobs(NewJobs,State),FinishedJobs,both,State) of
-	     false -> false;
-	     {ok,NewState} -> 
-	       %% Finally check whether some non-finished job is finishable in all
-	       %% possible model states
-	       check_remaining_jobs
-		 (State,NewState#corr_res_state.states,TS,
-		  proplists:get_value
-		    (enforce_progress,State#corr_res_state.options,true))
-	   end
+      {ok,NewState} -> 
+	%% Finally check whether some non-finished job is finishable in all
+	%% possible model states
+	check_remaining_jobs(State,NewState#corr_res_state.states,TS)
     end of
     false ->
       io:format
@@ -106,7 +100,7 @@ next_state(State,Result,_,_TS) ->
 	State;
       true ->
 	{ok,NewState} =
-	  accept_incoming(add_new_jobs(NewJobs,State),FinishedJobs,both,State),
+	  accept_incoming(add_new_jobs(NewJobs,State),FinishedJobs,State),
 	NewState
     end
   catch _:_ ->
@@ -128,23 +122,10 @@ next_state(State,Result,_,_TS) ->
 %% Calculate the next model state (a set of possible states) given the
 %% set of finished jobs. 
 %%
-accept_incoming(State,FinishedJobs,WhatToCheck,OrigState) ->
+accept_incoming(State,FinishedJobs,OrigState) ->
   %% First always "accept" an incoming new job
   %% (since otherwise the execution would still be blocked)
-  FirstStatesAndJobs =
-    if
-      WhatToCheck==both ->
-	accept_one_incoming(State,FinishedJobs);
-      true ->
-	%% if we are not checking scheduling we can just move the incoming jobs to waiting
-	lists:map
-	  (fun (IndState) ->
-	       {IndState#onestate
-		{waiting=lists:usort(IndState#onestate.waiting++IndState#onestate.incoming),
-		 incoming=[]},
-		FinishedJobs}
-	   end, State#corr_res_state.states)
-    end,
+  FirstStatesAndJobs = accept_one_incoming(State,FinishedJobs),
   ?LOG("WC=~p after first:~n~p~n",[WhatToCheck,FirstStatesAndJobs]),
 
   %% Now finish all remaining jobs, FirstStatesAndJobs is
@@ -152,7 +133,7 @@ accept_incoming(State,FinishedJobs,WhatToCheck,OrigState) ->
   %% still a viable State, and RemainingJobs is the set of finished
   %% jobs remaining to execute; once no jobs remain the state moves to
   %% the third parameter.
-  case finish_jobs(State,FirstStatesAndJobs,[],WhatToCheck,OrigState) of
+  case finish_jobs(State,FirstStatesAndJobs,[],OrigState) of
     false -> false;
     {ok,FinishStates} -> {ok,State#corr_res_state{states=FinishStates}}
   end.
@@ -171,18 +152,19 @@ accept_one_incoming(State,FinishedJobs) ->
     (lists:map(fun (NewState) -> {NewState,FinishedJobs} end, NewStates)).
     
 %% Terminate when no non-finished states remain
-finish_jobs(_,[],FinishedStates,_WhatToCheck,_) ->
+finish_jobs(_,[],FinishedStates,_) ->
   ?LOG
-     ("WC=~p Finished=~p~n",
-      [_WhatToCheck,FinishedStates]),
+     ("Finished=~p~n",
+      [FinishedStates]),
   {ok,lists:usort(FinishedStates)};
-finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
+finish_jobs(State,StatesAndJobs,FinishedStates,OrigState) ->
   ?LOG("WC=~p States:~n~p~nFinished=~p~n",
-       [WhatToCheck,StatesAndJobs,FinishedStates]),
+       [StatesAndJobs,FinishedStates]),
   DataModule = State#corr_res_state.data_module,
   WaitingModule = State#corr_res_state.waiting_module,
   {NewStatesAndJobs,NewFinishedStates} =
-    %% Recurse over the list of possible states (and finished jobs in each state)
+    %% Recurse over the list of possible states 
+    %% (and finished jobs in each state)
     lists:foldl
       (fun ({IndState,FJobs},{NSJ,NF}) ->
 	   if
@@ -193,14 +175,12 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
 	     true ->
 	       %% Accepting moves
 	       NewAcceptStates =
-		 if
-		   WhatToCheck==both ->
-		     lists:map
-		       (fun (Job) -> {job_new_waiting(Job,IndState,WaitingModule),FJobs} end,
-			IndState#onestate.incoming);
-		   true ->
-		     []
-		 end,
+		 lists:map
+		   (fun (Job) -> 
+			{job_new_waiting(Job,IndState,WaitingModule),FJobs} 
+		    end,
+		    IndState#onestate.incoming),
+
 	       %% A call finishes
 	       NewFinishStates =
 		 lists:flatmap
@@ -211,7 +191,7 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
 			      %% We have to be careful here -- the job in the state
 			      %% has the waiting info while the completed job has
 			      %% the correct result
-			      job_is_executable(QueueJob,IndState,DataModule,WaitingModule,WhatToCheck)
+			      job_is_executable(QueueJob,IndState,DataModule,WaitingModule)
 			      andalso job_returns_correct_value(Job,IndState,DataModule) of
 			      true ->
 				NextStates = 
@@ -219,8 +199,7 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
 				    (QueueJob,Job#job.result,
 				     IndState,
 				     DataModule,
-				     WaitingModule,
-				     WhatToCheck),
+				     WaitingModule),
 				NewJobs =
 				  delete_job(Job,FJobs),
 				lists:map
@@ -241,7 +220,7 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
 	   end
        end, {[],FinishedStates}, StatesAndJobs),
   if
-    NewStatesAndJobs==[], NewFinishedStates==[], WhatToCheck==safety ->
+    NewStatesAndJobs==[], NewFinishedStates==[] ->
       io:format
 	("~n*** Error: there are calls that have been completed by the implementation "++
 	   "which cannot be completed by the model (when checking return values and without considering priority)~n"),
@@ -260,7 +239,6 @@ finish_jobs(State,StatesAndJobs,FinishedStates,WhatToCheck,OrigState) ->
 	(State,
 	 merge_jobs_and_states(NewStatesAndJobs),
 	 lists:usort(NewFinishedStates),
-	 WhatToCheck,
 	 OrigState)
   end.
 
@@ -306,24 +284,16 @@ print_schedule_state(ScheduleState,ScheduleSpec) ->
   end.
       
 %% Check whether remaining jobs (which have not finished) can be finished by the model 
-check_remaining_jobs(OrigState,FinalStates,TS,ForceProgress) ->
+check_remaining_jobs(OrigState,FinalStates,TS) ->
   ?LOG("FinalStates=~n~p~n",[FinalStates]),
   DataModule = OrigState#corr_res_state.data_module,
   WaitingModule = OrigState#corr_res_state.waiting_module,
   {SuccessStates,JobsPerFailedState} =
     lists:foldl
       (fun (IndState,{S,J}) ->
-	   case executable_jobs(IndState#onestate.waiting,IndState,DataModule,WaitingModule,both) of
+	   case executable_jobs(IndState#onestate.waiting,IndState,DataModule,WaitingModule) of
 	     [] -> {[IndState|S],J};
-	     Jobs -> 
-	       if
-		 ForceProgress -> {S,[Jobs|J]};
-		 true ->
-		   case urgent_jobs(Jobs) of
-		     [] -> {[IndState|S],J};
-		     _ -> {S,[Jobs|J]}
-		   end
-	       end
+	     Jobs -> {S,[Jobs|J]}
 	   end
        end, 
        {[],[]},
@@ -343,11 +313,11 @@ check_remaining_jobs(OrigState,FinalStates,TS,ForceProgress) ->
       true
   end.
 
-executable_jobs(Jobs,IndState,DataModule,WaitingModule,WhatToCheck) ->
-  lists:filter(fun (Job) -> job_is_executable(Job,IndState,DataModule,WaitingModule,WhatToCheck) end, Jobs).
-
-urgent_jobs(Jobs) ->
-  lists:filter(fun (Job) -> job_is_urgent(Job) end, Jobs).
+executable_jobs(Jobs,IndState,DataModule,WaitingModule) ->
+  lists:filter
+    (fun (Job) -> 
+	 job_is_executable(Job,IndState,DataModule,WaitingModule) 
+     end, Jobs).
 
 job_eq(Job1,Job2) ->
   (Job1#job.pid==Job2#job.pid) andalso (Job1#job.call==Job2#job.call).
@@ -370,12 +340,9 @@ delete_job(Job,JobList) ->
 merge_jobs_and_states(JobsAndStates) ->
   lists:usort(JobsAndStates).
 
-job_is_executable(Job,IndState,DataModule,WaitingModule,WhatToCheck) ->
+job_is_executable(Job,IndState,DataModule,WaitingModule) ->
   job_cpre_is_true(Job,IndState,DataModule)
-    andalso ((WhatToCheck==safety) orelse job_priority_enabled_is_true(Job,IndState,WaitingModule)).
-
-job_is_urgent(Job) ->
-  proplists:get_value(urgent,Job#job.info,false).
+    andalso job_priority_enabled_is_true(Job,IndState,WaitingModule).
 
 job_returns_correct_value(Job,IndState,DataModule) ->
   Result=
@@ -410,7 +377,7 @@ job_new_waiting(Job,IndState,WaitingModule) ->
      waiting=lists:usort([UpdatedJob|IndState#onestate.waiting])
    }.
 
-job_next_states(Job,Result,IndState,DataModule,WaitingModule,WhatToCheck) ->
+job_next_states(Job,Result,IndState,DataModule,WaitingModule) ->
   NewDataStates =
     case job_pre_is_true(Job,IndState,DataModule) of
       false ->
@@ -428,16 +395,11 @@ job_next_states(Job,Result,IndState,DataModule,WaitingModule,WhatToCheck) ->
   lists:map
     (fun (NewDataState) ->
 	 NewWaitState = 
-	   if
-	     WhatToCheck==both ->
-	       WaitingModule:post_waiting
-		 (resource_call(Job#job.call),
-		  Job#job.waitinfo,
-		  IndState#onestate.swait,
-		  NewDataState);
-	     true ->
-	       IndState#onestate.swait
-	   end,
+	   WaitingModule:post_waiting
+	     (resource_call(Job#job.call),
+	      Job#job.waitinfo,
+	      IndState#onestate.swait,
+	      NewDataState),
 	 IndState#onestate
 	   {
 	   swait=NewWaitState,

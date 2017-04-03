@@ -74,10 +74,7 @@ output_unblocked(Result,State) ->
 	
 print_finished_job_info(Job,_TS) ->
   {_,Operation,Args} = Job#job.call,
-  case Operation of
-    output -> "output";
-    _ -> io_lib:format("~p",[hd(Args)])
-  end.
+  shr_utils:print_mfa({Operation,Args}).
 
 print_started_job_info(Job,_TS) ->
   {_,F,Args} = Job#job.call,
