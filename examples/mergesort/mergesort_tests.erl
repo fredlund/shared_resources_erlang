@@ -14,6 +14,7 @@
 -export([debug3/0]).
 -export([run/0]).
 -export([runs/0]).
+-export([runs1/0]).
 -export([runs2/0]).
 -export([runs3/0]).
 
@@ -145,6 +146,34 @@ runs() ->
 	{mergesorter,in,[1,1]}
        ,{mergesorter,in,[1,2]}
        ,{mergesorter,in,[1,3]}
+       ,{mergesorter,in,[2,4]}
+       ,{mergesorter,output,[]}
+       ,{mergesorter,output,[]}
+       ],
+       fun () ->
+	   shr_supervisor:add_childproc
+	     (mergesorter,
+	      fun () ->
+		  shr_composite_resource:start_link(mergesort_N(2),[],[])
+	      end)
+       end,
+       20*1000,
+       [no_env_wait]
+      )),
+  lists:foreach
+    (fun (Run) ->
+	 io:format("~n"),
+	 shr_run:print_run(Run)
+     end, Runs).
+
+runs1() ->
+  Runs =
+    (shr_run:runs
+       (
+       [
+	{1,{mergesorter,in,[1,1]}}
+       ,{1,{mergesorter,in,[1,2]}}
+       ,{1,{mergesorter,in,[1,3]}}
        ,{mergesorter,in,[2,4]}
        ,{mergesorter,output,[]}
        ,{mergesorter,output,[]}

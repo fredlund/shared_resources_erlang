@@ -11,12 +11,13 @@
 
 -include("tester.hrl").
 
--record(state,{blocked_users=[],old_commands=[],time=0}).
+-record(state,{blocked_users=[],old_items=[],time=0}).
 
 run(TestCase) ->
   run(TestCase,[]).
 
 run(TestCase,Options) ->
+  ?TIMEDLOG("~n~n*** beginning run~n",[]),
   shr_supervisor:ensure_started(self()),
   shr_utils:put({?MODULE,jobs_alive},[]),
   shr_utils:put({?MODULE,counter},0),
@@ -25,8 +26,24 @@ run(TestCase,Options) ->
 run([],History,_Options,_State) ->
   History;
 run([TestItems|Rest],History,Options,State) ->
-  {HistoryItem,NewState} = run_test_items(TestItems,History,Options,State),
-  run(Rest,History++[HistoryItem],Options,NewState).
+  {HistoryItem={NewJobs,FinishedJobs},NewState} = 
+    run_test_items(TestItems,History,Options,State),
+  NewerState =
+    lists:foldl
+      (fun (Job,S) ->
+	   case proplists:get_value(user,Job#job.info) of
+	     User when is_integer(User) ->
+	       S#state{blocked_users=lists:delete(User,S#state.blocked_users)};
+	     _ ->
+	       S
+	   end
+       end, NewState, FinishedJobs),
+  NewHistory =
+    if
+      NewJobs==[] -> History;
+      true -> History++[HistoryItem]
+    end,
+  run(Rest,NewHistory,Options,NewerState).
 
 runs(TestCase,SetupFun,Time) ->
   runs(TestCase,SetupFun,Time,[]).
@@ -72,6 +89,7 @@ normalize_job(Job) ->
   {Job#job.call,Job#job.result}.
 
 run_test_items(PreTestItems,History,Options,State) ->
+  ?TIMEDLOG("run_test_items ~p State=~p~n",[PreTestItems,State]),
   TestItems =
     if 
       is_list(PreTestItems) -> PreTestItems;
@@ -79,26 +97,38 @@ run_test_items(PreTestItems,History,Options,State) ->
     end,
   {OldEnabledItems,NewState} = 
     lists:foldl
-      (fun (TestItem,{TItems,St}) ->
-	   case is_enabled(TestItem,TItems,State) of
+      (fun (TestItem,{TItems,S}) ->
+	   case is_enabled(TestItem,TItems,S) of
 	     true -> 
-	       {[TestItem|TestItems],
-		St#state
-		{old_commands=lists:delete(TestItem,St#state.old_commands)}};
+	       {[TestItem|TItems],
+		S#state{old_items=lists:delete(TestItem,S#state.old_items)}};
 	     false ->
-	       {TItems,St}
+	       {TItems,S}
 	   end
-       end, {[],State}, State#state.old_commands),
-  NewItems =
-    lists:filter
-      (fun (TestItem) -> 
-	   is_enabled(TestItem,OldEnabledItems,NewState) 
-       end, TestItems),
+       end, {[],State}, State#state.old_items),
+  {NewItems,NewBlockedItems} =
+    lists:foldl
+      (fun (TestItem,{NI,NB}) -> 
+	   case is_enabled(TestItem,OldEnabledItems,NewState) of
+	     true -> {[TestItem|NI],NB};
+	     false -> {NI,[TestItem|NB]}
+	   end
+       end, {[],[]}, TestItems),
+  AllItems =
+    OldEnabledItems++NewItems,
+  AllNewUsers =
+    users(AllItems),
+  NewerState =
+    NewState#state
+    {blocked_users=AllNewUsers++NewState#state.blocked_users,
+     old_items=NewState#state.old_items++NewBlockedItems},
+  ?TIMEDLOG("running ~p blocking ~p~n",[AllItems,AllNewUsers]),
   AllCommands =
-    lists:map(fun test_item_to_command/1, OldEnabledItems++NewItems),
-  run_commands(AllCommands,History,Options,NewState).
+    lists:map(fun test_item_to_command/1, AllItems),
+  run_commands(AllCommands,History,Options,NewerState).
 
 run_commands(Commands,_History,Options,State) ->
+  ?TIMEDLOG("run_commands(~p)~n",[Commands]),
   try
     WaitTime =
       ?COMPLETION_TIME,
@@ -145,7 +175,7 @@ run_commands(Commands,_History,Options,State) ->
 	 end, Commands),
     if
       NewJobs==[] ->
-	{[],[]};
+	{{[],[]},State};
       true ->
 	FinishedJobs = wait_for_jobs(NewJobs,WaitTime,Counter,EnvWait),
 	?TIMEDLOG("NewJobs=~p~nFinishedJobs=~p~n",[NewJobs,FinishedJobs]),
@@ -224,15 +254,15 @@ handle_exit(UntilTime,Pid,Reason,StackTrace,Counter,Finished,JobsAlive,EnvWait) 
 
 is_enabled(TestItem,TestItems,State) ->
   (not(user_call(TestItem))) orelse 
-    ((not(lists:member(user_id(State#state.blocked_users)))) 
+    ((not(lists:member(user_id(TestItem),State#state.blocked_users)))
      andalso (not(lists:member(user_id(TestItem),users(TestItems))))).
 
-user_call({User,{_Resource,{_Operation,_Args}}}) when is_integer(User) ->
+user_call({User,{_Resource,_Operation,_Args}}) when is_integer(User) ->
   true;
 user_call(_) ->
   false.
 
-user_id({User,{_Resource,{_Operation,_Args}}}) when is_integer(User) ->
+user_id({User,{_Resource,_Operation,_Args}}) when is_integer(User) ->
   User.
 
 users(TestItems) ->
@@ -249,9 +279,9 @@ users(TestItems) ->
 test_item_to_command(TestItem) ->
   case TestItem of
     {User,{Resource,Operation,Args}} when is_integer(User) ->
-      {User,#command{call={Operation,Args},port=Resource}};
+      #command{call={Operation,Args},port=Resource,options=[{user,User}]};
     {Resource,Operation,Args} ->
-      #command{call={Operation,Args},port=Resource}
+      #command{call={Operation,Args},port=Resource,options=[]}
   end.
 
 print_run([]) ->
