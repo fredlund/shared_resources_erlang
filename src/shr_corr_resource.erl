@@ -70,7 +70,7 @@ postcondition(State,_Args,Result,TS) ->
       ok
   end,
   try
-    case accept_incoming(add_new_jobs(NewJobs,State),FinishedJobs,State) of
+    case accept_incoming(add_new_jobs(NewJobs,State),FinishedJobs,State,TS) of
       false -> false;
       {ok,NewState} -> 
 	%% Finally check whether some non-finished job is finishable in all
@@ -106,7 +106,7 @@ next_state(State,Result,_,TS) ->
 	State;
       true ->
 	{ok,NewState} =
-	  accept_incoming(add_new_jobs(NewJobs,State),FinishedJobs,State),
+	  accept_incoming(add_new_jobs(NewJobs,State),FinishedJobs,State,TS),
 	RemainingStates =
 	  return_remaining_states(State,NewState#corr_res_state.states,TS),
 	NewState#corr_res_state{states=RemainingStates}
@@ -130,7 +130,7 @@ next_state(State,Result,_,TS) ->
 %% Calculate the next model state (a set of possible states) given the
 %% set of finished jobs. 
 %%
-accept_incoming(State,FinishedJobs,OrigState) ->
+accept_incoming(State,FinishedJobs,OrigState,TS) ->
   %% First always "accept" an incoming new job
   %% (since otherwise the execution would still be blocked)
   FirstStatesAndJobs = accept_one_incoming(State,FinishedJobs),
@@ -141,7 +141,7 @@ accept_incoming(State,FinishedJobs,OrigState) ->
   %% still a viable State, and RemainingJobs is the set of finished
   %% jobs remaining to execute; once no jobs remain the state moves to
   %% the third parameter.
-  case finish_jobs(State,FirstStatesAndJobs,[],OrigState) of
+  case finish_jobs(State,FirstStatesAndJobs,[],OrigState,FinishedJobs,TS) of
     false -> false;
     {ok,FinishStates} -> {ok,State#corr_res_state{states=FinishStates}}
   end.
@@ -160,12 +160,12 @@ accept_one_incoming(State,FinishedJobs) ->
     (lists:map(fun (NewState) -> {NewState,FinishedJobs} end, NewStates)).
     
 %% Terminate when no non-finished states remain
-finish_jobs(_,[],FinishedStates,_) ->
+finish_jobs(_,[],FinishedStates,_,_,_) ->
   ?LOG
      ("Finishing (no StatesJobs remain)... FinishedStates=~n  ~p~n~n",
       [FinishedStates]),
   {ok,lists:usort(FinishedStates)};
-finish_jobs(State,StatesAndJobs,FinishedStates,OrigState) ->
+finish_jobs(State,StatesAndJobs,FinishedStates,OrigState,FinishedJobs,TS) ->
   ?LOG("finish_jobs: StatesJobs:~n  ~p~nFinishedStates=~n  ~p~n~n",
        [StatesAndJobs,FinishedStates]),
 
@@ -184,11 +184,13 @@ finish_jobs(State,StatesAndJobs,FinishedStates,OrigState) ->
   if
     NewStatesAndJobs==[], NewFinishedStates==[] ->
       io:format
-	("~n*** Error: there are calls that have been completed "++
+	("~n*** Error: there are calls among~n~s~n"++
+   	   "that have been completed "++
 	   "by the implementation\n"++
 	   "which cannot be completed by the model\n"++
 	   "(when checking that implementation return values\n"++
-	   "are permitted by the specification)~n~n"),
+	   "are permitted by the specification)~n~n",
+	 [shr_test_jobs:print_jobs(nonsilent_jobs(FinishedJobs,State),TS)]),
       maybe_print_model_state(OrigState),
       false;
 
@@ -197,7 +199,7 @@ finish_jobs(State,StatesAndJobs,FinishedStates,OrigState) ->
 	(State,
 	 merge_jobs_and_states(NewStatesAndJobs),
 	 lists:usort(NewFinishedStates),
-	 OrigState)
+	 OrigState,FinishedJobs,TS)
   end.
 
 
@@ -319,7 +321,7 @@ print_model_state(ModelState,ModelSpec) ->
   try ModelSpec:print_state(ModelState)
   catch 
     _:undef ->
-      io_lib:format("~p",[ModelState]);
+      io_lib:format("~w",[ModelState]);
     Class:Reason -> 
       io:format
 	("*** WARNING: printing model state ~p using ~p fails due to~n~p:~p~n",
@@ -334,7 +336,7 @@ print_schedule_state(ScheduleState,ScheduleSpec) ->
   try ScheduleSpec:print_state(ScheduleState)
   catch 
     _:undef ->
-      io_lib:format("~p",[ScheduleState]);
+      io_lib:format("~w",[ScheduleState]);
     Class:Reason -> 
       io:format
 	("*** WARNING: printing schedule state ~p using ~p fails due to~n~p:~p~n",
