@@ -292,17 +292,13 @@ compute_transitions(#onestate{incoming=Incoming,waiting=Waiting}=IndState,
 		       lists:map
 			 (fun (NextState) -> {NextState,NewJobs} end,
 			  NextStates);
-		     false ->
-		       []
+		     false -> []
 		   end;
-		 false ->
-		   ?LOG
-		      ("Job ~p is missing~nIndState:~n~p~n",
-		       [Job,IndState]),
-		   throw(bad)
+		 false -> []
 	       end
 	   end,
 	   NonSilentFJobs),
+
       NewAcceptStates++NewFinishStates++NewSilentStates
   end.
 

@@ -135,7 +135,11 @@ start(Options,StartFun) ->
       shr_utils:put(test_cases,shr_utils:get(test_cases)++[TestCase]),
       shr_utils:put(test_case,[]);
     [] -> 
-      ok
+      ok;
+    undefined ->
+      shr_utils:put(test_cases,[]),
+      shr_utils:put(test_case,[]),
+      shr_utils:put(failed,false)
   end,
   ?TIMEDLOG
     ("start_fun is ~p~n",

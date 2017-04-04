@@ -9,7 +9,7 @@
 %%-define(debug,true).
 -include("../../src/debug.hrl").
 
--record(state,{inputs,output}).
+-record(state,{inputs}).
 
 initial_state([N],_) ->
   new_state(N).
@@ -18,7 +18,7 @@ pre(_Msg,_) ->
   ?TIMEDLOG("pre: ~p~n",[_Msg]),
   true.
 
-cpre(_Msg={in,[N,_Element]},State) ->
+cpre(_Msg={in,[_N,_Element]},_State) ->
   ?TIMEDLOG("cpre: ~p state=~s~n",[_Msg,print_state(State)]),
   true;
 cpre(_Msg={output,_},State) ->
@@ -65,7 +65,7 @@ return_value(_,_) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 print_state(State) ->
-  io_lib:format("~p",[State]).
+  io_lib:format("~w",[State]).
 
 empty() ->
   [].
@@ -110,19 +110,13 @@ find_mins(State) ->
      lists:zip(lists:seq(1,size(inputs(State))),elements(State))).
 
 new_state(N) ->
-  #state{inputs=list_to_tuple(lists:duplicate(N,empty())),output=empty()}.
+  #state{inputs=list_to_tuple(lists:duplicate(N,empty()))}.
 
 inputs(State) ->
   State#state.inputs.
 
-output(State) ->
-  State#state.output.
-
 set_inputs(Inputs,State) ->
   State#state{inputs=Inputs}.
-
-set_output(Output,State) ->
-  State#state{output=Output}.
 
 elements(State) ->
   tuple_to_list(State#state.inputs).

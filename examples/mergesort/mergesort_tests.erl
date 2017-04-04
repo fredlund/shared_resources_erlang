@@ -76,7 +76,8 @@ test5() ->
 test6() ->
   shr_test_jobs:check_prop
     (fun (Opts) -> test_prop(2,mergesort_n_buf_shr,Opts) end,
-     [{imp_scheduler,{shr_queue_sched2,[mergesort_2_shr]}},{silent,[{mergesorter,in}]},no_par,{generator,mergesort_gnr}]).
+     [{imp_scheduler,{shr_queue_sched2,[mergesort_2_shr]}},
+      {silent,[{mergesorter,in}]},no_par,{generator,mergesort_gnr}]).
 
 test(Specification,Options) ->
   shr_test_jobs:check_prop
@@ -269,8 +270,8 @@ runs3() ->
 
 prop_gentest() ->
   ?FORALL
-     (Test={_Specification,_EnforceProgress},
-      {oneof([mergesort_n_shr,mergesort_n_buf_shr]),bool()},
+     (Test,
+      oneof([mergesort_n_shr,mergesort_n_buf_shr]),
       begin
 	ShouldSucceed = should_succeed(Test),
 	io:format("Testing ~p; should succeed=~p~n",[Test,ShouldSucceed]),
@@ -287,7 +288,7 @@ prop_gentest() ->
 	InnerSuccess
       end).
 
-should_succeed({mergesort_n_buf_shr,false}) ->
+should_succeed(mergesort_n_buf_shr) ->
   true;
 should_succeed(_) ->
   false.
@@ -298,14 +299,14 @@ check_test(Test) ->
 succeeds(Result) ->
   true == Result.
 
-innerprop({Specification,EnforceProgress}) ->
+innerprop(Specification) ->
   ?FORALL
      ({N,NoPar},
       {eqc_gen:choose(2,20),oneof([[no_par],[]])},
       begin
 	Options =
-	  [{enforce_progress,EnforceProgress}]
-	  ++ NoPar,
+	  NoPar
+	  ++ [{silent,[{mergesorter,in}]}],
 	eqc:on_output
 	  (fun shr_test_jobs:eqc_printer/2,
 	   test_prop(N,Specification,Options))
