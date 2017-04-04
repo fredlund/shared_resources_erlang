@@ -9,6 +9,9 @@
 
 -record(state,{statemodule,queue,time}).
 
+%%-define(debug,true).
+-include("../../src/debug.hrl").
+
 initial_state([StateMod],_) ->
   #state{statemodule=StateMod,queue=orddict:new(),time=0}.
 
@@ -18,11 +21,18 @@ new_waiting(Call,State,_DataState) ->
    State#state{queue=State#state.queue++[{Time,Call}],time=Time+1}}.
 
 priority_enabled(_Call,Time,State,DataState) ->
-  false ==
+  ?LOG
+    ("priority_enabled(~p) @time ~p;~nstate=~p~nDataState=~p~n",
+     [_Call,Time,State,DataState]),
+  AnyEarlier = 
     any_earlier
       (Time,
        fun (_,Call) -> (State#state.statemodule):cpre(Call,DataState) end,
-       State#state.queue).
+       State#state.queue),
+  ?LOG
+     ("priority_enabled(~p) @time ~p; earlier=~p~n",
+      [_Call,Time,AnyEarlier]),
+  false == AnyEarlier.
 
 post_waiting(Call,Time,State,_DataState) ->
   State#state{queue=State#state.queue--[{Time,Call}]}.

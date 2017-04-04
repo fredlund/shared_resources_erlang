@@ -215,7 +215,9 @@ compute_transitions(#onestate{incoming=Incoming,waiting=Waiting}=IndState,
       (fun (Job) -> 
 	   job_is_executable(Job,IndState,DataModule,WaitingModule)
        end, SilentJobs),
-  ?LOG("silent_executables=~n~p~n~n",[SilentExecutables]),
+  ?LOG
+     ("silent_jobs=~n~p~nsilent_executables=~n~p~n~n",
+      [SilentJobs,SilentExecutables]),
   
   NonSilentFJobs = 
     nonsilent_jobs(FJobs,State),

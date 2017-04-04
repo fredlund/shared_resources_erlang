@@ -76,7 +76,7 @@ test5() ->
 test6() ->
   shr_test_jobs:check_prop
     (fun (Opts) -> test_prop(2,mergesort_n_buf_shr,Opts) end,
-     [{scheduler,{shr_queue_sched2,[mergesort_2_shr]}},{silent,[{mergesorter,in}]},no_par,{generator,mergesort_gnr}]).
+     [{imp_scheduler,{shr_queue_sched2,[mergesort_2_shr]}},{silent,[{mergesorter,in}]},no_par,{generator,mergesort_gnr}]).
 
 test(Specification,Options) ->
   shr_test_jobs:check_prop
@@ -95,8 +95,8 @@ test_prop(N,Specification,Options) ->
       G ->
 	G
     end,
-  Scheduler =
-    case proplists:get_value(scheduler,Options) of
+  ImpScheduler =
+    case proplists:get_value(imp_scheduler,Options) of
       undefined -> shr_always;
       Sched -> Sched
     end,
@@ -109,11 +109,11 @@ test_prop(N,Specification,Options) ->
 	     shr_supervisor:add_childproc
 	       (mergesorter,
 		fun () ->
-		    shr_composite_resource:start_link(mergesort_N(N,Scheduler),[],[])
+		    shr_composite_resource:start_link
+		      (mergesort_N(N,ImpScheduler),[],[])
 		end)
 	 end,
        resource={Specification,[N]},
-       scheduler=Scheduler,
        options=Options
      }).
   

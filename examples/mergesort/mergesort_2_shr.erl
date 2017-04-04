@@ -17,10 +17,10 @@ pre(_Msg,_) ->
   ?TIMEDLOG("pre: ~p~n",[_Msg]),
   true.
 
-cpre(_Msg={left,[N]},State) ->
+cpre(_Msg={left,[_N]},State) ->
   ?TIMEDLOG("cpre: ~p state=~s~n",[_Msg,print_state(State)]),
   is_empty(left(State));
-cpre(_Msg={right,[N]},State) ->
+cpre(_Msg={right,[_N]},State) ->
   ?TIMEDLOG("cpre: ~p state=~s~n",[_Msg,print_state(State)]),
   is_empty(right(State));
 cpre(_Msg={output,_},State) ->
@@ -49,7 +49,7 @@ post(_Msg={output,_},_Return,State) ->
 
 return(State,_Msg={output,_},Result) ->
   ?TIMEDLOG("return: ~p~n",[_Msg]),
-  Min = min(left(State),right(State)),
+  Min = mmin(left(State),right(State)),
   Result == Min;
 return(_,_Call,Result) ->
   not_exception(Result).
@@ -62,7 +62,7 @@ not_exception(Result) ->
 
 return_value(_Msg={output,_},State) ->
   ?TIMEDLOG("return_value: ~p~n",[_Msg]),
-  min(left(State),right(State));
+  mmin(left(State),right(State));
 return_value(_,_) ->
   underspecified.
 
@@ -94,11 +94,11 @@ less(_,eod) ->
 less(Element1,Element2) ->
   Element1<Element2.
 
-min(Element,eod) ->
+mmin(Element,eod) ->
   Element;
-min(eod,Element) ->
+mmin(eod,Element) ->
   Element;
-min(Element1,Element2) ->
+mmin(Element1,Element2) ->
   if
     Element1<Element2 ->
       Element1;
@@ -114,16 +114,30 @@ new_state() ->
     }.
 
 left(State) ->
-  State#state.left.
+  valid_value(State#state.left).
 
 right(State) ->
-  State#state.right.
+  valid_value(State#state.right).
 
 set_left(Element,State) ->
-  State#state{left=Element}.
+  State#state{left=valid_value(Element)}.
 
 set_right(Element,State) ->
-  State#state{right=Element}.
+  State#state{right=valid_value(Element)}.
+
+valid_value(eod) ->
+  eod;
+valid_value(empty) ->
+  empty;
+valid_value(N) when is_integer(N) ->
+  N;
+valid_value(Other) ->
+  io:format("*** Error: ~p: valid_value(~w)~n",[?MODULE,Other]),
+  error(badarg).
+
+
+
+
 
 
 
