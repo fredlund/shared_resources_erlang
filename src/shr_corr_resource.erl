@@ -41,7 +41,11 @@ initial_state(_,Options) ->
 
 postcondition(State,_Args,Result,TS) ->
   {NewJobs,FinishedJobs} = Result,
-  ?TIMEDLOG("NewJobs=~p~nFinishedJobs=~p~n",[NewJobs,FinishedJobs]),
+  ?RAWLOG
+    ("~n~n******************** postcondition ********************~n~n",[]),
+  ?LOG
+     ("postcondition: NewJobs=~n  ~p~nFinishedJobs=~p~n~n",
+      [NewJobs,FinishedJobs]),
   if
     NewJobs==[] ->
       if
@@ -60,23 +64,25 @@ postcondition(State,_Args,Result,TS) ->
   case proplists:get_value(verbose,State#corr_res_state.options,false) of
     true ->
       io:format
-	("~npostcondition: new jobs=~n~p~ncompleted jobs=~n~p~nstate=~n~p~n",
+	("~~nnpostcondition: new jobs=~n~p~ncompleted jobs=~n~p~nstate=~n~p~n",
 	 [NewJobs,FinishedJobs,State]);
     false ->
       ok
   end,
   try
-    ?LOG("Postcondition: result=~p~n",[Result]),
     case accept_incoming(add_new_jobs(NewJobs,State),FinishedJobs,State) of
       false -> false;
       {ok,NewState} -> 
 	%% Finally check whether some non-finished job is finishable in all
 	%% possible model states
-	check_remaining_jobs(State,NewState#corr_res_state.states,TS)
+	case return_remaining_states(State,NewState#corr_res_state.states,TS) of
+	  [] -> false;
+	  _ -> true
+	end
     end of
     false ->
       io:format
-	("postcondition false after starting new jobs:~n  ~s~n",
+	("~n*** Error: postcondition false after starting new jobs:~n  ~s~n~n",
 	   [shr_test_jobs:print_jobs(NewJobs,TS)]),
         false;
       true ->
@@ -92,7 +98,7 @@ postcondition(State,_Args,Result,TS) ->
   end
   end.
 
-next_state(State,Result,_,_TS) ->
+next_state(State,Result,_,TS) ->
   try
     {NewJobs,FinishedJobs} = Result,
     if
@@ -101,7 +107,9 @@ next_state(State,Result,_,_TS) ->
       true ->
 	{ok,NewState} =
 	  accept_incoming(add_new_jobs(NewJobs,State),FinishedJobs,State),
-	NewState
+	RemainingStates =
+	  return_remaining_states(State,NewState#corr_res_state.states,TS),
+	NewState#corr_res_state{states=RemainingStates}
     end
   catch _:_ ->
       io:format("~n*** Warning: next raises exception~n"),
@@ -126,7 +134,7 @@ accept_incoming(State,FinishedJobs,OrigState) ->
   %% First always "accept" an incoming new job
   %% (since otherwise the execution would still be blocked)
   FirstStatesAndJobs = accept_one_incoming(State,FinishedJobs),
-  ?LOG("WC=~p after first:~n~p~n",[WhatToCheck,FirstStatesAndJobs]),
+  ?LOG("after first:~n~p~n~n",[FirstStatesAndJobs]),
 
   %% Now finish all remaining jobs, FirstStatesAndJobs is
   %% a list of pairs (State,RemainingJobs) where State is
@@ -154,83 +162,33 @@ accept_one_incoming(State,FinishedJobs) ->
 %% Terminate when no non-finished states remain
 finish_jobs(_,[],FinishedStates,_) ->
   ?LOG
-     ("Finished=~p~n",
+     ("Finishing (no StatesJobs remain)... FinishedStates=~n  ~p~n~n",
       [FinishedStates]),
   {ok,lists:usort(FinishedStates)};
 finish_jobs(State,StatesAndJobs,FinishedStates,OrigState) ->
-  ?LOG("WC=~p States:~n~p~nFinished=~p~n",
+  ?LOG("finish_jobs: StatesJobs:~n  ~p~nFinishedStates=~n  ~p~n~n",
        [StatesAndJobs,FinishedStates]),
-  DataModule = State#corr_res_state.data_module,
-  WaitingModule = State#corr_res_state.waiting_module,
+
+  %% Recurse over the list of possible states 
+  %% (and finished jobs in each state)
   {NewStatesAndJobs,NewFinishedStates} =
-    %% Recurse over the list of possible states 
-    %% (and finished jobs in each state)
     lists:foldl
       (fun ({IndState,FJobs},{NSJ,NF}) ->
-	   if
-	     %% Nothing to do when no more jobs, and incoming is empty; 
-	     %% move state to finished states
-	     FJobs==[], IndState#onestate.incoming==[] ->
+	   case compute_transitions(IndState,FJobs,State) of
+	     terminated ->
 	       {NSJ,[IndState|NF]};
-	     true ->
-	       %% Accepting moves
-	       NewAcceptStates =
-		 lists:map
-		   (fun (Job) -> 
-			{job_new_waiting(Job,IndState,WaitingModule),FJobs} 
-		    end,
-		    IndState#onestate.incoming),
-
-	       %% A call finishes
-	       NewFinishStates =
-		 lists:flatmap
-		   (fun (Job) ->
-			case find_job(Job,IndState#onestate.waiting) of
-			  {ok,QueueJob} ->
-			    case
-			      %% We have to be careful here -- the job in the state
-			      %% has the waiting info while the completed job has
-			      %% the correct result
-			      job_is_executable(QueueJob,IndState,DataModule,WaitingModule)
-			      andalso job_returns_correct_value(Job,IndState,DataModule) of
-			      true ->
-				NextStates = 
-				  job_next_states
-				    (QueueJob,Job#job.result,
-				     IndState,
-				     DataModule,
-				     WaitingModule),
-				NewJobs =
-				  delete_job(Job,FJobs),
-				lists:map
-				  (fun (NextState) -> {NextState,NewJobs} end,
-				   NextStates);
-			      false ->
-				[]
-			    end;
-			  false ->
-			    ?LOG
-			      ("Job ~p is missing~nIndState:~n~p~n",
-			       [Job,IndState]),
-			    []
-			end
-		    end,
-		    FJobs),
-	       {NewAcceptStates++NewFinishStates++NSJ,NF}
+	     NewStatesJobs when is_list(NewStatesJobs) ->
+	       {NewStatesJobs++NSJ,NF}
 	   end
        end, {[],FinishedStates}, StatesAndJobs),
   if
     NewStatesAndJobs==[], NewFinishedStates==[] ->
       io:format
-	("~n*** Error: there are calls that have been completed by the implementation "++
-	   "which cannot be completed by the model (when checking return values and without considering priority)~n"),
-      maybe_print_model_state(OrigState),
-      false;
-
-    NewStatesAndJobs==[], NewFinishedStates==[] -> 
-      io:format
-	("~n*** Error: there are calls that have been completed by the implementation "++
-	   "which cannot be completed by the model (when considering priority)~n"),
+	("~n*** Error: there are calls that have been completed "++
+	   "by the implementation\n"++
+	   "which cannot be completed by the model\n"++
+	   "(when checking that implementation return values\n"++
+	   "are permitted by the specification)~n~n"),
       maybe_print_model_state(OrigState),
       false;
 
@@ -240,6 +198,108 @@ finish_jobs(State,StatesAndJobs,FinishedStates,OrigState) ->
 	 merge_jobs_and_states(NewStatesAndJobs),
 	 lists:usort(NewFinishedStates),
 	 OrigState)
+  end.
+
+
+compute_transitions(#onestate{incoming=Incoming,waiting=Waiting}=IndState,
+		    FJobs,State) ->
+
+  DataModule = State#corr_res_state.data_module,
+  WaitingModule = State#corr_res_state.waiting_module,
+
+  %% Is there a silent job executable
+  SilentJobs =
+    silent_jobs(Waiting,State),
+  SilentExecutables =
+    lists:filter
+      (fun (Job) -> 
+	   job_is_executable(Job,IndState,DataModule,WaitingModule)
+       end, SilentJobs),
+  ?LOG("silent_executables=~n~p~n~n",[SilentExecutables]),
+  
+  NonSilentFJobs = 
+    nonsilent_jobs(FJobs,State),
+
+  if
+    %% Nothing to do when no more jobs has terminated, 
+    %% incoming is empty,
+    %% and no silent call is executable -->
+    %% move state to finished states
+    NonSilentFJobs==[], Incoming==[], SilentExecutables==[] ->
+      terminated;
+    
+    true ->
+      
+      %% Calculate accepting moves
+      NewAcceptStates =
+	lists:map
+	  (fun (Job) -> 
+	       {job_new_waiting(Job,IndState,WaitingModule),FJobs} 
+	   end,
+	   Incoming),
+      
+      %% Silent moves
+      NewSilentStates =
+	lists:flatmap
+	  (fun (Job) ->
+	       ReturnValue =
+		 job_returns
+		   (Job,
+		    IndState,
+		    DataModule),
+	       
+	       NextStates =
+		 job_next_states
+		   (Job,
+		    %% May be underspecified
+		    ReturnValue,
+		    IndState,
+		    DataModule,
+		    WaitingModule),
+	       lists:map
+		 (fun (NextState) -> {NextState,FJobs} end,
+		  NextStates)
+	   end,
+	   SilentExecutables),
+      
+      %% A call finishes
+      NewFinishStates =
+	lists:flatmap
+	  (fun (Job) ->
+	       case find_job(Job,Waiting) of
+		 {ok,QueueJob} ->
+		   %% We have to be careful -- the job in the state
+		   %% has the waiting info while the completed job has
+		   %% the correct result
+		   case
+		     job_is_executable(QueueJob,IndState,
+				       DataModule,WaitingModule)
+		     andalso job_returns_correct_value(Job,IndState,
+						       DataModule) of
+		     true ->
+		       NextStates = 
+			 job_next_states
+			   (QueueJob,Job#job.result,
+			    IndState,
+			    DataModule,
+			    WaitingModule),
+		       NewJobs =
+			 delete_job(Job,FJobs),
+		       lists:map
+			 (fun (NextState) -> {NextState,NewJobs} end,
+			  NextStates);
+		     false ->
+		       []
+		   end;
+		 false ->
+		   ?LOG
+		      ("Job ~p is missing~nIndState:~n~p~n",
+		       [Job,IndState]),
+		   throw(bad)
+	       end
+	   end,
+	   NonSilentFJobs),
+      NewAcceptStates++NewFinishStates++NewSilentStates
   end.
 
 maybe_print_model_state(State) ->
@@ -283,15 +343,20 @@ print_schedule_state(ScheduleState,ScheduleSpec) ->
       io_lib:format("~p",[ScheduleState]) 
   end.
       
-%% Check whether remaining jobs (which have not finished) can be finished by the model 
-check_remaining_jobs(OrigState,FinalStates,TS) ->
+%% Returns the states which are such that a job
+%% can be executed, i.e., which since the implementation did NOT
+%% execute that job signals an incompatible state.
+%% There should be no silent jobs still executable, since they presumably
+%% were already executed, so no special care with silent jobs is needed here.
+%% If all states can execute a non-silent action, an error is printed.
+return_remaining_states(OrigState,FinalStates,TS) ->
   ?LOG("FinalStates=~n~p~n",[FinalStates]),
   DataModule = OrigState#corr_res_state.data_module,
   WaitingModule = OrigState#corr_res_state.waiting_module,
   {SuccessStates,JobsPerFailedState} =
     lists:foldl
-      (fun (IndState,{S,J}) ->
-	   case executable_jobs(IndState#onestate.waiting,IndState,DataModule,WaitingModule) of
+      (fun (#onestate{waiting=Waiting}=IndState,{S,J}) ->
+	   case executable_jobs(Waiting,IndState,DataModule,WaitingModule) of
 	     [] -> {[IndState|S],J};
 	     Jobs -> {S,[Jobs|J]}
 	   end
@@ -301,17 +366,17 @@ check_remaining_jobs(OrigState,FinalStates,TS) ->
   if
     SuccessStates==[] -> 
       io:format
-	("~n*** Error: at least one of the following calls can be completed by the model "++
-	   "but have not been completed:~n~s~n",
+	("~n*** Error: at least one of the following calls can be "++
+	   "completed by the model but have not been completed:~n~s~n",
 	 [shr_test_jobs:print_jobs
 	    (lists:usort
 	       (fun (Job1,Job2) -> Job1#job.call == Job2#job.call end,
 		lists:flatten(JobsPerFailedState)), TS)]),
-      maybe_print_model_state(OrigState),
-      false;
+      maybe_print_model_state(OrigState);
     true ->
-      true
-  end.
+      ok
+  end,
+  SuccessStates.
 
 executable_jobs(Jobs,IndState,DataModule,WaitingModule) ->
   lists:filter
@@ -334,6 +399,22 @@ find(F,[Elem|Rest]) ->
       find(F,Rest)
   end.
 
+silent_jobs(Jobs,State) ->
+  SilentCalls = proplists:get_value(silent,State#corr_res_state.options,[]),
+  lists:filter
+    (fun (Job) ->
+	 {Resource,Operation,_} = Job#job.call,
+	 lists:member({Resource,Operation},SilentCalls)
+     end, Jobs).
+
+nonsilent_jobs(Jobs,State) ->
+  SilentCalls = proplists:get_value(silent,State#corr_res_state.options,[]),
+  lists:filter
+    (fun (Job) ->
+	 {Resource,Operation,_} = Job#job.call,
+	 not(lists:member({Resource,Operation},SilentCalls))
+     end, Jobs).
+
 delete_job(Job,JobList) ->
   lists:filter(fun (ListJob) -> not(job_eq(ListJob,Job)) end, JobList).
 
@@ -344,10 +425,19 @@ job_is_executable(Job,IndState,DataModule,WaitingModule) ->
   job_cpre_is_true(Job,IndState,DataModule)
     andalso job_priority_enabled_is_true(Job,IndState,WaitingModule).
 
+job_returns(Job,IndState,DataModule) ->
+  Result =
+    DataModule:return_value
+      (IndState#onestate.sdata,resource_call(Job#job.call)),
+  ?LOG
+    ("Job ~p returns value ~p~n",
+     [Job#job.call,Result]),
+  Result.
+  
 job_returns_correct_value(Job,IndState,DataModule) ->
-  Result=
-  DataModule:return
-    (IndState#onestate.sdata,resource_call(Job#job.call),Job#job.result),
+  Result =
+    DataModule:return
+      (IndState#onestate.sdata,resource_call(Job#job.call),Job#job.result),
   ?LOG
     ("Job ~p returns correct value ~p? ~p~n",
      [Job#job.call,Job#job.result,Result]),

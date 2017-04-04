@@ -496,7 +496,6 @@ check_prop(Options) ->
   check_prop(fun prop_res/1,Options).
 
 check_prop(Prop,Options) ->
-  io:format("initializing variables~n"),
   shr_utils:put(test_cases,[]),
   shr_utils:put(test_case,[]),
   shr_utils:put(failed,false),
