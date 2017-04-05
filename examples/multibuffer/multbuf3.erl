@@ -49,6 +49,3 @@ runJobs(Max,L,[Call|Rest],Seen) ->
       end
   end.
   
-%%% multibuffer_tests:check_test({multbuf3,{shr_queue_sched2,[multibuffer_shr]},true}).
-%%% 
-%%% 

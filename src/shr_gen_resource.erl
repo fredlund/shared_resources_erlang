@@ -44,7 +44,7 @@ init([StateSpec,WaitSpec|Options]) ->
   StateMod = shr_utils:module(StateSpec),
   WaitMod = shr_utils:module(WaitSpec),
   State = shr_utils:initial_state(StateSpec,Options),
-  WaitState = shr_utils:initial_state(WaitSpec,Options),
+  WaitState = shr_utils:initial_state(WaitSpec,[{state_module,StateMod}|Options]),
   {ok,
    #state
    {state_module=StateMod, wait_module=WaitMod,

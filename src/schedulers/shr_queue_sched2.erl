@@ -12,7 +12,8 @@
 %%-define(debug,true).
 -include("../../src/debug.hrl").
 
-initial_state([StateMod],_) ->
+initial_state(_,Options) ->
+  StateMod = proplists:get_value(state_module,Options),
   #state{statemodule=StateMod,queue=orddict:new(),time=0}.
 
 new_waiting(Call,State,_DataState) ->

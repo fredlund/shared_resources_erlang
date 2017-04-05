@@ -9,7 +9,8 @@
 
 -record(state,{statemodule,counter,enabled,not_enabled,time}).
 
-initial_state([StateMod],_) ->
+initial_state(_,Options) ->
+  StateMod = proplists:get_value(state_module,Options),
   #state{statemodule=StateMod,counter=0,enabled=[],not_enabled=[],time=0}.
 
 new_waiting(Call,State,DataState) ->

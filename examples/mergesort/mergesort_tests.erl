@@ -76,8 +76,10 @@ test5() ->
 test6() ->
   shr_test_jobs:check_prop
     (fun (Opts) -> test_prop(2,mergesort_n_buf_shr,Opts) end,
-     [{imp_scheduler,{shr_queue_sched2,[mergesort_2_shr]}},
-      {silent,[{mergesorter,in}]},no_par,{generator,mergesort_gnr}]).
+     [{imp_scheduler,shr_queue_sched2},
+      {silent,[{mergesorter,in}]},
+      no_par,
+      {generator,mergesort_gnr}]).
 
 test(Specification,Options) ->
   shr_test_jobs:check_prop
@@ -256,7 +258,8 @@ runs3() ->
 	   shr_supervisor:add_childproc
 	     (mergesorter,
 	      fun () ->
-		  shr_composite_resource:start_link(mergesort_N(2,{shr_queue_sched2,[mergesort_2_shr]}),[],[])
+		  shr_composite_resource:start_link
+		    (mergesort_N(2,shr_queue_sched2),[],[])
 	      end)
        end,
        20*1000,
@@ -271,7 +274,12 @@ runs3() ->
 prop_gentest() ->
   ?FORALL
      (Test,
-      oneof([mergesort_n_shr,mergesort_n_buf_shr]),
+      {
+	oneof([mergesort_n_shr,mergesort_n_buf_shr])
+      ,oneof([shr_always,shr_queue_sched2,shr_queue_sched1])
+      ,bool()
+      ,oneof([mergesort_gnr,fsm])
+      },
       begin
 	ShouldSucceed = should_succeed(Test),
 	io:format("Testing ~p; should succeed=~p~n",[Test,ShouldSucceed]),
@@ -288,10 +296,12 @@ prop_gentest() ->
 	InnerSuccess
       end).
 
-should_succeed(mergesort_n_buf_shr) ->
-  true;
-should_succeed(_) ->
-  false.
+should_succeed({Specification,ImplementationScheduler,Hide,Generator}) ->
+  Hide 
+    andalso (Specification==mergesort_n_buf_shr)
+    andalso 
+      ((ImplementationScheduler=/=shr_always)
+       orelse (Generator =/= mergesort_gnr)).
 
 check_test(Test) ->     
   eqc:counterexample(innerprop(Test)).
@@ -299,14 +309,31 @@ check_test(Test) ->
 succeeds(Result) ->
   true == Result.
 
-innerprop(Specification) ->
+innerprop({Specification,ImplementationScheduler,Hide,Generator}) ->
   ?FORALL
      ({N,NoPar},
       {eqc_gen:choose(2,20),oneof([[no_par],[]])},
       begin
+	HideOption =
+	  if 
+	    Hide -> [{silent,[{mergesorter,in}]}];
+	    true -> []
+	  end,
+	ImplementationSchedulerOption =
+	  [{imp_scheduler,ImplementationScheduler}],
+	GeneratorOption =
+	  if
+	    Generator==fsm ->
+	      [{shr_gnr_fsms,
+		[{N,mergesort_gnr_fsm_input},mergesort_gnr_fsm_output]}];
+	    true ->
+	      [{generator,Generator}]
+	  end,
 	Options =
 	  NoPar
-	  ++ [{silent,[{mergesorter,in}]}],
+	  ++ HideOption
+	  ++ ImplementationSchedulerOption
+	  ++ GeneratorOption,
 	eqc:on_output
 	  (fun shr_test_jobs:eqc_printer/2,
 	   test_prop(N,Specification,Options))

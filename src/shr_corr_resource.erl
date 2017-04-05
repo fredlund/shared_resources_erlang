@@ -17,8 +17,9 @@
 
 initial_state(_,Options) ->
   ?TIMEDLOG("initial_state~n",[]),
-  WaitSpec = proplists:get_value(waiting_spec,Options),
   DataSpec = proplists:get_value(data_spec,Options),
+  DataModule = shr_utils:module(DataSpec),
+  WaitSpec = proplists:get_value(waiting_spec,Options),
   #corr_res_state
     {
      started=false
@@ -29,7 +30,7 @@ initial_state(_,Options) ->
 	  incoming=[]
 	  ,waiting=[]
 	  ,sdata=shr_utils:initial_state(DataSpec,Options)
-	  ,swait=shr_utils:initial_state(WaitSpec,Options)
+	  ,swait=shr_utils:initial_state(WaitSpec,[{state_module,DataModule}|Options])
 	}
        ]
      ,options = Options
