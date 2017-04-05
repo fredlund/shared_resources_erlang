@@ -60,13 +60,13 @@ test() ->
   test(mergesort_n_shr,[no_par]).
 
 test2() ->
-  test(mergesort_n_buf_shr,[{enforce_progress,false},no_par]).
+  test(mergesort_n_buf_shr,[no_par]).
 
 test3() ->
-  test(mergesort_n_buf_shr,[{enforce_progress,true},no_par]).
+  test(mergesort_n_buf_shr,[no_par]).
 
 test4() ->
-  test(mergesort_n_buf_shr,[{enforce_progress,false},no_par,{generator,mergesort_gnr},{print_testcase,true}]).
+  test(mergesort_n_buf_shr,[no_par,{generator,mergesort_gnr},{print_testcase,true}]).
 
 test5() ->
   shr_test_jobs:check_prop
@@ -296,7 +296,7 @@ prop_gentest() ->
 	InnerSuccess
       end).
 
-should_succeed({Specification,ImplementationScheduler,Hide,Generator}) ->
+should_succeed({_Specification,ImplementationScheduler,Hide,Generator}) ->
   Hide 
     andalso
       ((ImplementationScheduler=/=shr_always)
