@@ -17,7 +17,7 @@ precondition(Id,_,_,{_,_,_}) ->
   true.
 
 command(Id,output,_GlobalState) ->
-  {mergesorter,output,[],[urgent]}.
+  {mergesorter,output,[]}.
 
 next_state(Id,State,GS,{_,_,_}) ->
   {State,GS}.

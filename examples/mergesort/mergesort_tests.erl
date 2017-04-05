@@ -298,8 +298,7 @@ prop_gentest() ->
 
 should_succeed({Specification,ImplementationScheduler,Hide,Generator}) ->
   Hide 
-    andalso (Specification==mergesort_n_buf_shr)
-    andalso 
+    andalso
       ((ImplementationScheduler=/=shr_always)
        orelse (Generator =/= mergesort_gnr)).
 
