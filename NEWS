@@ -1,0 +1,15 @@
+NEWS
+====
+
+5/4 -- 2017: calls can now be hidden for the purpose of testing against
+a resource. Option syntax: {hidden,[{resource_name,operation_name},...]}
+will cause any operation at the specified resource to be ignored for the
+purpose of checking that implementation calls match specification calls
+(but the specification calls will still be issued).
+See mergesort_tests.erl for a more complete usage example.
+
+5/4 -- 2017: a new module shr_run for running a single test case on a system
+(a resource specification, an implementation, a composite resource)
+and observing the results.
+
+
