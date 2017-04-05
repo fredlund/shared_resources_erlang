@@ -153,14 +153,14 @@ inform_about_exit(Pid,Reason,#state{reportTo=ReportTo}) ->
       ok
   end.
 
-set_timeout(State) ->
-  if
-    State#state.timeout == void ->
-      Timestamp = timestamp(),
-      {noreply, State#state{timeout=Timestamp+10}, 10};
-    true ->
-      update_timeout(State)
-  end.
+%% set_timeout(State) ->
+%%  if
+%%    State#state.timeout == void ->
+%%      Timestamp = timestamp(),
+%%      {noreply, State#state{timeout=Timestamp+10}, 10};
+%%    true ->
+%%      update_timeout(State)
+%%  end.
 
 update_timeout(State) ->
   if
@@ -239,7 +239,7 @@ add_childfun(Name,Spec) ->
 -spec add_childproc(fun(() -> supervisor_ret()) | {atom(),atom(),[any()]}) -> any().
 add_childproc(Spec) ->
   ?GEN_SERVER:call(?MODULE,{addproc,[],Spec}).
--spec add_childproc(atom(),fun(() -> supervisor_ret()) | {atom(),atom(),[any()]}) -> any().
+-spec add_childproc(any()|[any()],fun(() -> supervisor_ret()) | {atom(),atom(),[any()]}) -> any().
 %% @doc Executes the function argument (either an anynomous function, or a 
 %% {Module,FunAtom,Args} triple), which should return a list of pids to 
 %% supervisor (enclosed by an ok atom, and possibly with a third field).

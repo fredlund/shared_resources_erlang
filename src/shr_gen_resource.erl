@@ -9,6 +9,7 @@
 
 -export([init/1,handle_call/3,terminate/2]). 
 -export([handle_cast/2,handle_info/2,code_change/3]).
+-export([print_call/1,print_args/1]).
 
 %%-define(debug,true).
 -include("debug.hrl").
@@ -119,13 +120,6 @@ add_callrecord(CallRecord,State) ->
 
 -spec pick_call([#call_waitinginfo{}]) -> #call_waitinginfo{}.
 pick_call(Calls) ->
-  if
-    Calls==[] ->
-      io:format("*** Error: calls is emtpy~n"),
-      error(bad_resource);
-    true ->
-      ok
-  end,
   N = uniform(length(Calls)),
   lists:nth(N,Calls).
 
@@ -164,9 +158,9 @@ post(Call,Result,State) ->
      ("~p: post(~s,~p) -> ~p~n",
       [self(),print_call(Call),Result,NewDataStates]),
   case NewDataStates of
-    {'$shr_nondeterministic',_States} ->
-      N = uniform(length(NewDataStates)),
-      NewDataState = lists:nth(N,NewDataStates),
+    {'$shr_nondeterministic',States} ->
+      N = uniform(length(States)),
+      NewDataState = lists:nth(N,States),
       State#state{state=NewDataState};
     _ ->
       State#state{state=NewDataStates}
@@ -243,7 +237,7 @@ operations(Resource) ->
 %% and the ``waiting_spec'' option names the module defining call priorities.
 -spec start(module_or_module_init(),module_or_module_init(),[any()]) -> {ok,pid()}.
 start(DataSpec,WaitSpec,Options) ->
-  shr_gen_server:start(?MODULE, [DataSpec,WaitSpec], []).
+  shr_gen_server:start(?MODULE, [DataSpec,WaitSpec|Options], []).
 %% @doc Starts a shared resource, with a registered name.
 %% The options argument provides necessary options for the resource
 %% such as defining the implementation module, and the module
@@ -254,7 +248,7 @@ start(DataSpec,WaitSpec,Options) ->
 %% and the ``waiting_spec'' option names the module defining call priorities.
 -spec start(atom(),module_or_module_init(),module_or_module_init(),[any()]) -> {ok,pid()}.
 start(Name, DataSpec, WaitSpec, Options) ->
-  shr_gen_server:start(Name, ?MODULE, [DataSpec,WaitSpec|Options], []).
+  shr_gen_server:start({local,Name}, ?MODULE, [DataSpec,WaitSpec|Options], []).
 %% @doc Starts and links to a shared resource.
 %% The options argument provides necessary options for the resource
 %% such as defining the implementation module, and the module
@@ -276,7 +270,7 @@ start_link(DataSpec, WaitSpec, Options) ->
 %% and the ``waiting_spec'' option names the module defining call priorities.
 -spec start_link(atom(),module_or_module_init(),module_or_module_init(),[any()]) -> {ok,pid()}.
 start_link(Name, DataSpec, WaitSpec, Options) ->
-  shr_gen_server:start_link(Name, ?MODULE, [DataSpec,WaitSpec|Options], []).
+  shr_gen_server:start_link({local,Name}, ?MODULE, [DataSpec,WaitSpec|Options], []).
 
 
 print_call({F,Args}) ->

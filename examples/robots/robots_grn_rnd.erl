@@ -13,8 +13,7 @@
 -include("../../src/tester.hrl").
 
 
--export([initial_state/2,start/2,started/2,command/2,precondition/2,next_state/3,stop/1]).
--export([enter/3,exit/3]).
+-export([initial_state/2,start/2,started/2,command/2,precondition/3,next_state/4,stop/1]).
 -export([print_finished_job_info/2, print_started_job_info/2]).
 
 %% -- State ------------------------------------------------------------------
@@ -47,30 +46,22 @@ command(State,_) ->
 	 true -> [{?MODULE,exit,[RobotId,Warehouse,Weight],[]}]
        end).
 
-precondition(_State,_Commands) ->
+precondition(_State,_Commands,_) ->
   true.
 
-next_state(State,_Result,_Args) ->
+next_state(State,_Result,_Args,_) ->
   State.
-
-enter(Robot,Warehouse,Weight) -> 
-  robots_controller_via_protocol:enter(Robot,Warehouse,Weight),
-  robots_environment_via_protocol:enter(Robot,Warehouse,Weight).
-
-exit(Robot,Warehouse,Weight) -> 
-  robots_controller_via_protocol:exit(Robot,Warehouse,Weight),
-  robots_environment_via_protocol:exit(Robot,Warehouse,Weight).
 
 stop(_State) ->
   exit(shr_utils:get(eqc_process),brutal_kill),
   timer:sleep(100).
 
-print_finished_job_info(Job,TS) ->
+print_finished_job_info(Job,_TS) ->
   case Job#job.call of
     {_,_,[R,_,_]} -> io_lib:format("~p",[R])
   end.
 
-print_started_job_info(Job,TS) ->
+print_started_job_info(Job,_TS) ->
   shr_utils:print_mfa(Job#job.call).
 
 

@@ -17,18 +17,10 @@ new(Name, Processes)
   new(Name,Processes,[]).
 new(Name, Processes, SpawnOptions)
   when is_list(Processes), Processes=/=[] ->
-  spawn_opt(fun () -> do_port1(Name,Processes) end, SpawnOptions).
+  spawn_opt(fun () -> do_port(Name,Processes) end, SpawnOptions).
 new(Name, Node, Processes, SpawnOptions)
   when is_list(Processes), Processes=/=[] ->
-  spawn_opt(Node,fun () -> do_port1(Name,Processes) end, SpawnOptions).
-
-do_port1(Name,P) ->
-  Processes = 
-    if
-      is_pid(P) -> [P];
-      true -> P
-    end,
-  do_port(Name,Processes).
+  spawn_opt(Node,fun () -> do_port(Name,Processes) end, SpawnOptions).
 
 do_port(Name,Ps) ->
   receive

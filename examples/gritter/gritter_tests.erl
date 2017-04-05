@@ -9,19 +9,13 @@ sim(N) ->
 
   shr_utils:setup_shr(),
 
-  ControllerOpts = 
-    [
-     {data_spec,gritter_shr}
-     ,{waiting_spec,shr_always}
-    ],
-    
   %% We need a controller, first start the resource and then wrap it in
   %% a generic Erlang resource implementation
   [Controller] = 
     shr_supervisor:add_childproc
       (gritter_shr, 
        fun () ->
-	   shr_gen_resource:start_link(ControllerOpts,[])
+	   shr_gen_resource:start_link(gritter_shr,shr_always,[])
        end),
 
   %% Finally start the simulation
