@@ -85,12 +85,9 @@ postcondition(State,_Args,Result,TS) ->
       io:format
 	("~n*** Error: postcondition false after starting new jobs:~n  ~s~n~n",
 	   [shr_test_jobs:print_jobs(NewJobs,TS)]),
-        false;
-      true ->
-        true;
-      Other ->
-        io:format("strange postcondition ~p~n",[Other]),
-        false
+      false;
+    true ->
+      true
   catch _:Reason ->
       io:format("postcondition raises ~p~nStacktrace:~n~p~n",
 		[Reason,
