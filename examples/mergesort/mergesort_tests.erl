@@ -6,6 +6,7 @@
 -export([prop_gentest/0]).
 
 -export([test/0]).
+-export([test1/0]).
 -export([test2/0]).
 -export([test3/0]).
 -export([test4/0]).
@@ -20,14 +21,22 @@
 -export([runs2/0]).
 -export([runs3/0]).
 
-mergesort_N(N) ->
-  mergesort_N(N,shr_always).
+mergesort_N_buf_to_2(Scheduler) ->
+  #rsystem
+    {
+     operations=[left,right,output],
+     resources=[{r,{shr_resource,{mergesort_n_buf_shr,[2]},Scheduler}}],
+     external_mapping=
+       fun ({left,Args}) -> {r,{in,[1|Args]}};
+	   ({right,Args}) -> {r,{in,[2|Args]}}
+       end
+    }.
 
-mergesort_N(N,Scheduler) ->
+mergesort_N(N,ResourceSpec) ->
   N1Resources = 
     lists:map
       (fun (I) ->
-	   {r(I),{shr_resource,mergesort_2_shr,Scheduler}}
+	   {r(I),ResourceSpec}
        end, lists:seq(1,N-1)),
   #rsystem
     {
@@ -58,6 +67,9 @@ r(N) ->
 
 test() ->
   test(mergesort_n_shr,[no_par]).
+
+test1() ->
+  test(mergesort_n_buf_shr,[no_par,{imp,mergesort_N_buf_to_2(shr_always)}]).
 
 test2() ->
   test(mergesort_n_buf_shr,[no_par]).
@@ -103,6 +115,11 @@ test_prop(N,Specification,Options) ->
       undefined -> shr_always;
       Sched -> Sched
     end,
+  Imp =
+    case proplists:get_value(imp,Options) of
+      undefined -> mergesort_2_shr;
+      I -> I
+    end,
   shr_test_resource_implementation:prop_tri
     (#rtest
      {
@@ -113,7 +130,7 @@ test_prop(N,Specification,Options) ->
 	       (mergesorter,
 		fun () ->
 		    shr_composite_resource:start_link
-		      (mergesort_N(N,ImpScheduler),[],[])
+		      (mergesort_N(N,{shr_resource,Imp,ImpScheduler}),[],[])
 		end)
 	 end,
        resource={Specification,[N]},
@@ -129,7 +146,7 @@ debug() ->
 debug2(N) ->
   shr_debug:debug
     (fun () ->
-	 shr_composite_resource:start_link(mergesort_N(N),[],[])
+	 shr_composite_resource:start_link(mergesort_N(N,{shr_resource,mergesort_2_shr,shr_always}),[],[])
      end).
 
 debug3() ->
@@ -143,7 +160,8 @@ run() ->
   shr_supervisor:add_childproc
     (mergesorter,
      fun () ->
-	 shr_composite_resource:start_link(mergesort_N(2),[],[])
+	 shr_composite_resource:start_link
+	   (mergesort_N(2,{shr_resource,mergesort_2_shr}),[],[])
      end),
   shr_run:print_run
     (shr_run:run
@@ -175,7 +193,8 @@ runs() ->
 	   shr_supervisor:add_childproc
 	     (mergesorter,
 	      fun () ->
-		  shr_composite_resource:start_link(mergesort_N(2),[],[])
+		  shr_composite_resource:start_link
+		    (mergesort_N(2,{shr_resource,mergesort_2_shr}),[],[])
 	      end)
        end,
        20*1000,
@@ -203,7 +222,8 @@ runs1() ->
 	   shr_supervisor:add_childproc
 	     (mergesorter,
 	      fun () ->
-		  shr_composite_resource:start_link(mergesort_N(2),[],[])
+		  shr_composite_resource:start_link
+		    (mergesort_N(2,{shr_resource,mergesort_2_shr}),[],[])
 	      end)
        end,
        20*1000,
@@ -259,7 +279,9 @@ runs3() ->
 	     (mergesorter,
 	      fun () ->
 		  shr_composite_resource:start_link
-		    (mergesort_N(2,shr_queue_sched2),[],[])
+		    (mergesort_N
+		       (2,{shr_resource,mergesort_2_shr,shr_queue_sched2}),
+		     [],[])
 	      end)
        end,
        20*1000,

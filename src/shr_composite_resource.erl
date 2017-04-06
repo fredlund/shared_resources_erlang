@@ -129,12 +129,14 @@ start_systemspec(SystemSpec,Args,_Options) ->
 
 parse_resourceSpec(ResourceSpec) ->
   case ResourceSpec of
-    {shr_resource,DataModule} ->
-      {shr_gen_resource,start_link,[DataModule,shr_always,[]]};
-    {shr_resource,DataModule,WaitingModule} ->
-      {shr_gen_resource,start_link,[DataModule,WaitingModule,[]]};
-    {shr_resource,DataModule,WaitingModule,Args} ->
-      {shr_gen_resource,start_link,[DataModule,WaitingModule,Args]};
+    CompositeResource when is_record(CompositeResource,rsystem) ->
+      throw(nyi);
+    {shr_resource,DataSpec} ->
+      {shr_gen_resource,start_link,[DataSpec,shr_always,[]]};
+    {shr_resource,DataSpec,WaitingSpec} ->
+      {shr_gen_resource,start_link,[DataSpec,WaitingSpec,[]]};
+    {shr_resource,DataSpec,WaitingSpec,Args} ->
+      {shr_gen_resource,start_link,[DataSpec,WaitingSpec,Args]};
     Spec={_Module,_Fun,Args} when is_list(Args) -> 
       Spec
   end.
