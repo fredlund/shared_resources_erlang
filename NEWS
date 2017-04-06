@@ -16,3 +16,9 @@ and observing the results.
 as a composition of resources, possibly interconnected by trivial processes
 which simply forwards messages from a resource to another.
 See mergesorts_tests.erl for usage examples.
+
+28/3 -- 2017: the new module shr_debug permits interacting with a resource
+(or a composite resource) in an interactive manner, i.e., issuing calls to
+a resource and observing whether the call blocked or not, and its return
+value. See mergesort_tests.erl for usage examples.
+
