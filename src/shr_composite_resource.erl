@@ -104,6 +104,9 @@ start_systemspec(SystemSpec,Args,_Options) ->
     lists:foldl
       (fun ({Rid,ResourceSpec},Map) -> 
 	       {Module,Fun,ResourceArgs} = parse_resourceSpec(ResourceSpec),
+	   ?LOG
+	     ("will spawn~n~p:~p(~p) from~n~p~n~n",
+	      [Module,Fun,ResourceArgs,ResourceSpec]),
 	   {ok,Pid} = apply(Module,Fun,ResourceArgs),
 	   [{Rid,Pid}|Map]
        end, ParameterMap, SystemSpec#rsystem.resources),
@@ -130,7 +133,7 @@ start_systemspec(SystemSpec,Args,_Options) ->
 parse_resourceSpec(ResourceSpec) ->
   case ResourceSpec of
     CompositeResource when is_record(CompositeResource,rsystem) ->
-      throw(nyi);
+      {?MODULE,start_link,[CompositeResource,[],[]]};
     {shr_resource,DataSpec} ->
       {shr_gen_resource,start_link,[DataSpec,shr_always,[]]};
     {shr_resource,DataSpec,WaitingSpec} ->

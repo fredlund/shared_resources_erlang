@@ -28,7 +28,8 @@ mergesort_N_buf_to_2(Scheduler) ->
      resources=[{r,{shr_resource,{mergesort_n_buf_shr,[2]},Scheduler}}],
      external_mapping=
        fun ({left,Args}) -> {r,{in,[1|Args]}};
-	   ({right,Args}) -> {r,{in,[2|Args]}}
+	   ({right,Args}) -> {r,{in,[2|Args]}};
+	   (Other) -> {r,Other}
        end
     }.
 
@@ -69,7 +70,7 @@ test() ->
   test(mergesort_n_shr,[no_par]).
 
 test1() ->
-  test(mergesort_n_buf_shr,[no_par,{imp,mergesort_N_buf_to_2(shr_always)}]).
+  test(mergesort_n_buf_shr,[no_par,{resource,mergesort_N_buf_to_2(shr_always)}]).
 
 test2() ->
   test(mergesort_n_buf_shr,[no_par]).
@@ -120,6 +121,11 @@ test_prop(N,Specification,Options) ->
       undefined -> mergesort_2_shr;
       I -> I
     end,
+  Resource =
+    case proplists:get_value(resource,Options) of
+      undefined -> {shr_resource,Imp,ImpScheduler};
+      R -> R
+    end,
   shr_test_resource_implementation:prop_tri
     (#rtest
      {
@@ -130,7 +136,7 @@ test_prop(N,Specification,Options) ->
 	       (mergesorter,
 		fun () ->
 		    shr_composite_resource:start_link
-		      (mergesort_N(N,{shr_resource,Imp,ImpScheduler}),[],[])
+		      (mergesort_N(N,Resource),[],[])
 		end)
 	 end,
        resource={Specification,[N]},
