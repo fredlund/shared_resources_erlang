@@ -180,7 +180,12 @@ prop_run() ->
 
 not_exception(Fun) ->
   try Fun(), true
-  catch _:_ -> false end.
+  catch Class:Reason -> 
+      io:format
+	("*** Error: raised exception~n  ~p:~p~nStacktrace:~n  ~p~n",
+	 [Class,Reason,erlang:get_stacktrace()]),
+      false 
+  end.
 
 sequence(N) -> 
   ?LET(NItems,choose(1,30),
