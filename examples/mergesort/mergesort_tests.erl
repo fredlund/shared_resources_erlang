@@ -165,15 +165,16 @@ debug3() ->
 prop_run() ->
   Fun = 
     fun (N,Sequence) -> 
-	io:format("~p: will execute~n  ~p~n",[N,Sequence]),
-	shr_utils:setup_shr(),
-	shr_supervisor:add_childproc
-	  (mergesorter,
-	   fun () ->
-	       shr_composite_resource:start_link
-		 (mergesort_N(N,{shr_resource,mergesort_2_shr}),[],[])
-	   end),
-	shr_run:run(Sequence,[no_env_wait]) 
+	fun () ->
+	    shr_utils:setup_shr(),
+	    shr_supervisor:add_childproc
+	      (mergesorter,
+	       fun () ->
+		   shr_composite_resource:start_link
+		     (mergesort_N(N,{shr_resource,mergesort_2_shr}),[],[])
+	       end),
+	    shr_run:run(Sequence,[no_env_wait]) 
+	end
     end,
   ?FORALL({N,Sequence},?LET(N,choose(2,10),{N,sequence(N)}),
 	  not_exception(Fun(N,Sequence))).
