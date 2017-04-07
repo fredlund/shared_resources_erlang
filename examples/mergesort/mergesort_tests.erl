@@ -4,6 +4,7 @@
 -include("../../src/resources.hrl").
 
 -export([prop_gentest/0]).
+-export([prop_run/0]).
 
 -export([test/0]).
 -export([test1/0]).
@@ -160,6 +161,41 @@ debug3() ->
     (fun () -> 
 	 shr_gen_resource:start({mergesort_n_buf_shr,[4]},shr_always,[]) 
      end).
+
+prop_run() ->
+  Fun = 
+    fun (N,Sequence) -> 
+	io:format("~p: will execute~n  ~p~n",[N,Sequence]),
+	shr_utils:setup_shr(),
+	shr_supervisor:add_childproc
+	  (mergesorter,
+	   fun () ->
+	       shr_composite_resource:start_link
+		 (mergesort_N(N,{shr_resource,mergesort_2_shr}),[],[])
+	   end),
+	shr_run:run(Sequence,[no_env_wait]) 
+    end,
+  ?FORALL({N,Sequence},?LET(N,choose(2,10),{N,sequence(N)}),
+	  not_exception(Fun(N,Sequence))).
+
+not_exception(Fun) ->
+  try Fun(), true
+  catch _:_ -> false end.
+
+sequence(N) -> 
+  ?LET(NItems,choose(1,30),
+       lists:duplicate(NItems,commands(N))).
+
+commands(N) ->
+  ?LET(NCommands,choose(1,3),
+       if
+	 NCommands==1 -> command(N);
+	 true -> lists:duplicate(NCommands,command(N))
+       end).
+
+command(N) ->
+  oneof([{mergesorter,output,[]},
+	 {mergesorter,in,[choose(1,N),choose(1,10)]}]).
 
 run() ->
   shr_utils:setup_shr(),
