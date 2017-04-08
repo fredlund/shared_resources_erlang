@@ -65,7 +65,7 @@ handle_call({enter,[RobotId,Warehouse,Weight]},From,State)
 	    State2 = remove_from_corridor(RobotId,Warehouse,State),
 	    {Robot2,State2};
 	  _ ->
-	    throw({robot_missing_from_corridor,RobotId,Warehouse})
+	    error({robot_missing_from_corridor,RobotId,Warehouse})
 	end
     end,
   assert(true, Weight >= Robot#robot.weight, decreasing_robot_weight),

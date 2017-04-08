@@ -159,7 +159,7 @@ enviar_next(State, _Var, _Args=[Uid,Msg,IsResending]) ->
 			 ("*** Error: enviar(~p,~p) -- msg in maybe_present=~p"
 			  ++" for following user ~p~n",
 			  [Uid,Msg,Uid2,msgs_maybe_present(Uid2,State)]),
-		       throw(bad);
+		       error(badarg);
 		     false -> ok
 		   end,
 		   case sets:is_element(Msg,Present) of
@@ -259,7 +259,7 @@ do_read(Uid,State) ->
       io:format
 	("*** Error in do_read: msgs_present=0 msgs_maybe_present=0~n"++
 	   "num_msgs_to_read=~p~n",[N]),
-      throw(bad);
+      error(badarg);
     {0,1} -> 
       set_msgs_maybe_present(Uid,sets:new(),S1);
     {0,_} ->
@@ -300,7 +300,7 @@ command(State,_CorrState) ->
 		    [{Element,{F,Args}}];
 		  _ ->
 		    io:format("*** Error: malformed command ~p~n",[Command]),
-		    throw(bad)
+		    error(badarg)
 		end
 	 end
        end).
@@ -471,7 +471,7 @@ my_oneof([]) ->
   io:format
     ("oneof([]) - stacktrace:~n~p~n",
      [try throw(trace) catch _:_ -> erlang:get_stacktrace() end]),
-  throw(bad);
+  error(badarg);
 my_oneof(Other) ->
   eqc_gen:oneof(Other).
 

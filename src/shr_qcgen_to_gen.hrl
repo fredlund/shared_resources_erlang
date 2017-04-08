@@ -13,7 +13,7 @@ command(State,_CorrState) ->
 		    [{Element,{F,RestArgs}}];
 		  _ ->
 		    io:format("*** Error: malformed command ~p~n",[Command]),
-		    throw(bad)
+		    error(badarg)
 		end
 	 end
        end).

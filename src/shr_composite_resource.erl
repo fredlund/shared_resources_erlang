@@ -95,7 +95,7 @@ check_systemspec(Other) ->
   io:format
     ("*** Error: system specification is on the wrong format:~n~p~n",
      [Other]),
-  throw(badarg).
+  error(badarg).
 
 start_systemspec(SystemSpec,Args,_Options) ->
   ParameterMap = 
