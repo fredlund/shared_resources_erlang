@@ -27,7 +27,7 @@ run([],History,_Options,_State) ->
   History;
 run([TestItems|Rest],History,Options,State) ->
   {HistoryItem={NewJobs,FinishedJobs},NewState} = 
-    run_test_items(TestItems,History,Options,State),
+    run_test_items(TestItems,Options,State),
   NewerState =
     lists:foldl
       (fun (Job,S) ->
@@ -88,7 +88,7 @@ strip_run(Run) ->
 normalize_job(Job) ->
   {Job#job.call,Job#job.result}.
 
-run_test_items(PreTestItems,History,Options,State) ->
+run_test_items(PreTestItems,Options,State) ->
   ?TIMEDLOG("run_test_items ~p State=~p~n",[PreTestItems,State]),
   TestItems =
     if 
@@ -125,132 +125,20 @@ run_test_items(PreTestItems,History,Options,State) ->
   ?TIMEDLOG("running ~p blocking ~p~n",[AllItems,AllNewUsers]),
   AllCommands =
     lists:map(fun test_item_to_command/1, AllItems),
-  run_commands(AllCommands,History,Options,NewerState).
-
-run_commands(Commands,_History,Options,State) ->
-  ?TIMEDLOG("run_commands(~p)~n",[Commands]),
-  try
-    WaitTime =
-      ?COMPLETION_TIME,
-    ParentPid =
-      self(),
-    Counter =
-      shr_utils:get({?MODULE,counter}),
-    EnvWait =
-      proplists:get_value(no_env_wait,Options,false),
-    NewJobs =
-      lists:map
-	(fun (Command) ->
-	     {F,Args} = Command#command.call,
-	     Info = Command#command.options,
-	     Call = {Command#command.port,F,Args},
-	     PreJob = #job{call=Call,info=Info},
-	     try shr_supervisor:add_childfun
-		   (fun () ->
-			try shr_calls:call(Command#command.port,{F,Args}) of
-			    Result ->
-			    ParentPid!
-			      {PreJob#job{pid=self(),result=Result},Counter}
-			catch _Exception:Reason ->
-			    StackTrace =
-			      erlang:get_stacktrace(),
-			    io:format("Job ~p exiting due to ~p~nStacktrace:~n~p~n",
-				      [self(),Reason,StackTrace]),
-			    Result = 
-			      {exit,self(),Reason,StackTrace},
-			    ParentPid!
-			      {PreJob#job{pid=self(),result=Result},Counter}
-			end
-		    end) of
-		 Pid -> PreJob#job{pid=Pid}
-	     catch _Exception2:Reason2 ->
-		 StackTrace = erlang:get_stacktrace(),
-		 PreJob#job
-		   {pid=spawn
-			  (fun () ->
-			       Result = {exit,self(),Reason2,StackTrace},
-			       ParentPid!{PreJob#job{pid=self(),result=Result},Counter}
-			   end)}
-	     end
-	 end, Commands),
+  WaitTime =
+    proplists:get_value(completion_time,Options,?COMPLETION_TIME),
+  EnvWait =
+    proplists:get_value(no_env_wait,Options,false),
+  {NewJobs,FinishedJobs} = shr_test_jobs:do_cmds(AllCommands,WaitTime,EnvWait),
+  HistoryItem = {NewJobs,FinishedJobs},
+  NewestState =
     if
-      NewJobs==[] ->
-	{{[],[]},State};
+      NewJobs=/=[] ->
+	NewerState#state{time=NewerState#state.time+1};
       true ->
-	FinishedJobs = wait_for_jobs(NewJobs,WaitTime,Counter,EnvWait),
-	?TIMEDLOG("NewJobs=~p~nFinishedJobs=~p~n",[NewJobs,FinishedJobs]),
-	HistoryItem = {NewJobs,FinishedJobs},
-	{HistoryItem,State#state{time=State#state.time+1}}
-    end
-  catch _ExceptionType:Reason ->
-      io:format
-	("*** Error: ~p:do_cmds(~p) raised an exception ~p~n",
-	 [?MODULE,self(),Reason]),
-      io:format
-	("Stacktrace:~n~p~n",
-	 [erlang:get_stacktrace()]),
-      throw(bad)
-  end.
-
-wait_for_jobs(NewJobs,WaitTime,Counter,EnvWait) ->
-  JobsAlive = shr_utils:get({?MODULE,jobs_alive}),
-  TimeStamp = get_millisecs_timestamp(),
-  UntilTime = TimeStamp + WaitTime,
-  AllJobs = NewJobs++JobsAlive,
-  case receive_completions(UntilTime,Counter,[],AllJobs,EnvWait) of
-    {FinishedJobs,NewJobsAlive} when is_list(FinishedJobs) ->
-      shr_utils:put({?MODULE,jobs_alive},NewJobsAlive),
-      FinishedJobs
-  end.
-
-receive_completions(_UntilTime,_Counter,Finished,[],false) ->
-  {Finished,[]};
-receive_completions(UntilTime,Counter,Finished,JobsAlive,EnvWait) ->
-  Timeout = max(0,UntilTime-get_millisecs_timestamp()),
-  receive
-    {'EXIT',Pid,Reason} ->
-      handle_exit(UntilTime,Pid,Reason,[],Counter,Finished,JobsAlive,EnvWait);
-    {'DOWN',_,_,Pid,Reason} ->
-      handle_exit(UntilTime,Pid,Reason,[],Counter,Finished,JobsAlive,EnvWait);
-    {Job,JobCounter} ->
-      case Job of
-	{exit,Pid,Reason,StackTrace} when JobCounter==Counter -> 
-	  handle_exit(UntilTime,Pid,Reason,StackTrace,Counter,Finished,JobsAlive,EnvWait);
-	{exit,Pid,_Reason,_} ->
-	  io:format
-	    ("*** Warning: exit for old job ~p received; consider increasing wait time.~n",[Pid]),
-	  receive_completions(UntilTime,Counter,Finished,JobsAlive,EnvWait);
-	_ when is_record(Job,job), JobCounter==Counter ->
-	  receive_completions(UntilTime,Counter,[Job|Finished],delete_job(Job,JobsAlive),EnvWait);
-	_ when is_record(Job,job) ->
-	  io:format
-	    ("*** Warning: old job received; consider increasing wait time.~n"),
-	  receive_completions(UntilTime,Counter,Finished,JobsAlive,EnvWait)
-      end;
-    X ->
-      io:format("~p: unknown message ~p received~n",[?MODULE,X]),
-      throw(bad)
-  after Timeout -> {lists:reverse(Finished),JobsAlive}
-  end.
-
-delete_job(Job,Jobs) ->
-  lists:filter(fun (OldJob) -> OldJob#job.pid=/=Job#job.pid end, Jobs).
-
-handle_exit(UntilTime,Pid,Reason,StackTrace,Counter,Finished,JobsAlive,EnvWait) ->
-  if
-    Reason=/=normal ->
-      case lists:filter(fun (Job) -> Pid==Job#job.pid end, JobsAlive) of
-	[Job] ->
-	  NewJob = Job#job{result={exit,Pid,Reason,StackTrace}},
-	  receive_completions(UntilTime,Counter,[NewJob|Finished],delete_job(NewJob,JobsAlive),EnvWait);
-	[] -> 
-	  ?TIMEDLOG
-	    ("*** Warning: got exit for process ~p which is not a current job~n",
-	     [Pid]),
-	  receive_completions(UntilTime,Counter,Finished,JobsAlive,EnvWait)
-      end;
-    true -> receive_completions(UntilTime,Counter,Finished,JobsAlive,EnvWait)
-  end.
+	NewerState
+    end,
+  {HistoryItem,NewestState}.
 
 is_enabled(TestItem,TestItems,State) ->
   (not(user_call(TestItem))) orelse 
@@ -283,6 +171,10 @@ test_item_to_command(TestItem) ->
     {Resource,Operation,Args} ->
       #command{call={Operation,Args},port=Resource,options=[]}
   end.
+
+get_millisecs_timestamp() ->
+  {Mega, Sec, Micro} = os:timestamp(),
+  (Mega*1000000 + Sec)*1000 + round(Micro/1000).
 
 print_run([]) ->
   ok;
@@ -355,9 +247,4 @@ print_jobs([Job|Rest]) ->
 print_job(Job) ->
   {R,F,Args} = Job#job.call,
   io_lib:format("~s",[shr_utils:print_mfa({R,F,Args})]).
-
-get_millisecs_timestamp() ->
-  {Mega, Sec, Micro} = os:timestamp(),
-  (Mega*1000000 + Sec)*1000 + round(Micro/1000).
   
-

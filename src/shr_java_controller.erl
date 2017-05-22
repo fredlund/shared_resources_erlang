@@ -100,7 +100,7 @@ convert(Result,F) ->
       ConvertedValue
   catch Exception:Reason ->
       io:format("convert ~p failed with ~p:~pn",[Result,Exception,Reason]),
-      throw(bad)
+      error(badarg)
   end.
 
 std_converter(Result) ->

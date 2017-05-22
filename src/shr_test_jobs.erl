@@ -10,7 +10,7 @@
 -export([api_spec/0,initial_state/0]).
 -export([init_state/1]).
 -export([start_pre/1,start_args/1,start/2,start_post/3,start_next/3]).
--export([do_cmds_pre/1,do_cmds_args/1,do_cmds_pre/2,do_cmds/2,do_cmds_post/3,do_cmds_next/3]).
+-export([do_cmds_pre/1,do_cmds_args/1,do_cmds_pre/2,do_cmds/3,do_cmds_post/3,do_cmds_next/3]).
 -export([print_jobs/2]).
 -export([return_test_cases/0,print_test_cases/0]).
 -export([job_exited/1]).
@@ -181,13 +181,15 @@ do_cmds_args(State) ->
   try
     WaitTime =
       State#state.completion_time,
+    NoEnvWait =
+      proplists:get_value(no_env_wait,State#state.options,false),
     ?LET(Commands,
 	 (State#state.test_gen_module):command
 	   (State#state.test_gen_state,
 	    State#state.test_corr_state),
 	 begin
 	   ?LOG("Commands are ~p~n",[Commands]),
-	   [lists:map(fun command_parser/1,Commands),WaitTime]
+	   [lists:map(fun command_parser/1,Commands),WaitTime,NoEnvWait]
 	 end)
   catch _:Reason ->
       io:format
@@ -197,7 +199,7 @@ do_cmds_args(State) ->
       io:format
 	("Stack trace:~n~p~n",
 	 [erlang:get_stacktrace()]),
-      throw(bad_state_machine)
+      error(bad_state_machine)
   end.
 
 do_cmds_pre(State,[Commands|_]) ->
@@ -215,10 +217,11 @@ do_cmds_pre(State,[Commands|_]) ->
       io:format
 	("Stack trace:~n~p~n",
 	 [erlang:get_stacktrace()]),
-      throw(bad_state_machine)
+      error(bad_state_machine)
   end.
 
-do_cmds(Commands,WaitTime) ->
+do_cmds(Commands,WaitTime,NoEnvWait) ->
+  ?TIMEDLOG("run_commands(~p)~n",[Commands]),
   try
     ?TIMEDLOG("new round: cmds = ~p~n",[Commands]),
     ParentPid =
@@ -264,7 +267,7 @@ do_cmds(Commands,WaitTime) ->
       NewJobs==[] ->
 	{[],[]};
       true ->
-	FinishedJobs = wait_for_jobs(NewJobs,WaitTime,Counter),
+	FinishedJobs = wait_for_jobs(NewJobs,WaitTime,Counter,NoEnvWait),
 	?TIMEDLOG("NewJobs=~p~nFinishedJobs=~p~n",[NewJobs,FinishedJobs]),
 	{NewJobs,FinishedJobs}
     end
@@ -275,7 +278,7 @@ do_cmds(Commands,WaitTime) ->
       io:format
 	("Stacktrace:~n~p~n",
 	 [erlang:get_stacktrace()]),
-      throw(bad)
+      error(bad)
   end.
 
 raw(Commands) when is_list(Commands) ->
@@ -336,7 +339,7 @@ try
       io:format
 	("Stack trace:~n~p~n",
 	 [erlang:get_stacktrace()]),
-      throw(bad_state_machine)
+      error(bad_state_machine)
   end.
 
 do_cmds_next(State,Result={NewJobs,FinishedJobs},[Commands|_]) ->
@@ -372,7 +375,7 @@ do_cmds_next(State,Result={NewJobs,FinishedJobs},[Commands|_]) ->
       io:format
 	("Stack trace:~n~p~n",
 	 [erlang:get_stacktrace()]),
-      throw(bad_state_machine)
+      error(bad_state_machine)
   end.
 
 observers_next_states(ModuleStates,NewJobs,FinishedJobs) ->
@@ -408,66 +411,69 @@ is_environment({environment,_}) ->
 is_environment(_) ->
   false.
 
-wait_for_jobs(NewJobs,WaitTime,Counter) ->
+wait_for_jobs(NewJobs,WaitTime,Counter,NoEnvWait) ->
   JobsAlive = shr_utils:get({?MODULE,jobs_alive}),
-  timer:sleep(WaitTime),
-  case receive_completions(Counter,[],NewJobs++JobsAlive) of
-    FinishedJobs when is_list(FinishedJobs) ->
-      AllJobs = 
-	NewJobs++JobsAlive,
-      NewJobsAlive =
-	lists:filter
-	  (fun (OldJob) ->
-	       lists:all(fun (FinishedJob) ->
-			     OldJob#job.pid=/=FinishedJob#job.pid
-			 end,FinishedJobs)
-	   end, AllJobs),
+  TimeStamp = get_millisecs_timestamp(),
+  UntilTime = TimeStamp + WaitTime,
+  AllJobs = NewJobs++JobsAlive,
+  case receive_completions(UntilTime,Counter,[],AllJobs,NoEnvWait) of
+    {FinishedJobs,NewJobsAlive} when is_list(FinishedJobs) ->
       shr_utils:put({?MODULE,jobs_alive},NewJobsAlive),
       FinishedJobs
   end.
 
-receive_completions(Counter,Finished,JobsAlive) ->
+receive_completions(_UntilTime,_Counter,Finished,[],false) ->
+  {Finished,[]};
+receive_completions(UntilTime,Counter,Finished,JobsAlive,NoEnvWait) ->
+  Timeout = max(0,UntilTime-get_millisecs_timestamp()),
   receive
     {'EXIT',Pid,Reason} ->
-      handle_exit(Pid,Reason,[],Counter,Finished,JobsAlive);
+      handle_exit(UntilTime,Pid,Reason,[],Counter,Finished,JobsAlive,NoEnvWait);
     {'DOWN',_,_,Pid,Reason} ->
-      handle_exit(Pid,Reason,[],Counter,Finished,JobsAlive);
+      handle_exit(UntilTime,Pid,Reason,[],Counter,Finished,JobsAlive,NoEnvWait);
     {Job,JobCounter} ->
       case Job of
 	{exit,Pid,Reason,StackTrace} when JobCounter==Counter -> 
-	  handle_exit(Pid,Reason,StackTrace,Counter,Finished,JobsAlive);
+	  handle_exit(UntilTime,Pid,Reason,StackTrace,Counter,Finished,JobsAlive,NoEnvWait);
 	{exit,Pid,_Reason,_} ->
 	  io:format
 	    ("*** Warning: exit for old job ~p received; consider increasing wait time.~n",[Pid]),
-	  receive_completions(Counter,Finished,JobsAlive);
+	  receive_completions(UntilTime,Counter,Finished,JobsAlive,NoEnvWait);
 	_ when is_record(Job,job), JobCounter==Counter ->
-	  receive_completions(Counter,[Job|Finished],JobsAlive);
+	  receive_completions(UntilTime,Counter,[Job|Finished],delete_job(Job,JobsAlive),NoEnvWait);
 	_ when is_record(Job,job) ->
 	  io:format
 	    ("*** Warning: old job received; consider increasing wait time.~n"),
-	  receive_completions(Counter,Finished,JobsAlive)
+	  receive_completions(UntilTime,Counter,Finished,JobsAlive,NoEnvWait)
       end;
     X ->
       io:format("~p: unknown message ~p received~n",[?MODULE,X]),
-      throw(bad)
-  after 0 -> lists:reverse(Finished)
+      error(bad)
+  after Timeout -> {lists:reverse(Finished),JobsAlive}
   end.
 
-handle_exit(Pid,Reason,StackTrace,Counter,Finished,JobsAlive) ->
+delete_job(Job,Jobs) ->
+  lists:filter(fun (OldJob) -> OldJob#job.pid=/=Job#job.pid end, Jobs).
+
+handle_exit(UntilTime,Pid,Reason,StackTrace,Counter,Finished,JobsAlive,NoEnvWait) ->
   if
     Reason=/=normal ->
       case lists:filter(fun (Job) -> Pid==Job#job.pid end, JobsAlive) of
 	[Job] ->
 	  NewJob = Job#job{result={exit,Pid,Reason,StackTrace}},
-	  receive_completions(Counter,[NewJob|Finished],JobsAlive);
+	  receive_completions(UntilTime,Counter,[NewJob|Finished],delete_job(NewJob,JobsAlive),NoEnvWait);
 	[] -> 
 	  ?TIMEDLOG
 	    ("*** Warning: got exit for process ~p which is not a current job~n",
 	     [Pid]),
-	  receive_completions(Counter,Finished,JobsAlive)
+	  receive_completions(UntilTime,Counter,Finished,JobsAlive,NoEnvWait)
       end;
-    true -> receive_completions(Counter,Finished,JobsAlive)
+    true -> receive_completions(UntilTime,Counter,Finished,JobsAlive,NoEnvWait)
   end.
+
+get_millisecs_timestamp() ->
+  {Mega, Sec, Micro} = os:timestamp(),
+  (Mega*1000000 + Sec)*1000 + round(Micro/1000).
 
 filter_environment_jobs(_State,Jobs) ->
   lists:filter

@@ -78,6 +78,6 @@ dynamic_test_to_test(Test,GetInit) ->
 	     {[{call,Module,F,Args}|Calls],Init};
 	   _ ->
 	     io:format("*** Error: strange call ~p~n",[Call]),
-	     throw(bad)
+	     error(bad)
 	 end
      end, {[],void}, Test).
