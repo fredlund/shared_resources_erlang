@@ -130,17 +130,6 @@ start(Options,StartFun) ->
   shr_utils:put({?MODULE,counter},Counter + 1),
   shr_utils:put({?MODULE,jobs_alive},[]),
   shr_utils:setup_shr(),
-  case shr_utils:get(test_case) of
-    TestCase=[_|_] -> 
-      shr_utils:put(test_cases,shr_utils:get(test_cases)++[TestCase]),
-      shr_utils:put(test_case,[]);
-    [] -> 
-      ok;
-    undefined ->
-      shr_utils:put(test_cases,[]),
-      shr_utils:put(test_case,[]),
-      shr_utils:put(failed,false)
-  end,
   ?TIMEDLOG
     ("start_fun is ~p~n",
      [StartFun]),
@@ -232,13 +221,6 @@ do_cmds_pre(State,[Commands|_]) ->
 do_cmds(Commands,WaitTime) ->
   try
     ?TIMEDLOG("new round: cmds = ~p~n",[Commands]),
-    case shr_utils:get(failed) of
-      false ->
-	TestCase = shr_utils:get(test_case),
-	shr_utils:put(test_case,TestCase++[Commands]);
-      _ ->
-	ok
-    end,
     ParentPid =
       self(),
     Counter =
@@ -342,7 +324,8 @@ try
 	  end;
 	false -> false
       end
-    end
+  end of PostResult when is_boolean(PostResult) -> 
+    shr_utils:put(failed,not(PostResult)), PostResult
   catch _:Reason ->
       io:format
 	("*** Model error: ~p:do_cmds_post raised an exception ~p in state~n  ~p~n"
@@ -501,8 +484,6 @@ check_prop(Options) ->
 
 check_prop(Prop,Options) ->
   shr_utils:put(test_cases,[]),
-  shr_utils:put(test_case,[]),
-  shr_utils:put(failed,false),
   EQCProp =
     eqc:on_test
     (fun () -> io:format("starting...~n"), fun () -> ok end end,
@@ -540,6 +521,13 @@ prop_res(Options) ->
 	      false ->
 		ok
 	    end,
+	    TestCases = 
+	      case shr_utils:get(test_cases) of
+		undefined -> [];
+		L when is_list(L) -> L 
+	      end,
+	    NewTestCases = [{test_case,Cmds,Res==ok}|TestCases],
+	    shr_utils:put(test_cases,NewTestCases),
 	    if
 	      (Res == ok) ->
 		case proplists:get_value(print_testcase,Options,false) of
@@ -550,7 +538,6 @@ prop_res(Options) ->
 		end,
 		true;
 	      true ->
-		shr_utils:put(failed,true),
 		print_counterexample(Cmds,H,DS,Res),
 		false
 	    end
