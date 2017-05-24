@@ -12,7 +12,7 @@
 -export([start_pre/1,start_args/1,start/2,start_post/3,start_next/3]).
 -export([do_cmds_pre/1,do_cmds_args/1,do_cmds_pre/2,do_cmds/3,do_cmds_post/3,do_cmds_next/3]).
 -export([print_jobs/2]).
--export([return_test_cases/0,print_test_cases/0]).
+-export([return_test_cases/0,print_test_cases/0,failing_test_case/0,failing_deterministic_test_case/0,print_test_case/1]).
 -export([job_exited/1]).
 
 -export([command_parser/1]).
@@ -24,6 +24,8 @@
 
 %% Super fragile below
 -record(eqc_statem_history,{state, args, command, features, result}).
+
+-record(test_case,{test_case,test_result,is_deterministic}).
 
 %%-define(debug,true).
 -include("debug.hrl").
@@ -46,6 +48,7 @@
 	  ,start_fun
 	  ,stop_fun
 	  ,jobs_alive
+	  ,is_deterministic
 	  ,counter
 	}).
 
@@ -81,6 +84,7 @@ init_state(Options) ->
     ,start_fun=StartFun
     ,stop_fun=StopFun
     ,jobs_alive=[]
+    ,is_deterministic=true
     ,completion_time=proplists:get_value(completion_time,Options,?COMPLETION_TIME)
     }.
 
@@ -359,11 +363,19 @@ do_cmds_next(State,Result={NewJobs,FinishedJobs},[Commands|_]) ->
 	  filter_environment_jobs(State,FinishedJobs)},
 	 call(filter_environment_commands(State,Commands)),
 	 State),
+    IsDeterministic =
+      not(State#state.is_deterministic) andalso 
+      case test_observers_states of
+	[] -> true;
+	[_] -> true;
+	_ -> false
+      end,
     State#state
       {
       test_gen_state=NewTestGenState
       ,test_corr_state=NewTestCorrState
       ,test_observers_states=NewTestObserversStates
+      ,is_deterministic=IsDeterministic
      }
   catch _:Reason ->
       io:format
@@ -532,7 +544,17 @@ prop_res(Options) ->
 		undefined -> [];
 		L when is_list(L) -> L 
 	      end,
-	    NewTestCases = [{test_case,Cmds,Res==ok}|TestCases],
+	    IsDeterministic =
+	      DS#state.is_deterministic,
+	    NewTestCase =
+	      #test_case
+	       {
+		 test_case=Cmds,
+		 test_result=(Res==ok),
+		 is_deterministic=IsDeterministic
+	       },
+	    NewTestCases = 
+	      [NewTestCase|TestCases],
 	    shr_utils:put(test_cases,NewTestCases),
 	    if
 	      (Res == ok) ->
@@ -739,33 +761,59 @@ print_started_job_info(Job,#state{test_gen_module=TGM,test_gen_state=TGS}) ->
 return_test_cases() ->
   shr_utils:get(test_cases).
 
+failing_test_case() ->
+  failing_test_case(return_test_cases()).
+failing_test_case([TestCase|Rest]) ->
+  if
+    not(TestCase#test_case.test_result) ->
+      TestCase;
+    true ->
+      failing_test_case(Rest)
+  end.
+
+failing_deterministic_test_case() ->
+  failing_deterministic_test_case(return_test_cases()).
+failing_deterministic_test_case([]) ->
+  throw(no_deterministic_test_case);
+failing_deterministic_test_case([TestCase|Rest]) ->
+  if
+    not(TestCase#test_case.test_result), TestCase#test_case.is_deterministic ->
+      TestCase;
+    true ->
+      failing_deterministic_test_case(Rest)
+  end.
+  
 print_test_cases() ->
   lists:foreach
-    (fun (TestCase) ->
-	 io:format
-	   ("~n~s~n",
-	    [
-	     combine
-	       ("  ",
-		lists:map
-		  (fun (Cmds) ->
-		       {Commands,Prefix,Postfix} =
-			 if
-			   is_list(Cmds), length(Cmds)>1 ->
-			     if
-			       length(Cmds)>1 -> {Cmds,"<< "," >>"};
-			       true -> {hd(Cmds),"",""}
-			     end;
-			   true -> {Cmds,"",""}
-			 end,
-		       io_lib:format
-			 ("~s~s~s",
-			  [Prefix,
-			   print_commands(Commands),
-			   Postfix])
-		   end, TestCase), "\n")
-	    ])
+    (fun (T) ->
+	 io:format("~s~n",[print_test_case(T)])
      end, return_test_cases()).
+
+print_test_case(T) ->
+  TestCase = T#test_case.test_case,
+  io_lib:format
+    ("~n~s~n",
+     [
+      combine
+	("  ",
+	 lists:map
+	   (fun (Cmds) ->
+		{Commands,Prefix,Postfix} =
+		  if
+		    is_list(Cmds), length(Cmds)>1 ->
+		      if
+			length(Cmds)>1 -> {Cmds,"<< "," >>"};
+			true -> {hd(Cmds),"",""}
+		      end;
+		    true -> {Cmds,"",""}
+		  end,
+		io_lib:format
+		  ("~s~s~s",
+		   [Prefix,
+		    print_commands(Commands),
+		    Postfix])
+	    end, TestCase), "\n")
+     ]).
 
 combine(_Pre,[],_Combinator) ->
   "";
