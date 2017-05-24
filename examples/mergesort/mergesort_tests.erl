@@ -71,7 +71,7 @@ test() ->
   test(mergesort_n_shr,[no_par]).
 
 test1() ->
-  test(mergesort_n_buf_shr,[no_par,{resource,mergesort_N_buf_to_2(shr_always)}]).
+  test(mergesort_n_buf_shr,[no_env_wait,no_par,{resource,mergesort_N_buf_to_2(shr_always)}]).
 
 test2() ->
   test(mergesort_n_buf_shr,[no_par]).

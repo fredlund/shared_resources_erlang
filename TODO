@@ -2,8 +2,12 @@
 rerun failing tests (non-progressing ones at least); that way we 
 could also reduce the timeout and increase testing frequency.
 
-- Maybe implement an option for ignoring safety errors to find scheduling
-errors more reliably.
+- Maybe implement an option for shared resources to report when they
+are stable:
+    r!{hello,id,from} => from!{hi,id}
+The reader ignores all messages that are too late.
+
+    
 
 
 

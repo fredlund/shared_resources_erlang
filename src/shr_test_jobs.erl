@@ -364,8 +364,8 @@ do_cmds_next(State,Result={NewJobs,FinishedJobs},[Commands|_]) ->
 	 call(filter_environment_commands(State,Commands)),
 	 State),
     IsDeterministic =
-      not(State#state.is_deterministic) andalso 
-      case test_observers_states of
+      State#state.is_deterministic andalso 
+      case State#state.test_observers_states of
 	[] -> true;
 	[_] -> true;
 	_ -> false
@@ -594,7 +594,7 @@ print_testcase1(Cmds,H,State,Result) ->
     CommandResultSequence = commands_and_return_values(Cmds,H,Result),
     io:format("~nCommand sequence:~n"),
     io:format("-----------------~n~n"),
-    print_commands(CommandResultSequence,State),
+    print_terminated_commands(CommandResultSequence,State),
     io:format("~n~n")
   catch _:Exception ->
       io:format
@@ -655,9 +655,9 @@ ensure_boolean(Other) ->
     ("Stacktrace:~n~p~n",
      [try throw(trace) catch _:_ -> erlang:get_stacktrace(), Other end]).
 
-print_commands([],_State) ->
+print_terminated_commands([],_State) ->
   ok;
-print_commands([{Call,Result}|Rest],State) ->
+print_terminated_commands([{Call,Result}|Rest],State) ->
   ResultString =
     case Call of
       {_,_,do_cmds,_Cmds,_} ->
@@ -702,28 +702,28 @@ print_commands([{Call,Result}|Rest],State) ->
 	FinishedStr++ExitedStr;
       _ -> ""
     end,
-  CallString = print_call(Call,Result,State),
+  CallString = print_call_result(Call,Result,State),
   if
     CallString=/="" ->
       io:format("  ~s ~s~n",[CallString,ResultString]);
     true ->
       ok
   end,
-  print_commands(Rest,State).
+  print_terminated_commands(Rest,State).
 
-print_call(Call,Result,State) ->
+print_call_result(Call,Result,State) ->
     case Call of
       {_,_,do_cmds,[Commands|_],_} ->
-	print_call_commands(Commands,Result,State);
+	print_call_commands_result(Commands,Result,State);
       {_,_,do_cmds,[Commands|_],_,_} ->
-	print_call_commands(Commands,Result,State);
+	print_call_commands_result(Commands,Result,State);
       {_,_,start,_,_} ->
 	"";
       {_,_,Name,Args,_} ->
 	io_lib:format("~p ~p",[Name,Args])
     end.
 
-print_call_commands(Commands,Result,State) ->
+print_call_commands_result(Commands,Result,State) ->
   {Jobs,_} = Result,
   {Prefix,Postfix} = 
     if
@@ -785,9 +785,27 @@ failing_deterministic_test_case([TestCase|Rest]) ->
   
 print_test_cases() ->
   lists:foreach
-    (fun (T) ->
-	 io:format("~s~n",[print_test_case(T)])
+    (fun (TestCase) ->
+	 print_test_case(convert_to_basic_testcase(TestCase))
      end, return_test_cases()).
+
+convert_to_basic_testcase(TestCase) ->
+  lists:reverse
+    (lists:foldl
+       (fun (Command,Acc) ->
+	    if
+	      is_tuple(Command), size(Command)>=4 ->
+		case element(3,Command) of
+		  do_cmds ->
+		    case element(4,Command) of
+		      [Commands|_] -> [Commands|Acc];
+		      _ -> Acc
+		    end;
+		  _ -> Acc
+		end;
+	      true -> Acc
+	    end
+	end, [], TestCase)).
 
 print_test_case(T) ->
   TestCase = T#test_case.test_case,
@@ -812,7 +830,7 @@ print_test_case(T) ->
 		   [Prefix,
 		    print_commands(Commands),
 		    Postfix])
-	    end, TestCase), "\n")
+	    end, convert_to_basic_testcase(TestCase)), "\n")
      ]).
 
 combine(_Pre,[],_Combinator) ->
@@ -820,7 +838,10 @@ combine(_Pre,[],_Combinator) ->
 combine(Pre,[Hd],_Combinator) ->
   Pre++Hd;
 combine(Pre,[Hd|Rest],Combinator) ->
-  Pre++Hd++Combinator++combine(Pre,Rest,Combinator).
+  if
+    Hd=="" -> combine(Pre,Rest,Combinator);
+    true -> Pre++Hd++Combinator++combine(Pre,Rest,Combinator)
+  end.
 
 print_commands([]) ->
   "";
@@ -830,8 +851,6 @@ print_commands([Cmd]) ->
   io_lib:format("~s",[shr_utils:print_mfa({Target,F,Args})]);
 print_commands([Cmd|Rest]) ->
   io_lib:format("~s,~s",[print_commands([Cmd]),print_commands(Rest)]).
-
-
 
 
 
