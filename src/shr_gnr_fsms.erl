@@ -15,7 +15,6 @@
 
 -include("fsmstate.hrl").
 
--define(MAX_CONCURRENT,3).
 -define(MAX_STATES,400).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -99,7 +98,7 @@ initial_state(PreMachineSpecs,PreOptions) ->
       true ->
 	[{max_par,1}|PreOptions];
       false ->
-	[{max_par,?MAX_CONCURRENT}|PreOptions];
+	PreOptions;
       _ ->
 	PreOptions
     end,
@@ -113,7 +112,7 @@ initial_state(PreMachineSpecs,PreOptions) ->
     lists:foldl
       (fun ({N,MachineWithMachineInit},Acc) when is_integer(N) ->
 	   lists:map
-	     (fun (N) -> {seq,N,MachineWithMachineInit} end, lists:seq(1,N))
+	     (fun (I) -> {seq,I,MachineWithMachineInit} end, lists:seq(1,N))
 	     ++Acc;
 	   (MachineWithInit,Acc) ->
 	   [{machine,MachineWithInit}|Acc]
@@ -163,27 +162,39 @@ precondition(#fstate{blocked=Blocked,machines=Machines,global_state=GlobalState}
      end, Commands).
 
 command(State,CorrState) ->
-  Result = command1(State,1,CorrState),
+  ParLimit = 
+    case proplists:get_value(max_par,State#fstate.options) of
+      N when is_integer(N), N>=1 ->
+	N;
+      undefined ->
+	length(State#fstate.machines)
+    end,
+  NumProcs = length(State#fstate.machines),
+  ?LET
+     (NPars,
+      choose(1,min(NumProcs,ParLimit)),
+      begin
+	Result = command1(State,NPars,CorrState),
+	?LOG
+	   ("Command generated: ~p~n",
+	    [Result]),
+	Result
+      end).
+
+command1(_State,NPars,_CorrState) when NPars =< 0 ->
+  [];
+command1(State,NPars,CorrState) when NPars > 0 ->
   ?LOG
-    ("Command generated: ~p~n",
-     [Result]),
-  Result.
-command1(State,NPars,CorrState) ->
-  ?LOG
-     ("fsms:command - blocked=~p~nmachines=~p permit_par(_,~p)=~p~n",
+     ("fsms:command - blocked=~p~nmachines=~p~n",
       [State#fstate.blocked,
-       State#fstate.machines,
-       NPars,
-       permit_par(State,NPars)]),
-  case length(State#fstate.blocked)<length(State#fstate.machines) 
-    andalso permit_par(State,NPars) of
+       State#fstate.machines]),
+  case length(State#fstate.blocked)<length(State#fstate.machines) of
     false -> 
       ?LOG
 	 ("fsms:command1 - no command can be generated;~n"
-	  ++"length(blocked)=~p length(machines)=~p permit_par()=~p~n",
+	  ++"length(blocked)=~p length(machines)=~p~n",
 	  [length(State#fstate.blocked),
-	   length(State#fstate.machines), 
-	   permit_par(State,NPars)]),
+	   length(State#fstate.machines)]),
       [];
     true ->
       ?LET({Command,NewState},
@@ -197,7 +208,7 @@ command1(State,NPars,CorrState) ->
 		   [Command];
 		 false ->
 		   ?LET(NextCommands,
-			command1(NewState,NPars+1,CorrState),
+			command1(NewState,NPars-1,CorrState),
 			[Command|NextCommands])
 	       end
 	   end)
@@ -235,14 +246,6 @@ gen_mach_cmd(State) ->
 		      {{Type,{F,Args},[{machine_id,MachId}|Options]},NewState}
 		  end)
 	   end)
-  end.
-
-permit_par(State,NPars) ->
-  case proplists:get_value(max_par,State#fstate.options,?MAX_CONCURRENT) of
-    false ->
-      false;
-    MaxPar when is_integer(MaxPar), MaxPar>=0 ->
-      MaxPar >= NPars
   end.
 
 limit_states(State,CorrState) ->
