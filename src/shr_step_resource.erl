@@ -1,0 +1,144 @@
+-module(shr_step_resource).
+
+%% A single step semantics for a resource (until a state is stable)
+
+-record(info,
+	{
+	  data_module :: atom(),
+	  wait_module :: atom()
+	}).
+
+-record(state,
+	{
+	  state,
+	  waitstate,
+	  calls,
+	  waiting 
+	}).
+
+-record(call,
+	{
+	  call,
+	  waitinfo
+	}).
+
+-export([initial_state/3,step/3]).
+
+initial_state(StateSpec,WaitSpec,Options) ->  
+  StateMod = shr_utils:module(StateSpec),
+  WaitMod = shr_utils:module(WaitSpec),
+  State = shr_utils:initial_state(StateSpec,Options),
+  WaitState = shr_utils:initial_state(WaitSpec,[{data_module,StateMod}|Options]),
+   {
+     #info
+     {
+       data_module=StateMod, 
+       wait_module=WaitMod
+     },
+     #state
+     {
+       state=State, 
+       waitstate=WaitState,
+       calls=[],
+       waiting=[]
+     }
+   }.
+
+step(Calls,States,Info) when is_list(States) ->
+  merge_states_and_unblocked
+    (lists:flatmap (fun (State) -> step(Calls,State,Info) end, States));
+step(Calls,State,Info) ->
+  EnabledCalls = 
+    lists:filter
+      (fun (Call) -> 
+	   (waiting_module(Info)):pre(Call,State#state.state) 
+       end, Calls),
+  step(State#state{waiting=EnabledCalls},Info).
+
+step(State,Info) when not(is_list(State)) ->
+  step([{State,[]}],Info);
+step(StatesUnblocked,Info) ->
+  NewStatesUnblocked = 
+    merge_states_and_unblocked
+      (lists:flatmap
+	 (fun ({State,Unblocked}) ->
+	      do_step(State,Unblocked,Info)
+	  end, StatesUnblocked)),
+  if
+    NewStatesUnblocked == StatesUnblocked ->
+      StatesUnblocked;
+    true ->
+      step(NewStatesUnblocked,Info)
+  end.
+
+do_step(State,Unblocked,Info) ->
+  WaitingModule = waiting_module(Info),
+  DataModule = data_module(Info),
+  AcceptNewStates =
+    lists:map
+      (fun (WaitingCall) ->
+	   {WaitInfo,NewWaitState} =
+	     WaitingModule:new_waiting
+	       (WaitingCall,
+		State#state.waitstate,
+		State#state.state),
+	   NewState =
+	     State#state
+	     {
+	       waiting = lists:delete(WaitingCall,State#state.waiting),
+	       calls = #call{call=WaitingCall,waitinfo=WaitInfo},
+	       waitstate = NewWaitState
+	     },
+	   {Unblocked,NewState}
+       end, State#state.waiting),
+  EnabledCalls =
+    lists:filter
+      (fun (Call) ->
+	   DataModule:cpre(Call#call.call,State#state.state)
+       end, State#state.calls),
+  CallNewStates =
+    lists:flatmap
+      (fun (Call) ->
+	   NewUnblocked = [Call|Unblocked],
+	   NewDataStates =
+	     case DataModule:post(Call#call.call,void,State#state.state) of
+	       {'$shr_nondeterministic',NewStates} -> NewStates;
+	       NewDataState -> NewDataState
+	     end,
+	   lists:map
+	     (fun (NewDataState) ->
+		  NewWaitState = 
+		    WaitingModule:post_waiting
+		      (Call#call.call,Call#call.waitinfo,
+		       State#state.waitstate,NewDataState),
+		  NewState =
+		    State#state
+		    {
+		      state = NewDataState,
+		      waitstate = NewWaitState,
+		      calls = lists:delete(Call,State#state.calls)
+		    },
+		  {NewUnblocked,NewState}
+	      end, NewDataStates)
+       end, EnabledCalls),
+  merge_states_and_unblocked(AcceptNewStates++CallNewStates).
+
+merge_states_and_unblocked(StatesAndUnblocked) ->	   
+  Normalized =
+    lists:map
+      (fun (Unblocked,State) ->
+	   {lists:sort(Unblocked),
+	    State#state
+	    {
+	      waiting = lists:sort(State#state.waiting),
+	      calls = lists:sort(State#state.calls)
+	    }}
+       end, StatesAndUnblocked),
+  lists:usort(Normalized).
+
+data_module(Info) ->
+  Info#info.data_module.
+waiting_module(Info) ->
+  Info#info.wait_module.
+
+
