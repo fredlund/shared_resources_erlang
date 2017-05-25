@@ -14,3 +14,5 @@
 	  call,          %% {F,Args}
 	  options=[]     %% list of values
 	}).
+
+-record(test_case,{test_case,test_result}).

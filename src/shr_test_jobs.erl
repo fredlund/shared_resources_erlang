@@ -12,8 +12,7 @@
 -export([start_pre/1,start_args/1,start/2,start_post/3,start_next/3]).
 -export([do_cmds_pre/1,do_cmds_args/1,do_cmds_pre/2,do_cmds/3,do_cmds_post/3,do_cmds_next/3]).
 -export([print_jobs/2]).
--export([return_test_cases/0,print_test_cases/0,failing_test_case/0,failing_deterministic_test_case/0,print_test_case/1,convert_to_basic_testcase/1]).
--export([failing_nondeterministic_test_case/0,nondeterministic_test_case/0]).
+-export([return_test_cases/0,print_test_cases/0,print_test_case/1,convert_to_basic_testcase/1]).
 -export([job_exited/1]).
 
 -export([command_parser/1]).
@@ -25,8 +24,6 @@
 
 %% Super fragile below
 -record(eqc_statem_history,{state, args, command, features, result}).
-
--record(test_case,{test_case,test_result,is_deterministic}).
 
 %%-define(debug,true).
 -include("debug.hrl").
@@ -49,7 +46,6 @@
 	  ,start_fun
 	  ,stop_fun
 	  ,jobs_alive
-	  ,is_deterministic
 	  ,counter
 	}).
 
@@ -85,7 +81,6 @@ init_state(Options) ->
     ,start_fun=StartFun
     ,stop_fun=StopFun
     ,jobs_alive=[]
-    ,is_deterministic=true
     ,completion_time=proplists:get_value(completion_time,Options,?COMPLETION_TIME)
     }.
 
@@ -138,23 +133,43 @@ start(Options,StartFun) ->
   ?TIMEDLOG
     ("start_fun is ~p~n",
      [StartFun]),
+  StartResult =
+    if
+      is_function(StartFun) ->
+	try 
+	  Self = self(),
+	  spawn_link
+	    (fun () ->
+		 Result = StartFun(Options),
+		 Self!{started,Result}
+	     end),
+	  receive
+	    {started,Result} ->
+	      ?TIMEDLOG
+		 ("start_fun ~p returned~n",
+		  [StartFun]),
+	      Result
+	  after 10000 ->
+	      io:format("*** Error: start_fun does not return~n"),
+	      false
+	  end
+	catch Class:Reason ->
+	    io:format
+	      ("*** Error: function ~p with options~n~p~n"++
+		 "raised an exception ~p:~p~n",
+	       [StartFun,Options,Class,Reason]),
+	    io:format
+	      ("stacktrace:~n~p~n",
+	       [erlang:get_stacktrace()]),
+	    error(bad_startfun)
+	end;
+      true ->
+	[]
+    end,
   if
-    is_function(StartFun) ->
-      try StartFun(Options)
-      catch Class:Reason ->
-	  io:format
-	    ("*** Error: function ~p with options~n~p~n"++
-	       "raised an exception ~p:~p~n",
-	     [StartFun,Options,Class,Reason]),
-	  io:format
-	    ("stacktrace:~n~p~n",
-	     [erlang:get_stacktrace()]),
-	  error(bad_startfun)
-      end;
-    true ->
-      []
-  end,
-  Counter.
+    StartResult==false -> false;
+    true -> Counter
+  end.
 
 start_post(_State,_,{'EXIT',Reason}) ->
   io:format
@@ -164,8 +179,8 @@ start_post(_State,_,{'EXIT',Reason}) ->
     ("Stacktrace:~n~p~n",
      [erlang:get_stacktrace()]),
   false;
-start_post(_State,_,_Result) ->
-  true.
+start_post(_State,_,Result) ->
+  Result=/=false.
 
 start_next(State,
 	   Counter,
@@ -364,16 +379,11 @@ do_cmds_next(State,Result={NewJobs,FinishedJobs},[Commands|_]) ->
 	  filter_environment_jobs(State,FinishedJobs)},
 	 call(filter_environment_commands(State,Commands)),
 	 State),
-    IsDeterministic =
-      State#state.is_deterministic andalso 
-      (State#state.test_corr_module):is_deterministic
-	(State#state.test_corr_state),
     State#state
       {
       test_gen_state=NewTestGenState
       ,test_corr_state=NewTestCorrState
       ,test_observers_states=NewTestObserversStates
-      ,is_deterministic=IsDeterministic
      }
   catch _:Reason ->
       io:format
@@ -542,14 +552,11 @@ prop_res(Options) ->
 		undefined -> [];
 		L when is_list(L) -> L 
 	      end,
-	    IsDeterministic =
-	      DS#state.is_deterministic,
 	    NewTestCase =
 	      #test_case
 	       {
 		 test_case=Cmds,
-		 test_result=(Res==ok),
-		 is_deterministic=IsDeterministic
+		 test_result=(Res==ok)
 	       },
 	    NewTestCases = 
 	      [NewTestCase|TestCases],
@@ -758,37 +765,6 @@ print_started_job_info(Job,#state{test_gen_module=TGM,test_gen_state=TGS}) ->
 
 return_test_cases() ->
   shr_utils:get(test_cases).
-
-find_test_case(Test) ->
-  find_test_case(Test,return_test_cases()).
-find_test_case(_,[]) ->
-  throw(no_such_test_case);
-find_test_case(F,[TestCase|Rest]) ->
-  case F(TestCase) of
-    true -> TestCase;
-    false -> find_test_case(F,Rest)
-  end.
-
-failing_test_case() ->
-  find_test_case
-    (fun (T) -> 
-	 not(T#test_case.test_result) 
-     end).
-failing_deterministic_test_case() ->
-  find_test_case
-    (fun (T) ->
-	 (not(T#test_case.test_result)) andalso T#test_case.is_deterministic
-     end).
-failing_nondeterministic_test_case() ->
-  find_test_case
-    (fun (T) ->
-	 (not(T#test_case.test_result)) andalso not(T#test_case.is_deterministic)
-     end).
-nondeterministic_test_case() ->
-  find_test_case
-    (fun (T) ->
-	 not(T#test_case.is_deterministic)
-     end).
 
 print_test_cases() ->
   lists:foreach
