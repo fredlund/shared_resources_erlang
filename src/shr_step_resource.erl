@@ -5,6 +5,7 @@
 %%-define(debug,true).
 -include("debug.hrl").
 
+-include("shr_step.hrl").
 
 -record(info,
 	{
@@ -20,11 +21,6 @@
 	  waiting 
 	}).
 
--record(call,
-	{
-	  call,
-	  waitinfo
-	}).
 
 -export([initial_state/3,step/3,bigstep/3]).
 
@@ -49,14 +45,23 @@ initial_state(StateSpec,WaitSpec,Options) ->
    }.
 
 bigstep(CallSequence,State,Info) ->
-  bigstep(CallSequence,State,Info,[]).
+  bigstep(CallSequence,State,Info,[],1).
 
-bigstep([],State,_Info,History) -> 
+bigstep([],State,_Info,History,_Counter) -> 
   {deterministic,State,lists:reverse(History)};
-bigstep([Calls|Rest],State,Info,History) ->
+bigstep([RawCalls|Rest],State,Info,History,Counter) ->
+  {Calls,NewCounter} = 
+    lists:foldl
+      (fun (RawCall,{AccCalls,AccCounter}) ->
+	   case RawCall of
+	     {_F,_Args} -> 
+	       {[#call{call=RawCall,id=AccCounter}|AccCalls],AccCounter+1}
+	   end
+       end, {[],Counter}, RawCalls),
   case step(Calls,State,Info) of
     [{NewState,Unblocked}] -> 
-      bigstep(Rest,NewState,Info,[Unblocked|History]);
+      HistoryItem = #history_item{calls=Calls,unblocked=Unblocked},
+      bigstep(Rest,NewState,Info,[HistoryItem|History],NewCounter);
     Other=[_|_] -> 
       {nondeterministic,Other,lists:reverse(History),Rest}
   end.
@@ -117,7 +122,7 @@ do_step(State,Unblocked,Info) ->
 	     State#state
 	     {
 	       waiting = lists:delete(WaitingCall,State#state.waiting),
-	       calls = [#call{call=WaitingCall,waitinfo=WaitInfo}|State#state.calls],
+	       calls = [WaitingCall#call{waitinfo=WaitInfo}|State#state.calls],
 	       waitstate = NewWaitState
 	     },
 	   {NewState,Unblocked}
