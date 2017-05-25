@@ -6,6 +6,7 @@
 
 %% private exports
 -export([job_new_waiting/3, executable_jobs/4, job_next_states/5]).
+-export([is_deterministic/1]).
 
 %%-define(debug,true).
 -include("debug.hrl").
@@ -113,6 +114,12 @@ next_state(State,Result,_,TS) ->
       io:format("~n*** Warning: next raises exception~n"),
       io:format("~p~n",[erlang:get_stacktrace()]),
       error(badresource)
+  end.
+
+is_deterministic(State) ->
+  case State#corr_res_state.states of
+    [_,_|_] -> false;
+    _ -> true
   end.
 
 %%valid_jobs(Jobs,State) -> 

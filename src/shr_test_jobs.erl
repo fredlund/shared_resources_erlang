@@ -12,7 +12,8 @@
 -export([start_pre/1,start_args/1,start/2,start_post/3,start_next/3]).
 -export([do_cmds_pre/1,do_cmds_args/1,do_cmds_pre/2,do_cmds/3,do_cmds_post/3,do_cmds_next/3]).
 -export([print_jobs/2]).
--export([return_test_cases/0,print_test_cases/0,failing_test_case/0,failing_deterministic_test_case/0,print_test_case/1]).
+-export([return_test_cases/0,print_test_cases/0,failing_test_case/0,failing_deterministic_test_case/0,print_test_case/1,convert_to_basic_testcase/1]).
+-export([failing_nondeterministic_test_case/0,nondeterministic_test_case/0]).
 -export([job_exited/1]).
 
 -export([command_parser/1]).
@@ -365,11 +366,8 @@ do_cmds_next(State,Result={NewJobs,FinishedJobs},[Commands|_]) ->
 	 State),
     IsDeterministic =
       State#state.is_deterministic andalso 
-      case State#state.test_observers_states of
-	[] -> true;
-	[_] -> true;
-	_ -> false
-      end,
+      (State#state.test_corr_module):is_deterministic
+	(State#state.test_corr_state),
     State#state
       {
       test_gen_state=NewTestGenState
@@ -761,34 +759,45 @@ print_started_job_info(Job,#state{test_gen_module=TGM,test_gen_state=TGS}) ->
 return_test_cases() ->
   shr_utils:get(test_cases).
 
-failing_test_case() ->
-  failing_test_case(return_test_cases()).
-failing_test_case([TestCase|Rest]) ->
-  if
-    not(TestCase#test_case.test_result) ->
-      TestCase;
-    true ->
-      failing_test_case(Rest)
+find_test_case(Test) ->
+  find_test_case(Test,return_test_cases()).
+find_test_case(_,[]) ->
+  throw(no_such_test_case);
+find_test_case(F,[TestCase|Rest]) ->
+  case F(TestCase) of
+    true -> TestCase;
+    false -> find_test_case(F,Rest)
   end.
 
+failing_test_case() ->
+  find_test_case
+    (fun (T) -> 
+	 not(T#test_case.test_result) 
+     end).
 failing_deterministic_test_case() ->
-  failing_deterministic_test_case(return_test_cases()).
-failing_deterministic_test_case([]) ->
-  throw(no_deterministic_test_case);
-failing_deterministic_test_case([TestCase|Rest]) ->
-  if
-    not(TestCase#test_case.test_result), TestCase#test_case.is_deterministic ->
-      TestCase;
-    true ->
-      failing_deterministic_test_case(Rest)
-  end.
-  
+  find_test_case
+    (fun (T) ->
+	 (not(T#test_case.test_result)) andalso T#test_case.is_deterministic
+     end).
+failing_nondeterministic_test_case() ->
+  find_test_case
+    (fun (T) ->
+	 (not(T#test_case.test_result)) andalso not(T#test_case.is_deterministic)
+     end).
+nondeterministic_test_case() ->
+  find_test_case
+    (fun (T) ->
+	 not(T#test_case.is_deterministic)
+     end).
+
 print_test_cases() ->
   lists:foreach
     (fun (TestCase) ->
 	 print_test_case(convert_to_basic_testcase(TestCase))
      end, return_test_cases()).
 
+convert_to_basic_testcase(TestCase) when is_record(TestCase,test_case) ->
+  convert_to_basic_testcase(TestCase#test_case.test_case);
 convert_to_basic_testcase(TestCase) ->
   lists:reverse
     (lists:foldl
