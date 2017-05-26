@@ -48,7 +48,7 @@ bigstep(CallSequence,State,Info) ->
   bigstep(CallSequence,State,Info,[],1).
 
 bigstep([],State,_Info,History,_Counter) -> 
-  {deterministic,State,lists:reverse(History)};
+  {sequence,{State,lists:reverse(History)}};
 bigstep([RawCalls|Rest],State,Info,History,Counter) ->
   {Calls,NewCounter} = 
     lists:foldl
@@ -63,7 +63,7 @@ bigstep([RawCalls|Rest],State,Info,History,Counter) ->
       HistoryItem = #history_item{calls=Calls,unblocked=Unblocked},
       bigstep(Rest,NewState,Info,[HistoryItem|History],NewCounter);
     Other=[_|_] -> 
-      {nondeterministic,Other,lists:reverse(History),Rest}
+      {branching,{Calls,Other,lists:reverse(History),Rest}}
   end.
 
 step(Calls,States,Info) when is_list(States) ->
