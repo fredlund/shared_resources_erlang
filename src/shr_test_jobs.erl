@@ -527,8 +527,9 @@ prop_res(Options) ->
   ?FORALL
      (Cmds,
       ?LET(SCmds,
-	   (eqc_dynamic_cluster:dynamic_commands
-	      (?MODULE,init_state(Options))),
+	   (more_commands
+	      (3,eqc_dynamic_cluster:dynamic_commands
+		   (?MODULE,init_state(Options)))),
 	   SCmds),
       ?CHECK_COMMANDS
 	 ({H, DS, Res},
