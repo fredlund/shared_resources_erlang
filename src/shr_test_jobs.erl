@@ -138,21 +138,13 @@ start(Options,StartFun) ->
       is_function(StartFun) ->
 	try 
 	  Self = self(),
-	  spawn_link
-	    (fun () ->
-		 Result = StartFun(Options),
-		 Self!{started,Result}
-	     end),
-	  receive
-	    {started,Result} ->
-	      ?TIMEDLOG
-		 ("start_fun ~p returned~n",
-		  [StartFun]),
-	      Result
-	  after 10000 ->
-	      io:format("*** Error: start_fun does not return~n"),
-	      false
-	  end
+	  {Pid,Ref} = 
+	    spawn_monitor
+	      (fun () ->
+		   Result = StartFun(Options),
+		   Self!{started,Result}
+	       end),
+	  wait_start(Pid,Ref)
 	catch Class:Reason ->
 	    io:format
 	      ("*** Error: function ~p with options~n~p~n"++
@@ -170,6 +162,24 @@ start(Options,StartFun) ->
     StartResult==false -> false;
     true -> Counter
   end.
+
+wait_start(Pid,Ref) ->
+  receive
+    {'DOWN',Ref,process,_Object,Info} ->
+      io:format("~n*** WARNING: start_fun failed due to:~n~p~n",[Info]),
+      wait_start(Pid,Ref);
+    {started,Result} ->
+	?TIMEDLOG
+	   ("start_fun ~p returned~n",
+	    [StartFun]),
+	Result;
+    Other ->
+      io:format("~n*** WARNING: got message ~p~n",[Other]),
+      wait_start(Pid,Ref)
+    after 10000 ->
+	io:format("*** Error: start_fun does not return~n"),
+	false
+    end.
 
 start_post(_State,_,{'EXIT',Reason}) ->
   io:format
