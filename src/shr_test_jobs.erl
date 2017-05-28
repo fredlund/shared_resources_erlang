@@ -173,6 +173,8 @@ wait_start(Pid,Ref) ->
 	   ("start_fun ~p returned~n",
 	    [StartFun]),
 	Result;
+    {'DOWN',_,_,_,normal} ->
+      wait_start(Pid,Ref);
     Other ->
       io:format("~n*** WARNING: got message ~p~n",[Other]),
       wait_start(Pid,Ref)
