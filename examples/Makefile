@@ -3,9 +3,10 @@ all:
 	(cd multibuffer; make)
 	(cd gritter; make)
 	(cd mergesort; make)
+	(cd robofab; make)
 
 clean:
 	(cd robots; make clean)
 	(cd multibuffer; make clean)
 	(cd gritter; make clean)
-	(cd mergesort; make clean)
+	(cd robofab; make clean)
