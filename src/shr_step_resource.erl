@@ -11,6 +11,7 @@
 	{
 	  data_module :: atom(),
 	  wait_module :: atom(),
+	  gen_module,
 	  counter
 	}).
 
@@ -18,14 +19,15 @@
 	{
 	  state,
 	  waitstate,
+	  genstate,
 	  calls,
-	  waiting 
+	  waiting
 	}).
 
 
 -export([initial_state/3,step/3]).
 
-initial_state(StateSpec,WaitSpec,Options) ->  
+initial_state(StateSpec,WaitSpec,GenModule,GenState,Options) ->  
   StateMod = shr_utils:module(StateSpec),
   WaitMod = shr_utils:module(WaitSpec),
   State = shr_utils:initial_state(StateSpec,Options),
@@ -35,51 +37,32 @@ initial_state(StateSpec,WaitSpec,Options) ->
      {
        data_module=StateMod, 
        wait_module=WaitMod,
+       gen_module=GenModule,
        counter=0
      },
      #state
      {
        state=State, 
        waitstate=WaitState,
+       genstate=GenState,
        calls=[],
        waiting=[]
      }
    }.
 
-bigstep(CallSequence,State,Info) ->
-  bigstep(CallSequence,State,Info,[],1).
-
-bigstep([],State,_Info,History,_Counter) -> 
-  {sequence,{State,lists:reverse(History)}};
-bigstep([RawCalls|Rest],State,Info,History,Counter) ->
-  {Calls,NewCounter} = 
+step(PreJobCalls,State,Info) ->
+  Counter = Info#info.counter,
+  {JobCalls,NewCounter} =
     lists:foldl
-      (fun (RawCall,{AccCalls,AccCounter}) ->
-	   case RawCall of
-	     {_F,_Args} -> 
-	       {[#call{call=RawCall,id=AccCounter}|AccCalls],AccCounter+1}
-	   end
-       end, {[],Counter}, RawCalls),
-  case step(Calls,State,Info) of
-    [{NewState,Unblocked}] -> 
-      HistoryItem = #history_item{calls=Calls,unblocked=Unblocked},
-      bigstep(Rest,NewState,Info,[HistoryItem|History],NewCounter);
-    Other=[_|_] -> 
-      {branching,{Calls,Other,lists:reverse(History),Rest}}
-  end.
+      (fun (JCall,Counter) ->
+	   {JCall#job{pid=Counter}, Counter+1}
+       end, {[], Info#info.counter}, PreJobCalls),
+  {
+    merge_states_and_unblocked(step(JobCalls,State,Info)),
+    Info#info{counter=NewCounter}
+  }.
 
-step(Calls,States,Info) when is_list(States) ->
-  merge_states_and_unblocked
-    (lists:flatmap (fun (State) -> step(Calls,State,Info) end, States));
 step(PreCalls,State,Info) ->
-  ?LOG("step(calls=~p~nstate=~p~n",[PreCalls,State]),
-  Calls = 
-    if
-      is_list(PreCalls) ->
-	PreCalls;
-      true ->
-	[PreCalls]
-    end,
   EnabledCalls = 
     lists:filter
       (fun (Call) -> 
