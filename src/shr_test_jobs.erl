@@ -12,11 +12,12 @@
 -export([start_pre/1,start_args/1,start/2,start_post/3,start_next/3]).
 -export([do_cmds_pre/1,do_cmds_args/1,do_cmds_pre/2,do_cmds/3,do_cmds_post/3,do_cmds_next/3]).
 -export([print_jobs/2]).
--export([return_test_cases/0,print_test_cases/0,print_test_case/1,convert_to_basic_testcase/1]).
 -export([job_exited/1]).
 
 -export([command_parser/1]).
 -export([prop_res/1, check_prop/1, check_prop/2, eqc_printer/2]).
+
+-export([return_test_cases/0,print_test_cases/0,print_test_case/1,initial_gen_state/1,gen_module/1,basic_test_case/1]).
 
 -include_lib("eqc/include/eqc.hrl").
 -include_lib("eqc/include/eqc_component.hrl").
@@ -785,6 +786,31 @@ print_test_cases() ->
 	 print_test_case(convert_to_basic_testcase(TestCase))
      end, return_test_cases()).
 
+initial_gen_state(TestCase) ->
+  State = initial_state_from_test_case(TestCase),
+  State#state.test_gen_state.
+
+gen_module(TestCase) ->
+  State = initial_state_from_test_case(TestCase),
+  State#state.test_gen_module.
+
+initial_state_from_test_case(TestCase) ->
+  case TestCase of
+    [{init,Init}|_] ->
+      {State,_} = Init,
+      State
+  end.
+  
+basic_test_case(TestCase) ->
+  lists:filter
+    (fun (TestCase) ->
+	 case TestCase of
+	   {init,_} -> false;
+	   {final,_,_} -> false;
+	   T when is_tuple(T) -> element(3,T)==do_cmds
+	 end
+     end, TestCase).
+
 convert_to_basic_testcase(TestCase) when is_record(TestCase,test_case) ->
   convert_to_basic_testcase(TestCase#test_case.test_case);
 convert_to_basic_testcase(TestCase) ->
@@ -849,6 +875,8 @@ print_commands([Cmd]) ->
   io_lib:format("~s",[shr_utils:print_mfa({Target,F,Args})]);
 print_commands([Cmd|Rest]) ->
   io_lib:format("~s,~s",[print_commands([Cmd]),print_commands(Rest)]).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
 

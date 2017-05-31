@@ -23,7 +23,7 @@
 	}).
 
 
--export([initial_state/3,step/3,bigstep/3,state_space/3]).
+-export([initial_state/3,step/3]).
 
 initial_state(StateSpec,WaitSpec,Options) ->  
   StateMod = shr_utils:module(StateSpec),
@@ -45,36 +45,6 @@ initial_state(StateSpec,WaitSpec,Options) ->
        waiting=[]
      }
    }.
-
-state_space(CallSequence,InitialState,Info) ->
-  state_space(CallSequence,InitialState,Info,[]).
-
-state_space(CallSequence,State,Info,States) ->
-  case lookup_state(CallSequence,State,States) of
-    {ok,Name} ->
-      {name,Name};
-    false when CallSequence==[] ->
-      nil;
-    false ->
-      {NewStates,NewInfo} = add_new_state(CallSequence,State,States,Info),
-      case bigstep(CallSequence,State,Info) of
-	{sequence,{State,_}} ->
-	  {sequence,CallSequence,State};
-	{branching,{Calls,States,_,RemainingCalls}} ->
-	  lists:map
-	    (fun ({ChoiceState,Unblocked}) ->
-		 Result = 
-		   state_space(RemainingCalls,ChoiceState,NewInfo,NewStates),
-		 {choice,Calls,Result}
-	     end, States)
-      end
-  end.
-
-lookup_state(Calls,State,States) ->
-  lists:keyfind({Calls,State},1,States).
-add_new_state(Calls,State,States,Info) ->
-  {[{{Calls,State},Info#info.counter}|States], 
-   Info#info{counter=Info#info.counter+1}}.
 
 bigstep(CallSequence,State,Info) ->
   bigstep(CallSequence,State,Info,[],1).
