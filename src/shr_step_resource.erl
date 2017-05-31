@@ -5,7 +5,8 @@
 %%-define(debug,true).
 -include("debug.hrl").
 
--include("shr_step.hrl").
+-include("tester.hrl").
+%%-include("shr_step.hrl").
 
 -record(info,
 	{
@@ -25,7 +26,7 @@
 	}).
 
 
--export([initial_state/3,step/3]).
+-export([initial_state/5,step/3]).
 
 initial_state(StateSpec,WaitSpec,GenModule,GenState,Options) ->  
   StateMod = shr_utils:module(StateSpec),
@@ -50,25 +51,60 @@ initial_state(StateSpec,WaitSpec,GenModule,GenState,Options) ->
      }
    }.
 
-step(PreJobCalls,State,Info) ->
+step(Commands,State,Info) ->
   Counter = Info#info.counter,
   {JobCalls,NewCounter} =
     lists:foldl
-      (fun (JCall,Counter) ->
-	   {JCall#job{pid=Counter}, Counter+1}
-       end, {[], Info#info.counter}, PreJobCalls),
+      (fun (Command, {Acc,Counter}) ->
+	   io:format("Command is ~p~n",[Command]),
+	   {F,Args} = Command#command.call,
+	   Type = Command#command.port,
+	   Job = 
+	     #job
+	     {
+	       pid=Counter,
+	       call={Type,F,Args},
+	       info=Command#command.options
+	     },
+	   {[Job|Acc], Counter+1}
+       end, {[], Info#info.counter}, Commands),
+  EnabledJobCalls = 
+    lists:filter
+      (fun (JobCall) -> 
+	   (data_module(Info)):pre(JobCall,State#state.state) 
+       end, JobCalls),
+  lists:foreach
+    (fun (JobCall) ->
+	 Calls = 
+	   lists:map
+	     (fun (Job) ->
+		  {Type,F,Args} = Job#job.call,
+		  {Type,{F,Args},Job#job.info}
+	      end, JobCalls),
+	 case (gen_module(Info)):precondition(State#state.genstate,Calls,void) of
+	   true -> true;
+	   false ->
+	     io:format
+	       ("*** Warning: following a command ~p which cannot be completed~n in state~n~p~n",
+		[JobCall,State#state.genstate]),
+	     throw(not_deterministic)
+	 end
+     end, JobCalls),
+  CallState = State#state{waiting=EnabledJobCalls},
+  NewStates = merge_states_and_unblocked(step(CallState,Info)),
+  ResultingStates =
+    lists:map
+      (fun ({State,Unblocked}) ->
+	   Result = {EnabledJobCalls,Unblocked},
+	   NewGenState =
+	     (gen_module(Info)):next_state
+	       (State#state.genstate,Result,void,void),
+	   {State#state{genstate=NewGenState}, Unblocked}
+       end, NewStates),
   {
-    merge_states_and_unblocked(step(JobCalls,State,Info)),
+    ResultingStates,
     Info#info{counter=NewCounter}
   }.
-
-step(PreCalls,State,Info) ->
-  EnabledCalls = 
-    lists:filter
-      (fun (Call) -> 
-	   (data_module(Info)):pre(Call,State#state.state) 
-       end, Calls),
-  step(State#state{waiting=EnabledCalls},Info).
 
 step(State,Info) when not(is_list(State)) ->
   step([{State,[]}],Info);
@@ -107,7 +143,7 @@ do_step(State,Unblocked,Info) ->
 	     State#state
 	     {
 	       waiting = lists:delete(WaitingCall,State#state.waiting),
-	       calls = [WaitingCall#call{waitinfo=WaitInfo}|State#state.calls],
+	       calls = [WaitingCall#job{waitinfo=WaitInfo}|State#state.calls],
 	       waitstate = NewWaitState
 	     },
 	   {NewState,Unblocked}
@@ -115,8 +151,8 @@ do_step(State,Unblocked,Info) ->
   ?LOG("AcceptNewStates=~n~p~n",[AcceptNewStates]),
   EnabledCalls =
     lists:filter
-      (fun (Call) ->
-	   DataModule:cpre(Call#call.call,State#state.state)
+      (fun (Job) ->
+	   DataModule:cpre(shr_call(Job),State#state.state)
        end, State#state.calls),
   ?LOG("EnabledCalls=~p~n",[EnabledCalls]),
   CallNewStates =
@@ -124,7 +160,7 @@ do_step(State,Unblocked,Info) ->
       (fun (Call) ->
 	   NewUnblocked = [Call|Unblocked],
 	   NewDataStates =
-	     case DataModule:post(Call#call.call,void,State#state.state) of
+	     case DataModule:post(Call#job.call,void,State#state.state) of
 	       {'$shr_nondeterministic',NewStates} -> NewStates;
 	       NewDataState -> [NewDataState]
 	     end,
@@ -132,7 +168,7 @@ do_step(State,Unblocked,Info) ->
 	     (fun (NewDataState) ->
 		  NewWaitState = 
 		    WaitingModule:post_waiting
-		      (Call#call.call,Call#call.waitinfo,
+		      (Call#job.call,Call#job.waitinfo,
 		       State#state.waitstate,NewDataState),
 		  NewState =
 		    State#state
@@ -149,6 +185,10 @@ do_step(State,Unblocked,Info) ->
     [] -> [{State,Unblocked}];
     New -> New
   end.
+
+shr_call(Job) ->
+  {Type,F,Args} = Job#job.call,
+  {F,Args}.
 
 merge_states_and_unblocked(StatesAndUnblocked) ->	   
   Normalized =
@@ -169,5 +209,7 @@ data_module(Info) ->
   Info#info.data_module.
 waiting_module(Info) ->
   Info#info.wait_module.
+gen_module(Info) ->
+  Info#info.gen_module.
 
 
