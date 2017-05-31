@@ -26,7 +26,16 @@
 	}).
 
 
--export([initial_state/5,step/3]).
+-export([initial_state/5,step/3,repeat_step/3]).
+
+repeat_step(Commands,State,Info) ->
+  repeat_step1(Commands,[State],Info).
+repeat_step1([],States,_) -> States;
+repeat_step1([First|Rest],States,Info) -> 
+  repeat_step1
+    (Rest,
+     lists:flatmap(fun (State) -> step(First,State,Info) end, States),
+     Info).
 
 initial_state(StateSpec,WaitSpec,GenModule,GenState,Options) ->  
   StateMod = shr_utils:module(StateSpec),
@@ -94,12 +103,12 @@ step(Commands,State,Info) ->
   NewStates = merge_states_and_unblocked(step(CallState,Info)),
   ResultingStates =
     lists:map
-      (fun ({State,Unblocked}) ->
+      (fun ({NState,Unblocked}) ->
 	   Result = {EnabledJobCalls,Unblocked},
 	   NewGenState =
 	     (gen_module(Info)):next_state
-	       (State#state.genstate,Result,void,void),
-	   {State#state{genstate=NewGenState}, Unblocked}
+	       (NState#state.genstate,Result,void,void),
+	   {NState#state{genstate=NewGenState}, Unblocked}
        end, NewStates),
   {
     ResultingStates,
