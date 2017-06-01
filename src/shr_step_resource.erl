@@ -6,7 +6,6 @@
 -include("debug.hrl").
 
 -include("tester.hrl").
-%%-include("shr_step.hrl").
 
 -record(info,
 	{
@@ -51,36 +50,28 @@ initial_state(StateSpec,WaitSpec,GenModule,GenState,Options) ->
    }.
 
 repeat_step(Commands,State,Info) ->
-  Transition = #transition{calls=[],unblocked=[],returns=[],endstate=State},
-  lists:map
-    (fun (Transitions) ->
-	 lists:reverse(Transitions)
-     end, repeat_step1(Commands,[Transition],Info,1)).
-repeat_step1([],Transitions,_,_) -> Transitions;
-repeat_step1([First|Rest],Transitions,Info,Counter) -> 
-  repeat_step1
-    (Rest,
-     lists:flatmap
-       (fun (Transition) -> 
-	    State = Transition#transition.endstate,
-	    NewTransitions = step(First,State,Info,Counter),
-	    lists:map
-	      (fun (NewTransition) -> [NewTransition|Transition] end,
-	       NewTransitions)
-	end, 
-	Transitions),
-     Info,
-     Counter+length(First)).
+  repeat_step(Commands,State,Info,1).
+
+repeat_step([],State,_Info,_Counter) ->
+  {State,[]};
+repeat_step([First|Rest],State,Info,Counter) ->
+  ?LOG("Will execute~n~p~nin state~n~p~n",[First,State]),
+  Transitions = step(First,State,Info,Counter),
+  NewCounter = length(First)+Counter,
+  {State,
+   lists:map
+     (fun (Transition) ->
+	  S1 = Transition#transition.endstate,
+	  {Transition,repeat_step(Rest,S1,Info,NewCounter)}
+      end, Transitions)}.
 
 step(Commands,State,Info) ->
   step(Commands,State,Info,1).
 
 step(Commands,State,Info,Counter) ->
-  io:format("Commands are: ~p~n",[Commands]),
   {JobCalls,NewCounter} =
     lists:foldl
       (fun (Command, {Acc,Counter}) ->
-	   io:format("Command is ~p~n",[Command]),
 	   {F,Args} = Command#command.call,
 	   Type = Command#command.port,
 	   Job = 
