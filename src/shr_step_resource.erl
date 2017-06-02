@@ -2,7 +2,7 @@
 
 %% A single step semantics for a resource (until a state is stable)
 
-%%-define(debug,true).
+-define(debug,true).
 -include("debug.hrl").
 
 -include("tester.hrl").
@@ -111,22 +111,22 @@ step(Commands,State,Info,Counter) ->
     #transition{calls=JobCalls,unblocked=[],returns=[],endstate=CallState},
   NewTransitions = merge_transitions(step(Transition,Info)),
   lists:map
-    (fun (Transition) ->
-	 Result = {EnabledJobCalls,Transition#transition.unblocked},
-	 NState = Transition#transition.endstate,
+    (fun (NewTransition) ->
+	 Result = {EnabledJobCalls,NewTransition#transition.unblocked},
+	 NState = NewTransition#transition.endstate,
 	 NewGenState =
 	   (gen_module(Info)):next_state
 	     (NState#state.genstate,Result,void,void),
 	 NewNState = NState#state{genstate=NewGenState},
-	 Transition#transition{endstate=NewNState}
+	 NewTransition#transition{endstate=NewNState}
      end, NewTransitions).
 
 step(Transition,Info) when not(is_list(Transition)) ->
   step([Transition],Info);
 step(Transitions,Info) ->
   ?LOG
-     ("~n~nOld StatesTransitions=~n~p~n",
-      [StatesTransitions]),
+     ("~n~nOld Transitions=~n~p~n",
+      [Transitions]),
   NewTransitions = 
     merge_transitions
       (lists:flatmap
@@ -173,7 +173,7 @@ do_step(Transition,Info) ->
 	     Transition#transition
 	     {unblocked=[Call|Transition#transition.unblocked]},
 	   NewDataStates =
-	     case DataModule:post(Call#job.call,void,State#state.state) of
+	     case DataModule:post(shr_call(Call),void,State#state.state) of
 	       {'$shr_nondeterministic',NewStates} -> NewStates;
 	       NewDataState -> [NewDataState]
 	     end,
@@ -181,7 +181,7 @@ do_step(Transition,Info) ->
 	     (fun (NewDataState) ->
 		  NewWaitState = 
 		    WaitingModule:post_waiting
-		      (Call#job.call,Call#job.waitinfo,
+		      (shr_call(Call),Call#job.waitinfo,
 		       State#state.waitstate,NewDataState),
 		  NewState =
 		    State#state
@@ -193,7 +193,7 @@ do_step(Transition,Info) ->
 		  NewTransition#transition{endstate=NewState}
 	      end, NewDataStates)
        end, EnabledCalls),
-  ?LOG("CallNewStates=~n~p~n",[CallNewStates]),
+  ?LOG("CallNewStates=~n~p~n",[CallNewTransitions]),
   case merge_transitions(AcceptNewTransitions++CallNewTransitions) of
     [] -> [Transition];
     New -> New
