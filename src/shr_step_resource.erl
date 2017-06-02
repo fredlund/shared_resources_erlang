@@ -2,7 +2,7 @@
 
 %% A single step semantics for a resource (until a state is stable)
 
--define(debug,true).
+%%-define(debug,true).
 -include("debug.hrl").
 
 -include("tester.hrl").
