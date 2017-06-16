@@ -11,7 +11,8 @@
 	{
 	  data_module :: atom(),
 	  wait_module :: atom(),
-	  gen_module
+	  gen_module,
+	  options
 	}).
 
 -record(state,
@@ -37,7 +38,8 @@ initial_state(StateSpec,WaitSpec,GenModule,GenState,Options) ->
      {
        data_module=StateMod, 
        wait_module=WaitMod,
-       gen_module=GenModule
+       gen_module=GenModule,
+       options=Options
      },
      #state
      {
@@ -66,7 +68,32 @@ repeat_step([First|Rest],State,Info,Counter) ->
       end, Transitions)}.
 
 step(Commands,State,Info) ->
-  step(Commands,State,Info,1).
+  Transitions = 
+    step(Commands,State,Info,1),
+  CheckDeterministic = 
+    proplists:get_value(check_deterministic,Info#info.options,true),
+  if 
+    not(CheckDeterministic) ->
+      Transitions;
+    true ->
+      UnblockSet = sets:new(),
+      check_unblocks_are_unique(Transitions,UnblockSet)
+  end.
+
+check_unblocks_are_unique([],_UnblockSet) -> 
+  true;
+check_unblocks_are_unique([Transition|Rest],UnblockSet) -> 
+  TransitionUnblocks = Transition#transition.unblocked,
+  case sets:is_element(TransitionUnblocks,UnblockSet) of
+    true ->
+      io:format
+	("*** Warning: unblock sets are not unique:~n~p and ~p~n",
+	 [TransitionUnblocks,sets:to_list(UnblockSet)]),
+      throw(not_deterministic);
+    false ->
+      check_unblocks_are_unique
+	(Rest,sets:add_element(TransitionUnblocks,UnblockSet))
+  end.
 
 step(Commands,State,Info,Counter) ->
   {JobCalls,NewCounter} =
@@ -88,8 +115,9 @@ step(Commands,State,Info,Counter) ->
       (fun (JobCall) -> 
 	   (data_module(Info)):pre(JobCall,State#state.state) 
        end, JobCalls),
-  lists:foreach
-    (fun (JobCall) ->
+  IsExecutable =
+    lists:all
+      (fun (JobCall) ->
 	 Calls = 
 	   lists:map
 	     (fun (Job) ->
@@ -102,24 +130,34 @@ step(Commands,State,Info,Counter) ->
 	     io:format
 	       ("*** Warning: following a command ~p which cannot be completed~n in state~n~p~n",
 		[JobCall,State#state.genstate]),
-	     throw(not_deterministic)
+	     false
 	 end
-     end, JobCalls),
-  CallState = 
+       end, JobCalls),
+  if
+    not(IsExecutable) -> 
+      case proplists:get_value(fail_not_executable,Info#info.options,false) of
+	true ->
+	  throw(not_executable);
+	false ->
+	  []
+      end;
+    true ->
+      CallState = 
     State#state{waiting=EnabledJobCalls},
-  Transition = 
-    #transition{calls=JobCalls,unblocked=[],returns=[],endstate=CallState},
-  NewTransitions = merge_transitions(step(Transition,Info)),
-  lists:map
-    (fun (NewTransition) ->
-	 Result = {EnabledJobCalls,NewTransition#transition.unblocked},
-	 NState = NewTransition#transition.endstate,
-	 NewGenState =
-	   (gen_module(Info)):next_state
-	     (NState#state.genstate,Result,void,void),
-	 NewNState = NState#state{genstate=NewGenState},
-	 NewTransition#transition{endstate=NewNState}
-     end, NewTransitions).
+      Transition = 
+	#transition{calls=JobCalls,unblocked=[],returns=[],endstate=CallState},
+      NewTransitions = merge_transitions(step(Transition,Info)),
+      lists:map
+	(fun (NewTransition) ->
+	     Result = {EnabledJobCalls,NewTransition#transition.unblocked},
+	     NState = NewTransition#transition.endstate,
+	     NewGenState =
+	       (gen_module(Info)):next_state
+		 (NState#state.genstate,Result,void,void),
+	     NewNState = NState#state{genstate=NewGenState},
+	     NewTransition#transition{endstate=NewNState}
+	 end, NewTransitions)
+  end.
 
 step(Transition,Info) when not(is_list(Transition)) ->
   step([Transition],Info);
