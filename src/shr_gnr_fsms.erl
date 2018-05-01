@@ -19,6 +19,12 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+%% Ideas for handling conflicting actions:
+%% - strip away combined actions that do not meet some global constraint
+%% How do we specify such a global constraint?
+%% We can specify a constraint as a function: 
+%% global_constraint_fun.
+
 print_finished_job_info(Job,TS) ->
   MachId = proplists:get_value(machine_id,Job#job.info),
   {_,{Machine,MachineState,_}} = lists:keyfind(MachId,1,TS#fstate.machines),
@@ -108,6 +114,8 @@ initial_state(PreMachineSpecs,PreOptions) ->
     proplists:get_value(stop_fun,Options,void),
   GlobalState =
     proplists:get_value(global_state,Options,void),
+  GlobalConstraint =
+    proplists:get_value(global_constraint_fun,Options,fun (_) -> true end),
   MachineSpecs =
     lists:foldl
       (fun ({N,MachineWithMachineInit},Acc) when is_integer(N) ->
@@ -139,7 +147,8 @@ initial_state(PreMachineSpecs,PreOptions) ->
       start=StartFun,
       stop=StopFun,
       blocked=[],
-      global_state=GlobalState
+      global_state=GlobalState,
+      global_constraint=GlobalConstraint
     }.
 
 init_machine(I,Machine,Args) ->
@@ -170,16 +179,19 @@ command(State,CorrState) ->
 	length(State#fstate.machines)
     end,
   NumProcs = length(State#fstate.machines),
-  ?LET
-     (NPars,
-      choose(1,min(NumProcs,ParLimit)),
-      begin
-	Result = command1(State,NPars,CorrState),
-	?LOG
-	   ("Command generated: ~p~n",
-	    [Result]),
-	Result
-      end).
+  ?SUCHTHAT
+    (Cmds,
+     ?LET
+        (NPars,
+         choose(1,min(NumProcs,ParLimit)),
+         begin
+           Result = command1(State,NPars,CorrState),
+           ?LOG
+              ("Command generated: ~p~n",
+               [Result]),
+           Result
+         end),
+     (State#fstate.global_constraint)(Cmds)).
 
 command1(_State,NPars,_CorrState) when NPars =< 0 ->
   [];
