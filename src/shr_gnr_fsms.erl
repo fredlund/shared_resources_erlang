@@ -115,7 +115,7 @@ initial_state(PreMachineSpecs,PreOptions) ->
   GlobalState =
     proplists:get_value(global_state,Options,void),
   GlobalConstraint =
-    proplists:get_value(global_constraint_fun,Options,fun (_) -> true end),
+    proplists:get_value(global_constraint_fun,Options,fun (_,_,_) -> true end),
   MachineSpecs =
     lists:foldl
       (fun ({N,MachineWithMachineInit},Acc) when is_integer(N) ->
@@ -159,14 +159,14 @@ init_machine(I,Machine,Args) ->
       {I,{Machine,InitialState,MachineOptions}}
   end.
 
-precondition(#fstate{blocked=Blocked,machines=Machines,global_state=GlobalState},Commands,_) ->
+precondition(#fstate{blocked=Blocked,machines=Machines,global_state=GlobalState},Commands,CorrState) ->
   lists:all
     (fun ({Type,{F,Args},Info}) ->
 	 Call = {Type,F,Args},
 	 MachineId = proplists:get_value(machine_id,Info),
 	 {_,{Machine,MachineState,_Opts}} = lists:keyfind(MachineId,1,Machines),
 	    Machine:precondition
-	      (MachineId,MachineState,GlobalState,Call)
+	      (MachineId,MachineState,GlobalState,CorrState,Call)
 	   andalso not(lists:member(MachineId,Blocked))
      end, Commands).
 
@@ -191,7 +191,8 @@ command(State,CorrState) ->
                [Result]),
            Result
          end),
-     (State#fstate.global_constraint)(Cmds)).
+     (State#fstate.global_constraint)
+       (Cmds,State#fstate.global_state,CorrState)).
 
 command1(_State,NPars,_CorrState) when NPars =< 0 ->
   [];
@@ -210,7 +211,7 @@ command1(State,NPars,CorrState) when NPars > 0 ->
       [];
     true ->
       ?LET({Command,NewState},
-	   gen_mach_cmd(State),
+	   gen_mach_cmd(State,CorrState),
 	   case Command of
 	     void -> [];
 	     _ ->
@@ -226,7 +227,7 @@ command1(State,NPars,CorrState) when NPars > 0 ->
 	   end)
   end.
 
-gen_mach_cmd(State) ->
+gen_mach_cmd(State,CorrState) ->
   NonBlocked =
     lists:filter
       (fun ({I,_}) -> not(lists:member(I,State#fstate.blocked)) end,
@@ -248,10 +249,11 @@ gen_mach_cmd(State) ->
 	     NewBlocked = [MachId|State#fstate.blocked],
 	     NewState = State#fstate{blocked=NewBlocked},
 	     ?LET(Generated,
-		  Machine:command(MachId,MachineState,State#fstate.global_state),
+		  Machine:command
+                    (MachId,MachineState,State#fstate.global_state,CorrState),
 		  case Generated of
 		    stopped ->
-		      gen_mach_cmd(NewState);
+		      gen_mach_cmd(NewState,CorrState);
 		    {Type,F,Args} ->
 		      {{Type,{F,Args},[{machine_id,MachId}]},NewState};
 		    {Type,F,Args,Options} ->
@@ -275,7 +277,7 @@ jobs_to_machines(Jobs) ->
 	 Machine
      end, Jobs).
 
-next_state(State,Result,_Commands,_CorrState) ->
+next_state(State,Result,_Commands,CorrState) ->
   {NewJobs,FinishedJobs} =
     Result,
   RemainingNewMachines = 
@@ -295,6 +297,7 @@ next_state(State,Result,_Commands,_CorrState) ->
 	       (MachineId,
 		MachineState,
 		State#fstate.global_state,
+                CorrState,
 		Job#job.call),
 	   S#fstate
 	     {machines=

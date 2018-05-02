@@ -14,8 +14,6 @@
 -include("tester.hrl").
 -include("corr_resource_state.hrl").
 
--record(onestate,{incoming,waiting,sdata,swait}).
-
 initial_state(_,Options) ->
   ?TIMEDLOG("initial_state~n",[]),
   DataSpec = proplists:get_value(data_spec,Options),
