@@ -65,14 +65,16 @@ find_free_pid(State) ->
       
 java_caller(State) ->
   receive
-    {call,{Method,Args},From,Parent} ->
-      ?TIMEDLOG("will call java:call(~p,~p,~p)~n",[Controller,Method,Args]),
+    {call,_Call={Method,Args},From,Parent} ->
+      ?TIMEDLOG
+         ("will call java:call(~p,~p,~p)~n",
+          [State#state.controller,Method,Args]),
       try 
 	convert
 	  (java:call(State#state.controller,Method,Args),
 	   State#state.value_converter) of
 	Result ->
-	  ?TIMEDLOG("result of ~p is ~p~n",[Call,Result]),
+	  ?TIMEDLOG("result of ~p is ~p~n",[_Call,Result]),
 	  Parent!{reply,Result,From,self()},
 	  java_caller(State)
       catch throw:{java_exception,Exc} ->
@@ -115,8 +117,13 @@ std_converter(Result) ->
 	  ResultValue;
 	false ->
 	  case java:instanceof(Result,'java.lang.Throwable') of
-	    true -> {exception,java:getClassName(Result)};
-	    false -> Result
+	    true -> 
+              {exception,java:getClassName(Result)};
+	    false -> 
+              ?TIMEDLOG
+                 ("not converting ~p~n",
+                  [java:string_to_list(java:call(Result,toString,[]))]),
+              Result
 	  end
       end;
     false -> Result
