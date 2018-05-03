@@ -7,9 +7,10 @@
 -include("debug.hrl").
 
 -include("tester.hrl").
+-include("corr_resource_state.hrl").
 
 -record(state,{state,options,waiting_module,data_module,test_gen_state,test_gen_module,pid_counter}).
--record(onestate,{incoming,waiting,sdata,swait}).
+
 
 generate(PreOptions) ->
   Options = [no_par|PreOptions],
@@ -37,6 +38,7 @@ generate(PreOptions) ->
 do_run(0,_State) ->
   [];
 do_run(N,State) when is_integer(N), N>0 ->
+  CorrState = #corr_res_state{states=
   case eqc_gen:pick
     ((State#state.test_gen_module):command
        (State#state.test_gen_state,
