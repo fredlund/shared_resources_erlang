@@ -9,3 +9,13 @@
           global_constraint,
           blocked
         }).
+
+-record(machine,
+	{
+	  id,
+	  module,
+	  weight,
+	  state,
+	  options
+	}).
+	

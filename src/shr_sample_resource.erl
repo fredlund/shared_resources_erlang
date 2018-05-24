@@ -38,11 +38,10 @@ generate(PreOptions) ->
 do_run(0,_State) ->
   [];
 do_run(N,State) when is_integer(N), N>0 ->
-%%  CorrState = #corr_res_state{states=
+  CorrState = #corr_res_state{states=[State#state.state]},
   case eqc_gen:pick
     ((State#state.test_gen_module):command
-       (State#state.test_gen_state,
-	void)) of
+       (State#state.test_gen_state,CorrState)) of
     [] ->
       [];
     [PreCall] ->
