@@ -113,7 +113,7 @@ step(Commands,State,Info,Counter) ->
   EnabledJobCalls = 
     lists:filter
       (fun (JobCall) -> 
-	   (data_module(Info)):pre(JobCall,State#state.state) 
+	   (data_module(Info)):pre(shr_call(JobCall),State#state.state) 
        end, JobCalls),
   IsExecutable =
     lists:all
