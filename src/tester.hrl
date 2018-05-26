@@ -17,4 +17,4 @@
 
 -record(test_case,{test_case,test_result}).
 
--record(transition,{calls,unblocked,returns,endstate}).
+-record(transition,{calls,unblocked,returns,endstate,failed_pres}).

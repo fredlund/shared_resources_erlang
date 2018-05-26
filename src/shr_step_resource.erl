@@ -110,11 +110,19 @@ step(Commands,State,Info,Counter) ->
 	     },
 	   {[Job|Acc], Counter+1}
        end, {[], Counter}, Commands),
+
   EnabledJobCalls = 
     lists:filter
       (fun (JobCall) -> 
 	   (data_module(Info)):pre(shr_call(JobCall),State#state.state) 
        end, JobCalls),
+
+  FailedPres =
+    lists:filter
+      (fun (JobCall) -> 
+	   not((data_module(Info)):pre(shr_call(JobCall),State#state.state))
+       end, JobCalls),
+
   IsExecutable =
     lists:all
       (fun (JobCall) ->
@@ -143,7 +151,7 @@ step(Commands,State,Info,Counter) ->
       end;
     true ->
       CallState = 
-    State#state{waiting=EnabledJobCalls},
+        State#state{waiting=EnabledJobCalls},
       Transition = 
 	#transition{calls=JobCalls,unblocked=[],returns=[],endstate=CallState},
       NewTransitions = merge_transitions(step(Transition,Info)),
@@ -155,7 +163,7 @@ step(Commands,State,Info,Counter) ->
 	       (gen_module(Info)):next_state
 		 (NState#state.genstate,Result,void,void),
 	     NewNState = NState#state{genstate=NewGenState},
-	     NewTransition#transition{endstate=NewNState}
+	     NewTransition#transition{endstate=NewNState,failed_pres=FailedPres}
 	 end, NewTransitions)
   end.
 
@@ -210,13 +218,25 @@ do_step(Transition,Info) ->
 	   NewTransition =
 	     Transition#transition
 	     {unblocked=[Call|Transition#transition.unblocked]},
-	   NewDataStates =
-	     case DataModule:post(shr_call(Call),void,State#state.state) of
-	       {'$shr_nondeterministic',NewStates} -> NewStates;
-	       NewDataState -> [NewDataState]
-	     end,
+	   NewDataStatesAndReturns =
+             begin
+               ReturnCheck =
+                 fun (Result) ->
+                     DataModule:return
+                       (State#state.state,shr_call(Call),Result)
+                 end,
+               ReturnValue = 
+                 DataModule:return_value(shr_call(Call),State#state.state),
+               Returns = {ReturnValue,ReturnCheck},
+               case DataModule:post(shr_call(Call),void,State#state.state) of
+                 {'$shr_nondeterministic',NewStates} -> 
+                   lists:map(fun (NS) -> {NS,Returns} end, NewStates);
+                 NewDataState -> 
+                   [{NewDataState,Returns}]
+               end
+             end,
 	   lists:map
-	     (fun (NewDataState) ->
+	     (fun ({NewDataState,NewReturn}) ->
 		  NewWaitState = 
 		    WaitingModule:post_waiting
 		      (shr_call(Call),Call#job.waitinfo,
@@ -228,8 +248,8 @@ do_step(Transition,Info) ->
 		      waitstate = NewWaitState,
 		      calls = lists:delete(Call,State#state.calls)
 		    },
-		  NewTransition#transition{endstate=NewState}
-	      end, NewDataStates)
+		  NewTransition#transition{endstate=NewState,returns=NewReturn}
+	      end, NewDataStatesAndReturns)
        end, EnabledCalls),
   ?LOG("CallNewStates=~n~p~n",[CallNewTransitions]),
   case merge_transitions(AcceptNewTransitions++CallNewTransitions) of
