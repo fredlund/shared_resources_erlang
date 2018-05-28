@@ -227,7 +227,7 @@ do_step(Transition,Info) ->
                  end,
                ReturnValue = 
                  DataModule:return_value(shr_call(Call),State#state.state),
-               Returns = {ReturnValue,ReturnCheck},
+               Returns = {Call,ReturnValue,ReturnCheck},
                case DataModule:post(shr_call(Call),void,State#state.state) of
                  {'$shr_nondeterministic',NewStates} -> 
                    lists:map(fun (NS) -> {NS,Returns} end, NewStates);
@@ -248,7 +248,11 @@ do_step(Transition,Info) ->
 		      waitstate = NewWaitState,
 		      calls = lists:delete(Call,State#state.calls)
 		    },
-		  NewTransition#transition{endstate=NewState,returns=NewReturn}
+		  NewTransition#transition
+                    {
+                    endstate=NewState,
+                    returns=[NewReturn|NewTransition#transition.returns]
+                   }
 	      end, NewDataStatesAndReturns)
        end, EnabledCalls),
   ?LOG("CallNewStates=~n~p~n",[CallNewTransitions]),
@@ -267,7 +271,7 @@ merge_transitions(Transitions) ->
        (fun (Transition) ->
 	    State = Transition#transition.endstate,
 	    Unblocked = Transition#transition.unblocked,
-	    Returns = lists:keysort(1,Transition#transition.returns),
+	    Returns = lists:sort(Transition#transition.returns),
 	    NewState = 
 	      State#state
 	      {
