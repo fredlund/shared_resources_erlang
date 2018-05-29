@@ -142,6 +142,13 @@ step(Commands,State,Info,Counter) ->
 	 end
        end, JobCalls),
   if
+    FailedPres =/= [] ->
+      io:format
+        ("FailedPres=~p~n",[FailedPres]);
+    true ->
+      ok
+  end,
+  if
     not(IsExecutable) -> 
       case proplists:get_value(fail_not_executable,Info#info.options,false) of
 	true ->
@@ -153,7 +160,8 @@ step(Commands,State,Info,Counter) ->
       CallState = 
         State#state{waiting=EnabledJobCalls},
       Transition = 
-	#transition{calls=JobCalls,unblocked=[],returns=[],endstate=CallState},
+	#transition
+        {calls=JobCalls,unblocked=[],returns=[],endstate=CallState,failed_pres=FailedPres},
       NewTransitions = merge_transitions(step(Transition,Info)),
       lists:map
 	(fun (NewTransition) ->
@@ -163,7 +171,7 @@ step(Commands,State,Info,Counter) ->
 	       (gen_module(Info)):next_state
 		 (NState#state.genstate,Result,void,void),
 	     NewNState = NState#state{genstate=NewGenState},
-	     NewTransition#transition{endstate=NewNState,failed_pres=FailedPres}
+	     NewTransition#transition{endstate=NewNState}
 	 end, NewTransitions)
   end.
 
