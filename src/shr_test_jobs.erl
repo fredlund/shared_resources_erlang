@@ -33,6 +33,7 @@
 -define(COMPLETION_TIME,300).
 
 -include("tester.hrl").
+-include("corr_resource_state.hrl").
 
 -record(state,
 	{
@@ -171,8 +172,8 @@ wait_start(Pid,Ref) ->
       wait_start(Pid,Ref);
     {started,Result} ->
 	?TIMEDLOG
-	   ("start_fun ~p returned~n",
-	    [StartFun]),
+	   ("start_fun returned ~p~n",
+	    [Result]),
 	Result;
     {'DOWN',_,_,_,normal} ->
       wait_start(Pid,Ref);
@@ -211,6 +212,7 @@ do_cmds_pre(State) ->
   State#state.started.
 
 do_cmds_args(State) ->
+  ?TIMEDLOG("do_cmds_args~n",[]),
   try
     WaitTime =
       State#state.completion_time,
@@ -337,6 +339,7 @@ job_exited(Job) ->
 
 do_cmds_post(State,[Commands|_],Result={NewJobs,FinishedJobs}) ->
 try
+  ?TIMEDLOG("after do_cmds result=~p~n",[Result]),
   case lists:filter(fun job_exited/1, FinishedJobs) of
     [Job|_] ->
       {exit,Pid,ExitReason,_} = Job#job.result,
@@ -376,6 +379,8 @@ try
   end.
 
 do_cmds_next(State,Result={NewJobs,FinishedJobs},[Commands|_]) ->
+  ?TIMEDLOG("do_cmds_next, result=~p~n",[Result]),
+  ?TIMEDLOG("Num states=~p~n",[length((State#state.test_corr_state)#corr_res_state.states)]),
   try
     NewTestGenState =
       (State#state.test_gen_module):next_state

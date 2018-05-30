@@ -142,13 +142,6 @@ step(Commands,State,Info,Counter) ->
 	 end
        end, JobCalls),
   if
-    FailedPres =/= [] ->
-      io:format
-        ("FailedPres=~p~n",[FailedPres]);
-    true ->
-      ok
-  end,
-  if
     not(IsExecutable) -> 
       case proplists:get_value(fail_not_executable,Info#info.options,false) of
 	true ->

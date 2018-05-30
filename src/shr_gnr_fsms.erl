@@ -14,8 +14,10 @@
 -include("debug.hrl").
 
 -include("fsmstate.hrl").
+-include("corr_resource_state.hrl").
 
--define(MAX_STATES,400).
+
+-define(MAX_STATES,100).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -193,11 +195,16 @@ precondition(#fstate{blocked=Blocked,machines=Machines,global_state=GlobalState}
 
 command(State,CorrState) ->
   ParLimit = 
-    case proplists:get_value(max_par,State#fstate.options) of
-      N when is_integer(N), N>=1 ->
-	N;
-      undefined ->
-	length(State#fstate.machines)
+    case length(CorrState#corr_res_state.states) of
+      N when N>=?MAX_STATES ->
+        1;
+      _ ->
+        case proplists:get_value(max_par,State#fstate.options) of
+          N when is_integer(N), N>=1 ->
+            N;
+          undefined ->
+            length(State#fstate.machines)
+        end
     end,
   NumProcs = length(State#fstate.machines),
   ?SUCHTHAT
