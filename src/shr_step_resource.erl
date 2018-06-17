@@ -95,8 +95,8 @@ check_unblocks_are_unique([Transition|Rest],UnblockSet) ->
 	(Rest,sets:add_element(TransitionUnblocks,UnblockSet))
   end.
 
-step(Commands,State,Info,Counter) ->
-  {JobCalls,NewCounter} =
+step(Commands,State,Info,OldCounter) ->
+  {JobCalls,_NewCounter} =
     lists:foldl
       (fun (Command, {Acc,Counter}) ->
 	   {F,Args} = Command#command.call,
@@ -109,7 +109,7 @@ step(Commands,State,Info,Counter) ->
 	       info=Command#command.options
 	     },
 	   {[Job|Acc], Counter+1}
-       end, {[], Counter}, Commands),
+       end, {[], OldCounter}, Commands),
 
   EnabledJobCalls = 
     lists:filter
@@ -155,7 +155,8 @@ step(Commands,State,Info,Counter) ->
       Transition = 
 	#transition
         {calls=JobCalls,unblocked=[],returns=[],endstate=CallState,failed_pres=FailedPres},
-      NewTransitions = merge_transitions(step(Transition,Info)),
+      NewTransitions = 
+        merge_transitions(step(Transition,Info)),
       lists:map
 	(fun (NewTransition) ->
 	     Result = {EnabledJobCalls,NewTransition#transition.unblocked},
@@ -221,13 +222,15 @@ do_step(Transition,Info) ->
 	     {unblocked=[Call|Transition#transition.unblocked]},
 	   NewDataStatesAndReturns =
              begin
-               ReturnCheck =
-                 fun (Result) ->
-                     DataModule:return
-                       (State#state.state,shr_call(Call),Result)
-                 end,
                ReturnValue = 
                  DataModule:return_value(shr_call(Call),State#state.state),
+               ReturnCheck =
+                 if
+                   ReturnValue =/= undefined ->
+                     void;
+                   true ->
+                     {check,shr_call(Call),State#state.state}
+                 end,
                Returns = {Call,ReturnValue,ReturnCheck},
                case DataModule:post(shr_call(Call),void,State#state.state) of
                  {'$shr_nondeterministic',NewStates} -> 
@@ -263,7 +266,7 @@ do_step(Transition,Info) ->
   end.
 
 shr_call(Job) ->
-  {Type,F,Args} = Job#job.call,
+  {_Type,F,Args} = Job#job.call,
   {F,Args}.
 
 merge_transitions(Transitions) ->	   
@@ -272,19 +275,19 @@ merge_transitions(Transitions) ->
        (fun (Transition) ->
 	    State = Transition#transition.endstate,
 	    Unblocked = Transition#transition.unblocked,
-	    Returns = lists:sort(Transition#transition.returns),
 	    NewState = 
 	      State#state
 	      {
 		waiting = lists:sort(State#state.waiting),
 		calls = lists:sort(State#state.calls)
 	      },
-	    Transition#transition
+	    #transition
 	      {
 	      calls = lists:sort(Transition#transition.calls),
 	      endstate = NewState,
 	      unblocked = lists:sort(Unblocked),
-	      returns = Returns
+              failed_pres = lists:sort(Transition#transition.failed_pres),
+	      returns = lists:sort(Transition#transition.returns)
 	     }
 	end, Transitions)).
 
