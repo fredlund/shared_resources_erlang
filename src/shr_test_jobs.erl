@@ -103,7 +103,7 @@ observer_initial_states(TestObserverSpecs,Options) ->
 	     {RAcc,[Observer|ISAcc]};
 	   Other ->
 	     io:format
-	       ("*** Error: protocol observer ~p does not return a "++
+	       ("*** SHRT ERROR: protocol observer ~p does not return a "++
 		  "valid initial state: ~p~n",
 		[Name,Other]),
 	     {failed,ISAcc}
@@ -149,7 +149,7 @@ start(Options,StartFun) ->
 	  wait_start(Pid,Ref)
 	catch Class:Reason ->
 	    io:format
-	      ("*** Error: function ~p with options~n~p~n"++
+	      ("*** SHRT ERROR: function ~p with options~n~p~n"++
 		 "raised an exception ~p:~p~n",
 	       [StartFun,Options,Class,Reason]),
 	    io:format
@@ -168,7 +168,7 @@ start(Options,StartFun) ->
 wait_start(Pid,Ref) ->
   receive
     {'DOWN',Ref,process,_Object,Info} ->
-      io:format("~n*** WARNING: start_fun failed due to:~n~p~n",[Info]),
+      io:format("~n*** SHRT WARNING: start_fun failed due to:~n~p~n",[Info]),
       wait_start(Pid,Ref);
     {started,Result} ->
 	?TIMEDLOG
@@ -178,16 +178,16 @@ wait_start(Pid,Ref) ->
     {'DOWN',_,_,_,normal} ->
       wait_start(Pid,Ref);
     Other ->
-      io:format("~n*** WARNING: got message ~p~n",[Other]),
+      io:format("~n*** SHRT WARNING: got message ~p~n",[Other]),
       wait_start(Pid,Ref)
     after 10000 ->
-	io:format("*** Error: start_fun does not return~n"),
+	io:format("*** SHRT ERROR: start_fun does not return~n"),
 	false
     end.
 
 start_post(_State,_,{'EXIT',Reason}) ->
   io:format
-    ("*** Error: start raised the exception ~p~n",
+    ("*** SHRT ERROR: start raised the exception ~p~n",
      [Reason]),
   io:format
     ("Stacktrace:~n~p~n",
@@ -228,7 +228,7 @@ do_cmds_args(State) ->
 	 end)
   catch _:Reason ->
       io:format
-	("*** Model error: ~p:do_cmds_args raised an exception ~p in state~n  ~p~n"
+	("*** MODEL ERROR: ~p:do_cmds_args raised an exception ~p in state~n  ~p~n"
 	 ++"Such errors cannot be handled by the QuickCheck dynamic state machine...~n",
 	 [?MODULE,Reason,State]),
       io:format
@@ -245,7 +245,7 @@ do_cmds_pre(State,[Commands|_]) ->
 	 (State#state.test_gen_state,raw(Commands),State#state.test_corr_state))
   catch _:Reason ->
       io:format
-	("*** Model error: ~p:do_cmds_pre raised an exception ~p in state~n  ~p~n"
+	("*** MODEL ERROR: ~p:do_cmds_pre raised an exception ~p in state~n  ~p~n"
 	 ++"with commands ~p~n"
 	 ++"Such errors cannot be handled by the QuickCheck dynamic state machine...~n",
 	 [?MODULE,Reason,State,Commands]),
@@ -308,7 +308,7 @@ do_cmds(Commands,WaitTime,NoEnvWait) ->
     end
   catch _ExceptionType:Reason ->
       io:format
-	("*** Error: ~p:do_cmds(~p) raised an exception ~p~n",
+	("*** SHRT ERROR: ~p:do_cmds(~p) raised an exception ~p~n",
 	 [?MODULE,self(),Reason]),
       io:format
 	("Stacktrace:~n~p~n",
@@ -344,7 +344,7 @@ try
     [Job|_] ->
       {exit,Pid,ExitReason,_} = Job#job.result,
       io:format
-	("*** Error: job ~p terminated with exception~n  ~p~n",
+	("*** Test Error: job ~p terminated with exception~n  ~p~n",
 	 [Pid,ExitReason]),
       false;
     [] ->
@@ -405,7 +405,7 @@ do_cmds_next(State,Result={NewJobs,FinishedJobs},[Commands|_]) ->
      }
   catch _:Reason ->
       io:format
-	("*** Model error: ~p:do_cmds_next raised an exception ~p in state~n  ~p~n"
+	("*** MODEL ERROR: ~p:do_cmds_next raised an exception ~p in state~n  ~p~n"
 	 ++"with commands ~p"
 	 ++"~nresult is ~p~n"
 	 ++"Such errors cannot be handled by the QuickCheck dynamic state machine...~n",
@@ -425,7 +425,7 @@ observers_next_states(ModuleStates,NewJobs,FinishedJobs) ->
 	     {RAcc,[Observer#observer{state=NextState}|SAcc]};
 	   Other ->
 	     io:format
-	       ("*** Error: protocol observer ~p signalled a testing failure "++
+	       ("*** Test error: protocol observer ~p signalled a testing failure "++
 		  "for the new jobs~n  ~p~nand the finished jobs~n  ~p~n"++
 		  "Error was ~p~n",
 		[Name,NewJobs,FinishedJobs,Other]),
@@ -475,17 +475,17 @@ receive_completions(UntilTime,Counter,Finished,JobsAlive,NoEnvWait) ->
 	  handle_exit(UntilTime,Pid,Reason,StackTrace,Counter,Finished,JobsAlive,NoEnvWait);
 	{exit,Pid,_Reason,_} ->
 	  io:format
-	    ("*** Warning: exit for old job ~p received; consider increasing wait time.~n",[Pid]),
+	    ("*** SHRT WARNING: exit for old job ~p received; consider increasing wait time.~n",[Pid]),
 	  receive_completions(UntilTime,Counter,Finished,JobsAlive,NoEnvWait);
 	_ when is_record(Job,job), JobCounter==Counter ->
 	  receive_completions(UntilTime,Counter,[Job|Finished],delete_job(Job,JobsAlive),NoEnvWait);
 	_ when is_record(Job,job) ->
 	  io:format
-	    ("*** Warning: old job received; consider increasing wait time.~n"),
+	    ("*** SHRT WARNING: old job received; consider increasing wait time.~n"),
 	  receive_completions(UntilTime,Counter,Finished,JobsAlive,NoEnvWait)
       end;
     X ->
-      io:format("~p: unknown message ~p received~n",[?MODULE,X]),
+      io:format("SHRT WARNING: ~p: unknown message ~p received~n",[?MODULE,X]),
       error(bad)
   after Timeout -> {lists:reverse(Finished),JobsAlive}
   end.
@@ -502,7 +502,7 @@ handle_exit(UntilTime,Pid,Reason,StackTrace,Counter,Finished,JobsAlive,NoEnvWait
 	  receive_completions(UntilTime,Counter,[NewJob|Finished],delete_job(NewJob,JobsAlive),NoEnvWait);
 	[] -> 
 	  ?TIMEDLOG
-	    ("*** Warning: got exit for process ~p which is not a current job~n",
+	    ("*** SHRT WARNING: got exit for process ~p which is not a current job~n",
 	     [Pid]),
 	  receive_completions(UntilTime,Counter,Finished,JobsAlive,NoEnvWait)
       end;
@@ -622,7 +622,7 @@ print_testcase1(Cmds,H,State,Result) ->
     io:format("~n~n")
   catch _:Exception ->
       io:format
-	("~n*** Warning: print_counterexample raised an exception ~p~n"
+	("~n*** SHRT WARNING: print_counterexample raised an exception ~p~n"
 	 ++"Stacktrace:~n~p~n",
 	 [Exception,erlang:get_stacktrace()]),
       ok
@@ -650,7 +650,7 @@ result_value_from_history(Other) ->
       Other#eqc_statem_history.result;
     true ->
       io:format
-	("*** WARNING: don't know how to extract the result from "++
+	("*** SHRT WARNING: don't know how to extract the result from "++
 	   "the statement history~n"),
       if 
 	is_tuple(Other) ->
@@ -674,7 +674,7 @@ ensure_boolean(true) ->
 ensure_boolean(false) ->
   false;
 ensure_boolean(Other) ->
-  io:format("*** Error: ensure_boolean expects a boolean -- got ~p~n",[Other]),
+  io:format("*** SHRT ERROR: ensure_boolean expects a boolean -- got ~p~n",[Other]),
   io:format
     ("Stacktrace:~n~p~n",
      [try throw(trace) catch _:_ -> erlang:get_stacktrace(), Other end]).
