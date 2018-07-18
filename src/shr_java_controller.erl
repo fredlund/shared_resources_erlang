@@ -6,10 +6,10 @@
 -export([start/2,start_link/2]).
 -export([init/1,handle_call/3,terminate/2]). 
 -export([handle_cast/2,handle_info/2,code_change/3]).
-
 -export([call/2]).
+-export([std_converter/1]).
 
--record(state,{value_converter,free_pids,controller}).
+-record(state,{value_converter,arg_converter,free_pids,controller}).
 
 
 start(Controller,Options) ->
@@ -24,13 +24,18 @@ start(Controller,Link,Options) ->
       ValueConv when is_function(ValueConv) -> ValueConv;
       _ -> fun std_converter/1
     end,
+  ArgConverter =
+    case proplists:get_value(arg_converter,Options) of
+      ArgConv when is_function(ArgConv) -> ArgConv;
+      _ -> fun std_arg_converter/2
+    end,
   Fun = 
     if
       Link -> start_link;
       true -> start
     end,
   Result = 
-    gen_server:Fun({local,?MODULE},?MODULE,[Controller,ValueConverter],[]),
+    gen_server:Fun({local,?MODULE},?MODULE,[Controller,ValueConverter,ArgConverter],[]),
   case Result of
     {ok,_} -> ok;
     Other -> 
@@ -40,8 +45,8 @@ start(Controller,Link,Options) ->
   end,
   Result.
 
-init([Controller,ValueConverter]) ->
-  {ok,#state{value_converter=ValueConverter,free_pids=[],controller=Controller}}.
+init([Controller,ValueConverter,ArgConverter]) ->
+  {ok,#state{value_converter=ValueConverter,arg_converter=ArgConverter,free_pids=[],controller=Controller}}.
 
 handle_call(Msg={_Method,_Args},From,State) ->
   {Pid,NewState} = find_free_pid(State),
@@ -64,15 +69,19 @@ find_free_pid(State) ->
   end.
       
 java_caller(State) ->
+  Node = java:node_id(State#state.controller),
   receive
-    {call,{Method,Args},From,Parent} ->
-      ?TIMEDLOG("will call java:call(~p,~p,~p)~n",[Controller,Method,Args]),
+    {call,_Call={Method,Args},From,Parent} ->
+      ?TIMEDLOG
+         ("will call java:call(~p,~p,~p)~n",
+          [State#state.controller,Method,Args]),
+      ConvertedArgs = convert_args(Node,Args,State#state.arg_converter),
       try 
 	convert
-	  (java:call(State#state.controller,Method,Args),
+	  (java:call(State#state.controller,Method,ConvertedArgs),
 	   State#state.value_converter) of
 	Result ->
-	  ?TIMEDLOG("result of ~p is ~p~n",[Call,Result]),
+	  ?TIMEDLOG("result of ~p is ~p~n",[_Call,Result]),
 	  Parent!{reply,Result,From,self()},
 	  java_caller(State)
       catch throw:{java_exception,Exc} ->
@@ -90,6 +99,18 @@ code_change(_,State,_) ->
 terminate(_,_) ->
   ok.
 
+convert_args(Node,Args,F) when is_function(F) ->
+  ?TIMEDLOG("will convert args ~p~n",[Args]),
+  try lists:map(fun (Arg) -> F(Node,Arg) end, Args) of
+      ConvertedArgs ->
+      ?TIMEDLOG("converted args ~p~n",[ConvertedArgs]),
+      ConvertedArgs
+  catch Exception:Reason ->
+      io:format("convert_args ~p failed with ~p:~p~nn",[Args,Exception,Reason]),
+      io:format("Stacktrace:~n~p~n",[erlang:get_stacktrace()]),
+      error(badarg)
+  end.
+
 convert(Result,void) ->
   Result;
 convert(Result,F) ->
@@ -99,8 +120,17 @@ convert(Result,F) ->
       ?TIMEDLOG("converted value is ~p~n",[ConvertedValue]),
       ConvertedValue
   catch Exception:Reason ->
-      io:format("convert ~p failed with ~p:~pn",[Result,Exception,Reason]),
+      io:format("convert ~p failed with ~p:~p~nn",[Result,Exception,Reason]),
+      io:format("Stacktrace:~n~p~n",[erlang:get_stacktrace()]),
       error(badarg)
+  end.
+
+std_arg_converter(Node,Arg) ->
+  case Arg of
+    _ when is_list(Arg) ->
+      java:list_to_string(Node,Arg);
+    _ ->
+      Arg
   end.
 
 std_converter(Result) ->
@@ -115,8 +145,15 @@ std_converter(Result) ->
 	  ResultValue;
 	false ->
 	  case java:instanceof(Result,'java.lang.Throwable') of
-	    true -> {exception,java:getClassName(Result)};
-	    false -> Result
+	    true -> 
+              {exception,java:getClassName(Result)};
+	    false -> 
+              ?TIMEDLOG
+                 ("not converting ~p~n",
+                  [java:string_to_list(java:call(Result,toString,[]))]),
+              ?TIMEDLOG
+                 ("Classname=~p~n",[java:getClassName(Result)]),
+              Result
 	  end
       end;
     false -> Result

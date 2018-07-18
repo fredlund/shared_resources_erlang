@@ -14,15 +14,25 @@
 -include("debug.hrl").
 
 -include("fsmstate.hrl").
+-include("corr_resource_state.hrl").
 
--define(MAX_STATES,400).
+
+-define(MAX_STATES,100).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+%% Ideas for handling conflicting actions:
+%% - strip away combined actions that do not meet some global constraint
+%% How do we specify such a global constraint?
+%% We can specify a constraint as a function: 
+%% global_constraint_fun.
+
 print_finished_job_info(Job,TS) ->
   MachId = proplists:get_value(machine_id,Job#job.info),
-  {_,{Machine,MachineState,_}} = lists:keyfind(MachId,1,TS#fstate.machines),
-  try Machine:print_finished_job_info(Job#job.call,MachId,MachineState,TS#fstate.global_state)
+  Machine = lists:keyfind(MachId,#machine.id,TS#fstate.machines),
+  Module = Machine#machine.module,
+  MachineState = Machine#machine.state,
+  try Module:print_finished_job_info(Job#job.call,MachId,MachineState,TS#fstate.global_state)
   catch Class:Reason -> 
       case {Class,Reason} of
 	{error,undef} ->
@@ -40,8 +50,10 @@ print_finished_job_info(Job,TS) ->
 
 print_started_job_info(Job,TS) ->
   MachId = proplists:get_value(machine_id,Job#job.info),
-  {_,{Machine,MachineState,_}} = lists:keyfind(MachId,1,TS#fstate.machines),
-  try Machine:print_started_job_info(Job#job.call,MachId,MachineState,TS#fstate.global_state)
+  Machine = lists:keyfind(MachId,#machine.id,TS#fstate.machines),
+  Module = Machine#machine.module,
+  MachineState = Machine#machine.state,
+  try Module:print_started_job_info(Job#job.call,MachId,MachineState,TS#fstate.global_state)
   catch Class:Reason ->
       case {Class,Reason} of
 	{error,undef} ->
@@ -65,11 +77,14 @@ print_state(State=#fstate{blocked=Blocked,machines=Machines,options=Options}) ->
       combine
 	(Machines,
 	 "||",
-	 fun ({MachineId,{Machine,MachineState,_}}) ->
+	 fun (Machine) ->
+	     MachineId = Machine#machine.id,
+	     Module = Machine#machine.module,
+	     MachineState = Machine#machine.state,
 	     IsBlocked =
 	       lists:member(MachineId,Blocked),
 	     String =
-	       try Machine:print_state(MachineId,MachineState,IsBlocked)
+	       try Module:print_state(MachineId,MachineState,IsBlocked)
 	       catch _:_ -> io_lib:format("~p",[MachineState]) end,
 	     IsBlockedString =
 	       if
@@ -108,6 +123,8 @@ initial_state(PreMachineSpecs,PreOptions) ->
     proplists:get_value(stop_fun,Options,void),
   GlobalState =
     proplists:get_value(global_state,Options,void),
+  GlobalConstraint =
+    proplists:get_value(global_constraint_fun,Options,fun (_,_,_) -> true end),
   MachineSpecs =
     lists:foldl
       (fun ({N,MachineWithMachineInit},Acc) when is_integer(N) ->
@@ -127,59 +144,83 @@ initial_state(PreMachineSpecs,PreOptions) ->
 		  {seq,N,Spec} -> {[N],Spec};
 		  {machine,Spec} -> {[void],Spec}
 		end,
-	      {Machine,Init} =
+	      {Machine,PreInit} =
 		case MachineSpec of
 		  Mach when is_atom(Mach) -> {Mach,[]};
 		  {Mach,_} when is_atom(Mach) -> MachineSpec
 		end,
-	      init_machine(I,Machine,PreArgs++[Init,Options])
+	      {Init,Weight} = 
+		if
+		  is_list(PreInit) -> 
+		    case proplists:get_value(weight,PreInit) of
+		      undefined ->
+			{PreInit,1};
+		      W when is_integer(W), W>0 ->
+			{proplists:delete(weight,PreInit),W}
+		    end;
+		  true -> 
+		    {PreInit,1}
+		end,
+	      init_machine(I,Machine,Weight,PreArgs++[Init,Options])
 	  end, 
 	  lists:zip(lists:seq(1,length(MachineSpecs)),MachineSpecs)),
       options=Options,
       start=StartFun,
       stop=StopFun,
       blocked=[],
-      global_state=GlobalState
+      global_state=GlobalState,
+      global_constraint=GlobalConstraint
     }.
 
-init_machine(I,Machine,Args) ->
+init_machine(I,Machine,Weight,Args) ->
   case apply(Machine,initial_state,Args) of
     {ok,InitialState} ->
-      {I,{Machine,InitialState,[]}};
+      #machine{id=I,module=Machine,weight=Weight,state=InitialState,options=[]};
     {ok,InitialState,MachineOptions} ->
-      {I,{Machine,InitialState,MachineOptions}}
+      #machine{id=I,module=Machine,weight=Weight,state=InitialState,options=MachineOptions}
   end.
 
-precondition(#fstate{blocked=Blocked,machines=Machines,global_state=GlobalState},Commands,_) ->
+precondition(#fstate{blocked=Blocked,machines=Machines,global_state=GlobalState},Commands,CorrState) ->
   lists:all
     (fun ({Type,{F,Args},Info}) ->
 	 Call = {Type,F,Args},
 	 MachineId = proplists:get_value(machine_id,Info),
-	 {_,{Machine,MachineState,_Opts}} = lists:keyfind(MachineId,1,Machines),
-	    Machine:precondition
-	      (MachineId,MachineState,GlobalState,Call)
+	 Machine = lists:keyfind(MachineId,#machine.id,Machines),
+	 Module = Machine#machine.module,
+	 MachineState = Machine#machine.state,
+	 Module:precondition
+	   (MachineId,MachineState,GlobalState,CorrState,Call)
 	   andalso not(lists:member(MachineId,Blocked))
      end, Commands).
 
 command(State,CorrState) ->
   ParLimit = 
-    case proplists:get_value(max_par,State#fstate.options) of
-      N when is_integer(N), N>=1 ->
-	N;
-      undefined ->
-	length(State#fstate.machines)
+    case length(CorrState#corr_res_state.states) of
+      N when N>=?MAX_STATES ->
+        1;
+      _ ->
+        case proplists:get_value(max_par,State#fstate.options) of
+          N when is_integer(N), N>=1 ->
+            N;
+          undefined ->
+            length(State#fstate.machines)
+        end
     end,
   NumProcs = length(State#fstate.machines),
-  ?LET
-     (NPars,
-      choose(1,min(NumProcs,ParLimit)),
-      begin
-	Result = command1(State,NPars,CorrState),
-	?LOG
-	   ("Command generated: ~p~n",
-	    [Result]),
-	Result
-      end).
+  ?SUCHTHAT
+    (Cmds,
+     ?LET
+        (NPars,
+         choose(1,min(NumProcs,ParLimit)),
+         begin
+           Result = command1(State,NPars,CorrState),
+           ?LOG
+              ("Command generated: ~p~n",
+               [Result]),
+           Result
+         end),
+     (State#fstate.global_constraint)
+       (Cmds,State#fstate.global_state,CorrState)).
 
 command1(_State,NPars,_CorrState) when NPars =< 0 ->
   [];
@@ -198,7 +239,7 @@ command1(State,NPars,CorrState) when NPars > 0 ->
       [];
     true ->
       ?LET({Command,NewState},
-	   gen_mach_cmd(State),
+	   gen_mach_cmd(State,CorrState),
 	   case Command of
 	     void -> [];
 	     _ ->
@@ -214,10 +255,12 @@ command1(State,NPars,CorrState) when NPars > 0 ->
 	   end)
   end.
 
-gen_mach_cmd(State) ->
+gen_mach_cmd(State,CorrState) ->
   NonBlocked =
     lists:filter
-      (fun ({I,_}) -> not(lists:member(I,State#fstate.blocked)) end,
+      (fun (Machine) -> 
+	   not(lists:member(Machine#machine.id,State#fstate.blocked)) 
+       end,
        State#fstate.machines),
   ?LOG
     ("fsms:gen_mach_cmd - length(NonBlocked) = ~p~n",
@@ -226,20 +269,24 @@ gen_mach_cmd(State) ->
     [] ->
       {void,State};
     _ ->
-      ?LET({MachId,{Machine,MachineState,_}},
-	   oneof(NonBlocked),
+      ?LET(Machine,
+	   one_machine(NonBlocked),
 	   begin
+	     MachId = Machine#machine.id,
+	     MachineState = Machine#machine.state,
+	     Module = Machine#machine.module,
 	     ?LOG
 		("fsms:gen_mach_cmd - selected one machine ~p~nmach: ~p~n"
 		 ++"machinestate=~p~n",
-		 [MachId,Machine,MachineState]),
+		 [MachId,Module,MachineState]),
 	     NewBlocked = [MachId|State#fstate.blocked],
 	     NewState = State#fstate{blocked=NewBlocked},
 	     ?LET(Generated,
-		  Machine:command(MachId,MachineState,State#fstate.global_state),
+		  Module:command
+                    (MachId,MachineState,State#fstate.global_state,CorrState),
 		  case Generated of
 		    stopped ->
-		      gen_mach_cmd(NewState);
+		      gen_mach_cmd(NewState,CorrState);
 		    {Type,F,Args} ->
 		      {{Type,{F,Args},[{machine_id,MachId}]},NewState};
 		    {Type,F,Args,Options} ->
@@ -248,6 +295,12 @@ gen_mach_cmd(State) ->
 	   end)
   end.
 
+one_machine(Machines) ->
+  eqc_gen:frequency
+    (lists:map
+       (fun (Machine) -> {Machine#machine.weight,Machine} end, 
+	Machines)).
+		    
 limit_states(State,CorrState) ->
   case proplists:get_value(limit_card_state,State#fstate.options) of
     undefined ->
@@ -263,7 +316,7 @@ jobs_to_machines(Jobs) ->
 	 Machine
      end, Jobs).
 
-next_state(State,Result,_Commands,_CorrState) ->
+next_state(State,Result,_Commands,CorrState) ->
   {NewJobs,FinishedJobs} =
     Result,
   RemainingNewMachines = 
@@ -276,19 +329,21 @@ next_state(State,Result,_Commands,_CorrState) ->
       (fun (Job,S) ->
 	   MachineId = 
 	     proplists:get_value(machine_id,Job#job.info),
-	   {_,{Machine,MachineState,MachineOpts}} =
-	     lists:keyfind(MachineId,1,S#fstate.machines),
+	   Machine = lists:keyfind(MachineId,#machine.id,S#fstate.machines),
+	   Module = Machine#machine.module,
+	   MachineState = Machine#machine.state,
 	   {NewMachineState,NewGlobalState} =
-	     Machine:next_state
+	     Module:next_state
 	       (MachineId,
 		MachineState,
 		State#fstate.global_state,
+                CorrState,
 		Job#job.call),
 	   S#fstate
 	     {machines=
 		lists:keyreplace
-		  (MachineId,1,S#fstate.machines,
-		   {MachineId,{Machine,NewMachineState,MachineOpts}}),
+		  (MachineId,#machine.id,S#fstate.machines,
+		   Machine#machine{state=NewMachineState}),
 	      global_state=NewGlobalState}
        end, State, FinishedJobs),
   NewState#fstate{blocked=NewBlocked}.

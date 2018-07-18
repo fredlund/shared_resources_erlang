@@ -5,27 +5,30 @@
 %%-define(debug,true).
 -include("debug.hrl").
 
--include("shr_step.hrl").
+-include("tester.hrl").
 
 -record(info,
 	{
 	  data_module :: atom(),
 	  wait_module :: atom(),
-	  counter
+	  gen_module,
+	  options
 	}).
 
 -record(state,
 	{
 	  state,
 	  waitstate,
+	  genstate,
 	  calls,
-	  waiting 
+	  waiting
 	}).
 
 
--export([initial_state/3,step/3,bigstep/3,state_space/3]).
+-export([initial_state/5,step/3,repeat_step/3]).
 
-initial_state(StateSpec,WaitSpec,Options) ->  
+
+initial_state(StateSpec,WaitSpec,GenModule,GenState,Options) ->  
   StateMod = shr_utils:module(StateSpec),
   WaitMod = shr_utils:module(WaitSpec),
   State = shr_utils:initial_state(StateSpec,Options),
@@ -35,114 +38,161 @@ initial_state(StateSpec,WaitSpec,Options) ->
      {
        data_module=StateMod, 
        wait_module=WaitMod,
-       counter=0
+       gen_module=GenModule,
+       options=Options
      },
      #state
      {
        state=State, 
        waitstate=WaitState,
+       genstate=GenState,
        calls=[],
        waiting=[]
      }
    }.
 
-state_space(CallSequence,InitialState,Info) ->
-  state_space(CallSequence,InitialState,Info,[]).
+repeat_step(Commands,State,Info) ->
+  repeat_step(Commands,State,Info,1).
 
-state_space(CallSequence,State,Info,States) ->
-  case lookup_state(CallSequence,State,States) of
-    {ok,Name} ->
-      {name,Name};
-    false when CallSequence==[] ->
-      nil;
-    false ->
-      {NewStates,NewInfo} = add_new_state(CallSequence,State,States,Info),
-      case bigstep(CallSequence,State,Info) of
-	{sequence,{State,_}} ->
-	  {sequence,CallSequence,State};
-	{branching,{Calls,States,_,RemainingCalls}} ->
-	  lists:map
-	    (fun ({ChoiceState,Unblocked}) ->
-		 Result = 
-		   state_space(RemainingCalls,ChoiceState,NewInfo,NewStates),
-		 {choice,Calls,Result}
-	     end, States)
-      end
-  end.
+repeat_step([],State,_Info,_Counter) ->
+  {State,[]};
+repeat_step([First|Rest],State,Info,Counter) ->
+  ?LOG("Will execute~n~p~nin state~n~p~n",[First,State]),
+  Transitions = step(First,State,Info,Counter),
+  NewCounter = length(First)+Counter,
+  {State,
+   lists:map
+     (fun (Transition) ->
+	  S1 = Transition#transition.endstate,
+	  {Transition,repeat_step(Rest,S1,Info,NewCounter)}
+      end, Transitions)}.
 
-lookup_state(Calls,State,States) ->
-  lists:keyfind({Calls,State},1,States).
-add_new_state(Calls,State,States,Info) ->
-  {[{{Calls,State},Info#info.counter}|States], 
-   Info#info{counter=Info#info.counter+1}}.
-
-bigstep(CallSequence,State,Info) ->
-  bigstep(CallSequence,State,Info,[],1).
-
-bigstep([],State,_Info,History,_Counter) -> 
-  {sequence,{State,lists:reverse(History)}};
-bigstep([RawCalls|Rest],State,Info,History,Counter) ->
-  {Calls,NewCounter} = 
-    lists:foldl
-      (fun (RawCall,{AccCalls,AccCounter}) ->
-	   case RawCall of
-	     {_F,_Args} -> 
-	       {[#call{call=RawCall,id=AccCounter}|AccCalls],AccCounter+1}
-	   end
-       end, {[],Counter}, RawCalls),
-  case step(Calls,State,Info) of
-    [{NewState,Unblocked}] -> 
-      HistoryItem = #history_item{calls=Calls,unblocked=Unblocked},
-      bigstep(Rest,NewState,Info,[HistoryItem|History],NewCounter);
-    Other=[_|_] -> 
-      {branching,{Calls,Other,lists:reverse(History),Rest}}
-  end.
-
-step(Calls,States,Info) when is_list(States) ->
-  merge_states_and_unblocked
-    (lists:flatmap (fun (State) -> step(Calls,State,Info) end, States));
-step(PreCalls,State,Info) ->
-  ?LOG("step(calls=~p~nstate=~p~n",[PreCalls,State]),
-  Calls = 
-    if
-      is_list(PreCalls) ->
-	PreCalls;
-      true ->
-	[PreCalls]
-    end,
-  EnabledCalls = 
-    lists:filter
-      (fun (Call) -> 
-	   (data_module(Info)):pre(Call,State#state.state) 
-       end, Calls),
-  step(State#state{waiting=EnabledCalls},Info).
-
-step(State,Info) when not(is_list(State)) ->
-  step([{State,[]}],Info);
-step(StatesUnblocked,Info) ->
-  ?LOG
-     ("~n~nOld StatesUnblocked=~n~p~n",
-      [StatesUnblocked]),
-  NewStatesUnblocked = 
-    merge_states_and_unblocked
-      (lists:flatmap
-	 (fun ({State,Unblocked}) ->
-	      do_step(State,Unblocked,Info)
-	  end, StatesUnblocked)),
-  ?LOG
-     ("~n~nNewStatesUnblocked=~n~p~n",
-      [NewStatesUnblocked]),
-  if
-    NewStatesUnblocked == StatesUnblocked ->
-      StatesUnblocked;
+step(Commands,State,Info) ->
+  Transitions = 
+    step(Commands,State,Info,1),
+  CheckDeterministic = 
+    proplists:get_value(check_deterministic,Info#info.options,true),
+  if 
+    not(CheckDeterministic) ->
+      Transitions;
     true ->
-      step(NewStatesUnblocked,Info)
+      UnblockSet = sets:new(),
+      check_unblocks_are_unique(Transitions,UnblockSet)
   end.
 
-do_step(State,Unblocked,Info) ->
+check_unblocks_are_unique([],_UnblockSet) -> 
+  true;
+check_unblocks_are_unique([Transition|Rest],UnblockSet) -> 
+  TransitionUnblocks = Transition#transition.unblocked,
+  case sets:is_element(TransitionUnblocks,UnblockSet) of
+    true ->
+      io:format
+	("*** Warning: unblock sets are not unique:~n~p and ~p~n",
+	 [TransitionUnblocks,sets:to_list(UnblockSet)]),
+      throw(not_deterministic);
+    false ->
+      check_unblocks_are_unique
+	(Rest,sets:add_element(TransitionUnblocks,UnblockSet))
+  end.
+
+step(Commands,State,Info,OldCounter) ->
+  {JobCalls,_NewCounter} =
+    lists:foldl
+      (fun (Command, {Acc,Counter}) ->
+	   {F,Args} = Command#command.call,
+	   Type = Command#command.port,
+	   Job = 
+	     #job
+	     {
+	       pid=Counter,
+	       call={Type,F,Args},
+	       info=Command#command.options
+	     },
+	   {[Job|Acc], Counter+1}
+       end, {[], OldCounter}, Commands),
+
+  EnabledJobCalls = 
+    lists:filter
+      (fun (JobCall) -> 
+	   (data_module(Info)):pre(shr_call(JobCall),State#state.state) 
+       end, JobCalls),
+
+  FailedPres =
+    lists:filter
+      (fun (JobCall) -> 
+	   not((data_module(Info)):pre(shr_call(JobCall),State#state.state))
+       end, JobCalls),
+
+  IsExecutable =
+    lists:all
+      (fun (JobCall) ->
+	 Calls = 
+	   lists:map
+	     (fun (Job) ->
+		  {Type,F,Args} = Job#job.call,
+		  {Type,{F,Args},Job#job.info}
+	      end, JobCalls),
+	 case (gen_module(Info)):precondition(State#state.genstate,Calls,void) of
+	   true -> true;
+	   false ->
+	     io:format
+	       ("*** Warning: following a command ~p which cannot be completed~n in state~n~p~n",
+		[JobCall,State#state.genstate]),
+	     false
+	 end
+       end, JobCalls),
+  if
+    not(IsExecutable) -> 
+      case proplists:get_value(fail_not_executable,Info#info.options,false) of
+	true ->
+	  throw(not_executable);
+	false ->
+	  []
+      end;
+    true ->
+      CallState = 
+        State#state{waiting=EnabledJobCalls},
+      Transition = 
+	#transition
+        {calls=JobCalls,unblocked=[],returns=[],endstate=CallState,failed_pres=FailedPres},
+      NewTransitions = 
+        merge_transitions(step(Transition,Info)),
+      lists:map
+	(fun (NewTransition) ->
+	     Result = {EnabledJobCalls,NewTransition#transition.unblocked},
+	     NState = NewTransition#transition.endstate,
+	     NewGenState =
+	       (gen_module(Info)):next_state
+		 (NState#state.genstate,Result,void,void),
+	     NewNState = NState#state{genstate=NewGenState},
+	     NewTransition#transition{endstate=NewNState}
+	 end, NewTransitions)
+  end.
+
+step(Transition,Info) when not(is_list(Transition)) ->
+  step([Transition],Info);
+step(Transitions,Info) ->
+  ?LOG
+     ("~n~nOld Transitions=~n~p~n",
+      [Transitions]),
+  NewTransitions = 
+    merge_transitions
+      (lists:flatmap
+	 (fun (Transition) ->
+	      do_step(Transition,Info)
+	  end, Transitions)),
+  if
+    NewTransitions == Transitions ->
+      Transitions;
+    true ->
+      step(NewTransitions,Info)
+  end.
+
+do_step(Transition,Info) ->
+  State = Transition#transition.endstate,
   WaitingModule = waiting_module(Info),
   DataModule = data_module(Info),
-  AcceptNewStates =
+  AcceptNewTransitions =
     lists:map
       (fun (WaitingCall) ->
 	   {WaitInfo,NewWaitState} =
@@ -154,32 +204,46 @@ do_step(State,Unblocked,Info) ->
 	     State#state
 	     {
 	       waiting = lists:delete(WaitingCall,State#state.waiting),
-	       calls = [WaitingCall#call{waitinfo=WaitInfo}|State#state.calls],
+	       calls = [WaitingCall#job{waitinfo=WaitInfo}|State#state.calls],
 	       waitstate = NewWaitState
 	     },
-	   {NewState,Unblocked}
+	   Transition#transition{endstate=NewState}
        end, State#state.waiting),
-  ?LOG("AcceptNewStates=~n~p~n",[AcceptNewStates]),
   EnabledCalls =
     lists:filter
-      (fun (Call) ->
-	   DataModule:cpre(Call#call.call,State#state.state)
+      (fun (Job) ->
+	   DataModule:cpre(shr_call(Job),State#state.state)
        end, State#state.calls),
-  ?LOG("EnabledCalls=~p~n",[EnabledCalls]),
-  CallNewStates =
+  CallNewTransitions =
     lists:flatmap
       (fun (Call) ->
-	   NewUnblocked = [Call|Unblocked],
-	   NewDataStates =
-	     case DataModule:post(Call#call.call,void,State#state.state) of
-	       {'$shr_nondeterministic',NewStates} -> NewStates;
-	       NewDataState -> [NewDataState]
-	     end,
+	   NewTransition =
+	     Transition#transition
+	     {unblocked=[Call|Transition#transition.unblocked]},
+	   NewDataStatesAndReturns =
+             begin
+               ReturnValue = 
+                 DataModule:return_value(shr_call(Call),State#state.state),
+               ReturnCheck =
+                 if
+                   ReturnValue =/= undefined ->
+                     void;
+                   true ->
+                     {check,shr_call(Call),State#state.state}
+                 end,
+               Returns = {Call,ReturnValue,ReturnCheck},
+               case DataModule:post(shr_call(Call),void,State#state.state) of
+                 {'$shr_nondeterministic',NewStates} -> 
+                   lists:map(fun (NS) -> {NS,Returns} end, NewStates);
+                 NewDataState -> 
+                   [{NewDataState,Returns}]
+               end
+             end,
 	   lists:map
-	     (fun (NewDataState) ->
+	     (fun ({NewDataState,NewReturn}) ->
 		  NewWaitState = 
 		    WaitingModule:post_waiting
-		      (Call#call.call,Call#call.waitinfo,
+		      (shr_call(Call),Call#job.waitinfo,
 		       State#state.waitstate,NewDataState),
 		  NewState =
 		    State#state
@@ -188,33 +252,50 @@ do_step(State,Unblocked,Info) ->
 		      waitstate = NewWaitState,
 		      calls = lists:delete(Call,State#state.calls)
 		    },
-		  {NewState,NewUnblocked}
-	      end, NewDataStates)
+		  NewTransition#transition
+                    {
+                    endstate=NewState,
+                    returns=[NewReturn|NewTransition#transition.returns]
+                   }
+	      end, NewDataStatesAndReturns)
        end, EnabledCalls),
-  ?LOG("CallNewStates=~n~p~n",[CallNewStates]),
-  case merge_states_and_unblocked(AcceptNewStates++CallNewStates) of
-    [] -> [{State,Unblocked}];
+  ?LOG("CallNewStates=~n~p~n",[CallNewTransitions]),
+  case merge_transitions(AcceptNewTransitions++CallNewTransitions) of
+    [] -> [Transition];
     New -> New
   end.
 
-merge_states_and_unblocked(StatesAndUnblocked) ->	   
-  Normalized =
-    lists:map
-      (fun ({State,Unblocked}) ->
-	   {
-	     State#state
-	     {
-	       waiting = lists:sort(State#state.waiting),
-	       calls = lists:sort(State#state.calls)
-	     },
-	     lists:sort(Unblocked)
-	   }
-       end, StatesAndUnblocked),
-  lists:usort(Normalized).
+shr_call(Job) ->
+  {_Type,F,Args} = Job#job.call,
+  {F,Args}.
+
+merge_transitions(Transitions) ->	   
+  lists:usort
+    (lists:map
+       (fun (Transition) ->
+	    State = Transition#transition.endstate,
+	    Unblocked = Transition#transition.unblocked,
+	    NewState = 
+	      State#state
+	      {
+		waiting = lists:sort(State#state.waiting),
+		calls = lists:sort(State#state.calls)
+	      },
+	    #transition
+	      {
+	      calls = lists:sort(Transition#transition.calls),
+	      endstate = NewState,
+	      unblocked = lists:sort(Unblocked),
+              failed_pres = lists:sort(Transition#transition.failed_pres),
+	      returns = lists:sort(Transition#transition.returns)
+	     }
+	end, Transitions)).
 
 data_module(Info) ->
   Info#info.data_module.
 waiting_module(Info) ->
   Info#info.wait_module.
+gen_module(Info) ->
+  Info#info.gen_module.
 
 

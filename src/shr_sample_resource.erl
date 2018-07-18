@@ -7,9 +7,10 @@
 -include("debug.hrl").
 
 -include("tester.hrl").
+-include("corr_resource_state.hrl").
 
 -record(state,{state,options,waiting_module,data_module,test_gen_state,test_gen_module,pid_counter}).
--record(onestate,{incoming,waiting,sdata,swait}).
+
 
 generate(PreOptions) ->
   Options = [no_par|PreOptions],
@@ -37,10 +38,10 @@ generate(PreOptions) ->
 do_run(0,_State) ->
   [];
 do_run(N,State) when is_integer(N), N>0 ->
+  CorrState = #corr_res_state{states=[State#state.state]},
   case eqc_gen:pick
     ((State#state.test_gen_module):command
-       (State#state.test_gen_state,
-	void)) of
+       (State#state.test_gen_state,CorrState)) of
     [] ->
       [];
     [PreCall] ->
@@ -49,9 +50,14 @@ do_run(N,State) when is_integer(N), N>0 ->
       {Pid,State1} = new_pid(State),
       Call = {Command#command.port,F,Args},
       Job = #job{pid=Pid,call=Call,info=Command#command.options},
-      OneState = shr_corr_resource:job_new_waiting(Job,State#state.state,State#state.waiting_module),
+      OneState = 
+        shr_corr_resource:job_new_waiting
+          (Job,State#state.state,State#state.waiting_module),
       ResultState = repeat_until_stable(State1#state{state=OneState}),
-      FinishedJobs = job_minus(OneState#onestate.waiting,(ResultState#state.state)#onestate.waiting),
+      FinishedJobs = 
+        job_minus
+          (OneState#onestate.waiting,
+           (ResultState#state.state)#onestate.waiting),
       NewTestGenState =
 	(State#state.test_gen_module):next_state
 	  (State#state.test_gen_state,
