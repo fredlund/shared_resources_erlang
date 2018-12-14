@@ -31,21 +31,21 @@ cpre({cruce,[_Presencia]}, _State) -> true;
 
 cpre({semaforo,[1, Actual]}, State) ->
   Signals = signals(State),
-  Signals#signals.s1 == Actual;
+  Signals#signals.s1 /= Actual;
 cpre({semaforo,[2, Actual]}, State) ->
   Signals = signals(State),
-  Signals#signals.s2 == Actual;
+  Signals#signals.s2 /= Actual;
 cpre({semaforo,[3, Actual]}, State) ->
   Signals = signals(State),
-  Signals#signals.s3 == Actual;
+  Signals#signals.s3 /= Actual;
 
 cpre({barrera,[Abierta]}, State) ->
   Signals = signals(State),
-  Signals#signals.b == Abierta;
+  Signals#signals.b /= Abierta;
 
 cpre({freno,[Accionado]}, State) ->
   Signals = signals(State),
-  Signals#signals.f == Accionado.
+  Signals#signals.f /= Accionado.
 
 %% Post-condiciones (estado)
 post({baliza, [1]}, _Result, State) ->
@@ -96,35 +96,39 @@ return(State, {freno, [_Accionado]}, Result) ->
   Result == Signals#signals.f.
   
 %% Concrete implementation
-return_value(_State, {baliza, [_N]}) -> undefined;
+return_value({baliza, [_N]}, _State) -> undefined;
 
-return_value(_State, {cruce, [_Presencia]}) -> undefined;
+return_value({cruce, [_Presencia]}, _State) -> undefined;
 
-return_value(State, {semaforo, [1, _Actual]}) ->
+return_value({semaforo, [1, _Actual]}, State) ->
   Signals = signals(State),
   Signals#signals.s1;
-return_value(State, {semaforo, [2, _Actual]}) ->
+return_value({semaforo, [2, _Actual]}, State) ->
   Signals = signals(State),
   Signals#signals.s2;
-return_value(State, {semaforo, [3, _Actual]}) ->
+return_value({semaforo, [3, _Actual]}, State) ->
   Signals = signals(State),
   Signals#signals.s3;
 
-return_value(State, {barrera, [_Abierta]}) ->
+return_value({barrera, [_Abierta]}, State) ->
   Signals = signals(State),
   Signals#signals.b;
   
-return_value(State, {freno, [_Accionado]}) ->
+return_value({freno, [_Accionado]}, State) ->
   Signals = signals(State),
   Signals#signals.f.
             
 %% Funciones auxiliares
-signals(State = #state{z1 = Z1, z2 = Z2, x = X}) ->
-  case State of
-    _ when Z1 + Z2 + X == 0 ->
-      #signals{s1 = verde,
-               s2 = verde,
-               s3 = verde,
-               b = true,
-               f = false}
-  end.
+signals(#state{z1 = Z1, z2 = Z2, x = X}) ->
+  S1 = if Z1 > 0 -> rojo;
+          Z2 > 0; X -> amarillo;
+          true -> verde
+       end,
+  S2 = if Z2 > 0; X -> rojo;
+          true -> verde
+       end,
+  #signals{s1 = S1,
+           s2 = S2,
+           s3 = verde,
+           b = true,
+           f = false}.
