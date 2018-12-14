@@ -127,8 +127,11 @@ signals(#state{z1 = Z1, z2 = Z2, x = X}) ->
   S2 = if Z2 > 0; X -> rojo;
           true -> verde
        end,
+  S3 = verde,
+  Abierta = Z1 + Z2 == 0,
+  Freno = Z2 > 0 andalso X,
   #signals{s1 = S1,
            s2 = S2,
-           s3 = verde,
-           b = true,
-           f = false}.
+           s3 = S3,
+           b = Abierta,
+           f = Freno}.
