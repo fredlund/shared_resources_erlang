@@ -7,6 +7,13 @@ BEAMS = $(patsubst %.erl,ebin/%.beam,$(wildcard *.erl))
 HEADERS = $(wildcard *.hrl)
 EFLAGS = +debug_info 
 
+help:
+	@echo "make all # makes all"
+	@echo "make run"
+
+run: main
+	erl -pa ebin -pa ../../ebin
+
 all: ebin main
 
 main: ${BEAMS}
@@ -23,5 +30,5 @@ docs:
 clean:
 	rm -f ebin/*.beam 
 
-
+.PHONY: all run main clean
 
