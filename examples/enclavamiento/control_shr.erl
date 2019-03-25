@@ -32,14 +32,11 @@ pre(_,_State) ->
   true.
 
 cpre({leerCambioBarrera,[A]},State) ->
-  A =/= ((tren(1,State) + tren(2,State)) == 0);
+  A =/= cambioBarreraValue(State);
 cpre({leerCambioFreno,[A]},State) ->
-  A =/= 
-    ((tren(1,State) > 1)
-     or (tren(2,State) > 1) 
-     or ((tren(2,State) == 1) and presencia(State)));
+  A =/= cambioFrenoValue(State);
 cpre({leerCambioSemaforo,[Id,C]},State) ->
-  C == color(Id,State);
+  C == cambioSemaforoValue(Id,State);
 cpre(_,_) ->
   true.
 
@@ -76,7 +73,7 @@ post({avisarPresencia,[Presente]},_Return,State) ->
        (2,Color2,
         set_color(1,Color1, set_presencia(Presente,State))));
 
-post({avisarPasoPorBaliza,Id},_,State) ->
+post({avisarPasoPorBaliza,[Id]},_,State) ->
   set_tren
     (Id-1,tren(Id-1,State)-1,
      set_tren(Id,tren(Id,State)+1,State));
@@ -85,13 +82,11 @@ post(_,_,State) ->
   State.
 
 return_value({leerCambioBarrera,_},State) ->
-  tren(1,State) + tren(2,State) == 0;
+  cambioBarreraValue(State);
 return_value({leerCambioFreno,_},State) ->
-  (tren(1,State) > 1)
-    or (tren(2,State) > 1)
-    or ((tren(2,State) == 1) and presencia(State));
+  cambioFrenoValue(State);
 return_value({leerCambioSemaforo,[Id,_]},State) ->
-  color(Id,State);
+  cambioSemaforoValue(Id,State);
 return_value({print,[]},State) ->
   State;
 return_value(_,_) ->
@@ -103,17 +98,30 @@ print_state(State) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+cambioBarreraValue(State) ->
+  tren(1,State) + tren(2,State) == 0.
+
+cambioFrenoValue(State) ->
+  (tren(1,State) > 1)
+    or (tren(2,State) > 1)
+    or ((tren(2,State) == 1) and presencia(State)).
+
+cambioSemaforoValue(Id,State) ->
+  color(Id,State).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 tren(Id,State) ->
   element(Id+1,State#state.tren).
 
 set_tren(Id,Tren,State) ->
-  State#state{tren=setelement(Id,State#state.tren,Tren)}.
+  State#state{tren=setelement(Id+1,State#state.tren,Tren)}.
 
 color(Id,State) ->
   element(Id+1,State#state.color).
 
 set_color(Id,Color,State) ->
-  State#state{color=setelement(Id,State#state.color,Color)}.
+  State#state{color=setelement(Id+1,State#state.color,Color)}.
 
 presencia(State) ->  
   State#state.presencia.
