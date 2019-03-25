@@ -92,6 +92,8 @@ return_value({leerCambioFreno,_},State) ->
     or ((tren(2,State) == 1) and presencia(State));
 return_value({leerCambioSemaforo,[Id,_]},State) ->
   color(Id,State);
+return_value({print,[]},State) ->
+  State;
 return_value(_,_) ->
   void.
 
