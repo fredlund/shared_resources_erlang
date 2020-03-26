@@ -1,6 +1,6 @@
 -module(carretera_control_shr).
 
--define(NUM_SEGMENTS,3).
+-define(XLIMIT,3).
 
 -behaviour(shr_data_implementation).
 
@@ -21,12 +21,14 @@
 
 initial_state(_,_) ->
   #state
-    {segments=
+    {
+     segments=
        lists:flatmap
          (fun (X) -> 
               [#segment{location={X,0}},#segment{location={X,1}}]
           end,
-          lists:seq(0,?NUM_SEGMENTS-1))}.
+          lists:seq(0,?NUM_SEGMENTS-1))
+    }.
 
 pre(_Call,_State) ->
   ?LOG("pre(~p,~p)~n",[_Call,_State]),
@@ -34,6 +36,9 @@ pre(_Call,_State) ->
 
 cpre({enter,[_CocheId,_Velocidad]},State) ->
   isfree_segment({0,0},State) orelse isfree_segment({0,1},State);
+post({exit,[CocheId,_Velocidad]},_Return,State) ->
+  Location = location(CocheId,State),
+  (timeRemaining(Location,State) =< 0);
 cpre({move,[CocheId,_Velocidad]},State) ->
   {X,_Y} = Location = location(CocheId,State),
   ?LOG
@@ -50,9 +55,6 @@ post({move,[CocheId,Velocidad]},Return={_X,_Y},State) ->
   Location = location(CocheId,State),
   move_to_segment(Return,CocheId,Velocidad,
                   free_segment(Location,State));
-post({exit,[CocheId,_Velocidad]},_Return,State) ->
-  Location = location(CocheId,State),
-  free_segment(Location,State);
 post({tick,_},_Return,State) ->
   tick(State).
 
