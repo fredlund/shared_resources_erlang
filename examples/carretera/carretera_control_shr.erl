@@ -9,7 +9,6 @@
 
 -record(state,{segments=[]}).
 -record(segment,{location,coche=undefined,tiempoQueda=undefined}).
--record(coche,{id,velocidad}).
 
 %%-define(debug,true).
 -ifdef(debug).
@@ -25,36 +24,36 @@ initial_state(_,_) ->
     {segments=
        lists:flatmap
          (fun (X) -> 
-              [{#segment{location={X,0}}},#segment{location={X,1}}]
+              [#segment{location={X,0}},#segment{location={X,1}}]
           end,
           lists:seq(0,?NUM_SEGMENTS-1))}.
 
-pre(_,_State) ->
+pre(_Call,_State) ->
+  ?LOG("pre(~p,~p)~n",[_Call,_State]),
   true.
 
 cpre({enter,[_CocheId,_Velocidad]},State) ->
-  free_segment({0,0},State) orelse free_segment({0,1},State);
+  isfree_segment({0,0},State) orelse isfree_segment({0,1},State);
 cpre({move,[CocheId,_Velocidad]},State) ->
   {X,_Y} = Location = location(CocheId,State),
+  ?LOG
+    ("move(~p,~p); location=~p seg=~p~n",
+     [CocheId,_Velocidad,Location,se<gment(Location,State)]),
   (timeRemaining(Location,State) =< 0)
-    andalso (free_segment({X,0},State) orelse free_segment({X,1},State));
+    andalso (isfree_segment({X+1,0},State) orelse isfree_segment({X+1,1},State));
 cpre(_,_State) ->
   true.
 
 post({enter,[CocheId,Velocidad]},Return={_X,_Y},State) ->
-  Coche = #coche{id=CocheId,velocidad=Velocidad},
-  set_segment(Return,#segment{coche=Coche,tiempoQueda=Velocidad},State);
-post({move,[CocheId,_Velocidad]},Return={_X,_Y},State) ->
+  move_to_segment(Return,CocheId,Velocidad,State);
+post({move,[CocheId,Velocidad]},Return={_X,_Y},State) ->
   Location = location(CocheId,State),
-  Coche = car_in_location(Location,State),
-  set_segment
-    (Return,
-     #segment{coche=Coche,tiempoQueda=Coche#coche.velocidad},
-     free_segment(Location,State));
+  move_to_segment(Return,CocheId,Velocidad,
+                  free_segment(Location,State));
 post({exit,[CocheId,_Velocidad]},_Return,State) ->
   Location = location(CocheId,State),
   free_segment(Location,State);
-post(tick,_Return,State) ->
+post({tick,_},_Return,State) ->
   tick(State).
 
 return(State,{enter,[CocheId,_Velocidad]},Result) ->
@@ -68,7 +67,7 @@ check_return(State,CocheId,Result) ->
   {X,_Y} = location(CocheId,State),
   FreeNextLocations = 
     lists:filter
-      (fun (Location) -> free_segment(Location,State) end,
+      (fun (Location) -> isfree_segment(Location,State) end,
        [{X+1,0},{X+1,1}]),
   lists:member(Result,FreeNextLocations).
 
@@ -82,10 +81,10 @@ return_value(Call,State) ->
       void
   end.
 
-select_next_location(Location={X,Y},State) ->
-  case free_segment({X+1,Y},State) of
-    true -> Location;
-    false -> {X+1,Y rem 2}
+select_next_location({X,Y},State) ->
+  case isfree_segment({X+1,Y},State) of
+    true -> {X+1,Y};
+    false -> {X+1,(Y+1) rem 2}
   end.
 
 print_state(State) ->
@@ -94,37 +93,57 @@ print_state(State) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-free_segment(Location,State) ->
+isfree_segment(Location,State) ->
   (segment(Location,State))#segment.coche==undefined.
 
 segment(Location,State) ->
-  lists:keyfind(Location,#segment.location,State#state.segments).
+  case lists:keyfind(Location,#segment.location,State#state.segments) of
+    Segment when is_record(Segment,segment) ->
+      Segment;
+    false ->
+      ?LOG
+        ("~n*** Error: there is no segment at ~p~nSegments=~p~n",
+         [Location,State#state.segments]),
+      error(bad)
+  end.
 
 location(CocheId,State) ->
   location1(CocheId,State#state.segments).
 location1(CocheId,[Segment|Rest]) ->
+  ?LOG("location1(~p,~p)~n",[CocheId,Segment]),
   if
-    Segment#segment.coche =/= undefined ->
-      SegmentCocheId = (Segment#segment.coche)#coche.id,
-      if
-        CocheId == SegmentCocheId ->
-          Segment#segment.location;
-        true ->
-          location1(CocheId,Rest)
-      end;
-    true -> location1(CocheId,Rest)
+    Segment#segment.coche == CocheId ->
+      Segment#segment.location;
+    true -> 
+      location1(CocheId,Rest)
   end.
     
 timeRemaining(Location,State) ->
   Segment = segment(Location,State),
   Segment#segment.tiempoQueda.
 
-set_segment(Location,Segment,State) ->
-  State#state{segments=lists:keyreplace(Location,#segment.location,State#state.segments,Segment)}.
+move_to_segment(Location,CocheId,Velocidad,State) ->
+  ?LOG
+    ("move_to_segment(~p,~p,~p)~nin ~p~n",
+     [Location,CocheId,Velocidad,State]),
+  Segment = segment(Location,State),
+  if
+    Segment#segment.coche==undefined ->
+      NewSegment = 
+        Segment#segment{coche=CocheId,tiempoQueda=Velocidad},
+      State#state
+        {segments=lists:keyreplace(Location,#segment.location,State#state.segments,NewSegment)}
+  end.
 
-car_in_location(Location,State) ->  
-  Segment=segment(Location,State),
-  Segment#segment.coche.
+free_segment(Location,State) ->
+  Segment = segment(Location,State),
+  if
+    Segment#segment.coche=/=undefined ->
+      NewSegment = 
+        Segment#segment{coche=undefined,tiempoQueda=undefined},
+      State#state
+        {segments=lists:keyreplace(Location,#segment.location,State#state.segments,NewSegment)}
+  end.
 
 tick(State) ->
   State#state
