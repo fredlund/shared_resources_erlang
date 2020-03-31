@@ -1,4 +1,4 @@
-package cc.carreteraRecurso;
+package cc.carretera;
 
 public class Position {
   private int x;

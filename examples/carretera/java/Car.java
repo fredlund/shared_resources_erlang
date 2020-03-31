@@ -1,4 +1,4 @@
-package cc.carreteraRecurso;
+package cc.carretera;
 
 public class Car {
   private String id;
