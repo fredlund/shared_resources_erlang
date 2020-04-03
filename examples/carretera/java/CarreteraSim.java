@@ -84,16 +84,9 @@ public class CarreteraSim {
     frmCarreterasim.setBounds(100, 100, 450, 300);
     frmCarreterasim.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
     
-    JPanel panel = new JPanel();
-    
     JLabel lblTime = new JLabel("Time:"); 
-    
     JLabel timeLab = new JLabel("0"); this.timeLab = timeLab;
-    
     JCheckBox stepTicksBox = new JCheckBox("Step ticks");
-    
-    JPanel panel_1 = new JPanel();
-    panel_1.setBorder(new LineBorder(new Color(0, 0, 0)));
     
     JButton btnDoTimeTick = new JButton("Tick");
     btnDoTimeTick.addActionListener(new ActionListener() {
@@ -106,7 +99,6 @@ public class CarreteraSim {
           }
         }
       });
-    
     btnDoTimeTick.setEnabled(false);
     
     JLabel lbl0_1 = new JLabel("--------");
@@ -118,17 +110,16 @@ public class CarreteraSim {
     JLabel lbl2_0 = new JLabel("--------");
     JLabel lbl3_0 = new JLabel("--------");
     
-    
     carretera = new JLabel[][] { { lbl0_0, lbl0_1}, { lbl1_0, lbl1_1 }, { lbl2_0, lbl2_1 }, { lbl3_0, lbl3_1 } };
     
-    
-    
-    JPanel panel_2 = new JPanel();
-    
-    JPanel panel_4 = new JPanel();
+    JPanel panel_options = new JPanel();
+    JPanel panel_carretera = new JPanel();
+    panel_carretera.setBorder(new LineBorder(new Color(0, 0, 0)));
+    JPanel panel_actions = new JPanel();
+    JPanel panel_calls = new JPanel();
     
     JTextField txtCalls = new JTextField();
-    txtCalls.setEditable(false);																																																																																																																																																																																																																		
+    txtCalls.setEditable(false);
     txtCalls.setText("Calls:");
     txtCalls.setColumns(10);
     
@@ -136,9 +127,6 @@ public class CarreteraSim {
     callsTextArea.setColumns(40);
     callsTextArea.setRows(20);
     JScrollPane callsTextAreaSP = new JScrollPane(callsTextArea);
-    
-    
-    JPanel panel_3 = new JPanel();
     
     JButton btnQuit = new JButton("Quit");
     btnQuit.addActionListener(new ActionListener() {
@@ -162,156 +150,171 @@ public class CarreteraSim {
         }
       });
     
+    // Top panel layout
     GroupLayout groupLayout = new GroupLayout(frmCarreterasim.getContentPane());
-    groupLayout.setHorizontalGroup(
-                                   groupLayout.createParallelGroup(Alignment.TRAILING)
-                                   .addGroup(groupLayout.createSequentialGroup()
-                                             .addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
-                                                       .addComponent(panel_2, GroupLayout.PREFERRED_SIZE, 450, GroupLayout.PREFERRED_SIZE)
-                                                       .addComponent(panel_3, GroupLayout.PREFERRED_SIZE, 450, GroupLayout.PREFERRED_SIZE)
-                                                       .addGroup(groupLayout.createSequentialGroup()
-                                                                 .addContainerGap()
-                                                                 .addComponent(panel, GroupLayout.PREFERRED_SIZE, 450, Short.MAX_VALUE))
-                                                       .addGroup(groupLayout.createSequentialGroup()
-                                                                 .addContainerGap()
-                                                                 .addComponent(panel_1, GroupLayout.PREFERRED_SIZE, 450, GroupLayout.PREFERRED_SIZE)))
-                                             .addContainerGap())
-                                   );
+    groupLayout.setHorizontalGroup
+      (
+       groupLayout.createParallelGroup(Alignment.TRAILING)
+       .addGroup(groupLayout.createSequentialGroup()
+                 .addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
+                           .addComponent(panel_calls, GroupLayout.PREFERRED_SIZE, 450, GroupLayout.PREFERRED_SIZE)
+                           .addComponent(panel_actions, GroupLayout.PREFERRED_SIZE, 450, GroupLayout.PREFERRED_SIZE)
+                           .addGroup(groupLayout.createSequentialGroup()
+                                     .addContainerGap()
+                                     .addComponent(panel_options, GroupLayout.PREFERRED_SIZE, 450, Short.MAX_VALUE))
+                           .addGroup(groupLayout.createSequentialGroup()
+                                     .addContainerGap()
+                                     .addComponent(panel_carretera, GroupLayout.PREFERRED_SIZE, 450, GroupLayout.PREFERRED_SIZE)))
+                 .addContainerGap())
+       );
     
-    groupLayout.setVerticalGroup(
-                                 groupLayout.createParallelGroup(Alignment.LEADING)
-                                 .addGroup(groupLayout.createSequentialGroup()
-                                           .addComponent(panel, GroupLayout.PREFERRED_SIZE, 41, GroupLayout.PREFERRED_SIZE)
-                                           .addPreferredGap(ComponentPlacement.UNRELATED)
-                                           .addComponent(panel_1, GroupLayout.PREFERRED_SIZE, 106, GroupLayout.PREFERRED_SIZE)
-                                           .addPreferredGap(ComponentPlacement.RELATED)
-                                           .addComponent(panel_2, GroupLayout.PREFERRED_SIZE, 68, GroupLayout.PREFERRED_SIZE)
-                                           .addPreferredGap(ComponentPlacement.RELATED)
-                                           .addComponent(panel_3, GroupLayout.DEFAULT_SIZE, 36, Short.MAX_VALUE)
-                                           .addGap(6))
-                                 );
+    groupLayout.setVerticalGroup
+      (
+       groupLayout.createParallelGroup(Alignment.LEADING)
+       .addGroup(groupLayout.createSequentialGroup()
+                 .addComponent(panel_options, GroupLayout.PREFERRED_SIZE, 41, GroupLayout.PREFERRED_SIZE)
+                 .addPreferredGap(ComponentPlacement.UNRELATED)
+                 .addComponent(panel_carretera, GroupLayout.PREFERRED_SIZE, 106, GroupLayout.PREFERRED_SIZE)
+                 .addPreferredGap(ComponentPlacement.RELATED)
+                 .addComponent(panel_calls, GroupLayout.PREFERRED_SIZE, 68, GroupLayout.PREFERRED_SIZE)
+                 .addPreferredGap(ComponentPlacement.RELATED)
+                 .addComponent(panel_actions, GroupLayout.DEFAULT_SIZE, 36, Short.MAX_VALUE)
+                 .addGap(6))
+       );
     
+
+    // Panel 1: carretera
+
+    GroupLayout gl_panel_carretera = new GroupLayout(panel_carretera);
+    gl_panel_carretera.setHorizontalGroup
+      (
+       gl_panel_carretera.createParallelGroup(Alignment.LEADING)
+       .addGroup(gl_panel_carretera.createSequentialGroup()
+                 .addGap(20)
+                 .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
+                           .addComponent(lbl0_0, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE)
+                           .addComponent(lbl0_1, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE))
+                 .addPreferredGap(ComponentPlacement.RELATED)
+                 .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
+                           .addComponent(lbl1_1, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE)
+                           .addComponent(lbl1_0, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE))
+                 .addPreferredGap(ComponentPlacement.RELATED)
+                 .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
+                           .addComponent(lbl2_1, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE)
+                           .addComponent(lbl2_0, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE))
+                 .addPreferredGap(ComponentPlacement.RELATED)
+                 .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
+                           .addComponent(lbl3_0, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE)
+                           .addComponent(lbl3_1, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE))
+                 .addGap(10))
+       );
+    gl_panel_carretera.setVerticalGroup
+      (
+       gl_panel_carretera.createParallelGroup(Alignment.LEADING)
+       .addGroup(gl_panel_carretera.createSequentialGroup()
+                 .addGap(20)
+                 .addGroup(gl_panel_carretera.createParallelGroup(Alignment.BASELINE)
+                           .addComponent(lbl0_1, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
+                           .addComponent(lbl1_1, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
+                           .addComponent(lbl3_1, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
+                           .addComponent(lbl2_1, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE))
+                 .addGroup(gl_panel_carretera.createParallelGroup(Alignment.BASELINE, false)
+                           .addComponent(lbl0_0, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
+                           .addComponent(lbl1_0, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
+                           .addComponent(lbl2_0, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
+                           .addComponent(lbl3_0, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE))
+                 .addGap(10))
+       );
+    panel_carretera.setLayout(gl_panel_carretera);
     
-    GroupLayout gl_panel_1 = new GroupLayout(panel_1);
-    gl_panel_1.setHorizontalGroup(
-                                  gl_panel_1.createParallelGroup(Alignment.LEADING)
-                                  .addGroup(gl_panel_1.createSequentialGroup()
-                                            .addGap(20)
-                                            .addGroup(gl_panel_1.createParallelGroup(Alignment.LEADING)
-                                                      .addComponent(lbl0_0, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE)
-                                                      .addComponent(lbl0_1, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE))
-                                            .addPreferredGap(ComponentPlacement.RELATED)
-                                            .addGroup(gl_panel_1.createParallelGroup(Alignment.LEADING)
-                                                      .addComponent(lbl1_1, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE)
-                                                      .addComponent(lbl1_0, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE))
-                                            .addPreferredGap(ComponentPlacement.RELATED)
-                                            .addGroup(gl_panel_1.createParallelGroup(Alignment.LEADING)
-                                                      .addComponent(lbl2_1, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE)
-                                                      .addComponent(lbl2_0, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE))
-                                            .addPreferredGap(ComponentPlacement.RELATED)
-                                            .addGroup(gl_panel_1.createParallelGroup(Alignment.LEADING)
-                                                      .addComponent(lbl3_0, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE)
-                                                      .addComponent(lbl3_1, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE))
-                                            .addGap(10))
-                                  );
-    gl_panel_1.setVerticalGroup(
-                                gl_panel_1.createParallelGroup(Alignment.LEADING)
-				.addGroup(gl_panel_1.createSequentialGroup()
-                                          .addGap(20)
-                                          .addGroup(gl_panel_1.createParallelGroup(Alignment.BASELINE)
-                                                    .addComponent(lbl0_1, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
-                                                    .addComponent(lbl1_1, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
-                                                    .addComponent(lbl3_1, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
-                                                    .addComponent(lbl2_1, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE))
-                                          .addGroup(gl_panel_1.createParallelGroup(Alignment.BASELINE, false)
-                                                    .addComponent(lbl0_0, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
-                                                    .addComponent(lbl1_0, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
-                                                    .addComponent(lbl2_0, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
-                                                    .addComponent(lbl3_0, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE))
-                                          .addGap(10))
-                                );
-    panel_1.setLayout(gl_panel_1);
-    GroupLayout gl_panel_2 = new GroupLayout(panel_2);
-    gl_panel_2.setHorizontalGroup(
-                                  gl_panel_2.createParallelGroup(Alignment.LEADING)
-                                  .addGroup(gl_panel_2.createSequentialGroup()
-                                            .addComponent(panel_4, GroupLayout.PREFERRED_SIZE, 225, GroupLayout.PREFERRED_SIZE))
-                                  );
-    gl_panel_2.setVerticalGroup(
-                                gl_panel_2.createParallelGroup(Alignment.LEADING)
-				.addComponent(panel_4, GroupLayout.PREFERRED_SIZE, 68, GroupLayout.PREFERRED_SIZE)
-                                );
-    
-    GroupLayout gl_panel_4 = new GroupLayout(panel_4);
-    gl_panel_4.setHorizontalGroup(
-                                  gl_panel_4.createParallelGroup(Alignment.LEADING)
-                                  .addGroup(Alignment.TRAILING, gl_panel_4.createSequentialGroup()
-                                            .addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                                            .addComponent(txtCalls, GroupLayout.PREFERRED_SIZE, 100, GroupLayout.PREFERRED_SIZE)
-                                            .addContainerGap())
-                                  .addGroup(gl_panel_4.createSequentialGroup()
-                                            .addComponent(callsTextAreaSP, GroupLayout.PREFERRED_SIZE, 100, GroupLayout.PREFERRED_SIZE)
-                                            .addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                                  );
-    gl_panel_4.setVerticalGroup(
-                                gl_panel_4.createParallelGroup(Alignment.LEADING)
-				.addGroup(gl_panel_4.createSequentialGroup()
-                                          .addComponent(txtCalls, GroupLayout.PREFERRED_SIZE, 34, GroupLayout.PREFERRED_SIZE)
-                                          .addPreferredGap(ComponentPlacement.RELATED)
-                                          .addComponent(callsTextAreaSP, GroupLayout.PREFERRED_SIZE, 68, GroupLayout.PREFERRED_SIZE)
-                                          .addGap(47))
-                                );
-    panel_4.setLayout(gl_panel_4);
-    panel_2.setLayout(gl_panel_2);
-    
-    GroupLayout gl_panel = new GroupLayout(panel);
-    gl_panel.setHorizontalGroup(
-                                gl_panel.createParallelGroup(Alignment.LEADING)
-				.addGroup(gl_panel.createSequentialGroup()
-                                          .addComponent(lblTime)
-                                          .addPreferredGap(ComponentPlacement.UNRELATED)
-                                          .addComponent(timeLab)
-                                          .addPreferredGap(ComponentPlacement.UNRELATED)
-                                          .addComponent(stepTicksBox)
-                                          .addGap(18))
-                                );
-    gl_panel.setVerticalGroup(
-                              gl_panel.createParallelGroup(Alignment.LEADING)
-                              .addGroup(gl_panel.createSequentialGroup()
-					.addContainerGap(12, Short.MAX_VALUE)
-					.addGroup(gl_panel.createParallelGroup(Alignment.TRAILING)
-                                                  .addGroup(gl_panel.createParallelGroup(Alignment.BASELINE)
-                                                            .addComponent(stepTicksBox))
-                                                  .addGroup(gl_panel.createParallelGroup(Alignment.BASELINE)
-                                                            .addComponent(lblTime, GroupLayout.PREFERRED_SIZE, 15, GroupLayout.PREFERRED_SIZE)
-                                                            .addComponent(timeLab)))
-					.addContainerGap())
-                              );
-    panel.setLayout(gl_panel);
+
+    // Panel time_options: time and time tick option
+
+    GroupLayout gl_panel_options = new GroupLayout(panel_options);
+    gl_panel_options.setHorizontalGroup
+      (
+       gl_panel_options.createParallelGroup(Alignment.LEADING)
+       .addGroup(gl_panel_options.createSequentialGroup()
+                 .addComponent(lblTime)
+                 .addPreferredGap(ComponentPlacement.UNRELATED)
+                 .addComponent(timeLab)
+                 .addPreferredGap(ComponentPlacement.UNRELATED)
+                 .addComponent(stepTicksBox)
+                 .addGap(18))
+       );
+    gl_panel_options.setVerticalGroup
+      (
+       gl_panel_options.createParallelGroup(Alignment.LEADING)
+       .addGroup(gl_panel_options.createSequentialGroup()
+                 .addContainerGap(12, Short.MAX_VALUE)
+                 .addGroup(gl_panel_options.createParallelGroup(Alignment.TRAILING)
+                           .addGroup(gl_panel_options.createParallelGroup(Alignment.BASELINE)
+                                     .addComponent(stepTicksBox))
+                           .addGroup(gl_panel_options.createParallelGroup(Alignment.BASELINE)
+                                     .addComponent(lblTime, GroupLayout.PREFERRED_SIZE, 15, GroupLayout.PREFERRED_SIZE)
+                                     .addComponent(timeLab)))
+                 .addContainerGap())
+       );
+    panel_options.setLayout(gl_panel_options);
     
     
-    GroupLayout gl_panel_3 = new GroupLayout(panel_3);
-    gl_panel_3.setHorizontalGroup(
-                                  gl_panel_3.createParallelGroup(Alignment.LEADING)
-                                  .addGroup(gl_panel_3.createSequentialGroup()
-                                            .addGap(10)
-                                            .addComponent(btnDoTimeTick)
-                                            .addPreferredGap(ComponentPlacement.RELATED, 238, Short.MAX_VALUE)
-                                            .addComponent(btnStartSim)
-                                            .addPreferredGap(ComponentPlacement.RELATED)
-                                            .addComponent(btnQuit)
-                                            .addContainerGap())
-                                  );
-    gl_panel_3.setVerticalGroup(
-                                gl_panel_3.createParallelGroup(Alignment.LEADING)
-				.addGroup(gl_panel_3.createSequentialGroup()
-                                          .addGap(5)
-                                          .addGroup(gl_panel_3.createParallelGroup(Alignment.BASELINE)
-                                                    .addComponent(btnQuit)
-                                                    .addComponent(btnStartSim)
-                                                    .addComponent(btnDoTimeTick)))
-                                );
-    panel_3.setLayout(gl_panel_3);
+
+    // Panel actions: tick button, start simulation and quit
+    
+    GroupLayout gl_panel_actions = new GroupLayout(panel_actions);
+    gl_panel_actions.setHorizontalGroup
+      (
+       gl_panel_actions.createParallelGroup(Alignment.LEADING)
+       .addGroup(gl_panel_actions.createSequentialGroup()
+                 .addGap(10)
+                 .addComponent(btnDoTimeTick)
+                 .addPreferredGap(ComponentPlacement.RELATED, 238, Short.MAX_VALUE)
+                 .addComponent(btnStartSim)
+                 .addPreferredGap(ComponentPlacement.RELATED)
+                 .addComponent(btnQuit)
+                 .addContainerGap())
+       );
+    gl_panel_actions.setVerticalGroup
+      (
+       gl_panel_actions.createParallelGroup(Alignment.LEADING)
+       .addGroup(gl_panel_actions.createSequentialGroup()
+                 .addGap(5)
+                 .addGroup(gl_panel_actions.createParallelGroup(Alignment.BASELINE)
+                           .addComponent(btnQuit)
+                           .addComponent(btnStartSim)
+                           .addComponent(btnDoTimeTick)))
+       );
+    panel_actions.setLayout(gl_panel_actions);
+
+
+    // Panel calls: calls text window and label
+
+    GroupLayout gl_panel_calls = new GroupLayout(panel_calls);
+    gl_panel_calls.setHorizontalGroup
+      (
+       gl_panel_calls.createParallelGroup(Alignment.LEADING)
+       .addGroup(Alignment.TRAILING, gl_panel_calls.createSequentialGroup()
+                 .addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                 .addComponent(txtCalls, GroupLayout.PREFERRED_SIZE, 100, GroupLayout.PREFERRED_SIZE)
+                 .addContainerGap())
+       .addGroup(gl_panel_calls.createSequentialGroup()
+                 .addComponent(callsTextAreaSP, GroupLayout.PREFERRED_SIZE, 100, GroupLayout.PREFERRED_SIZE)
+                 .addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+       );
+    gl_panel_calls.setVerticalGroup
+      (
+       gl_panel_calls.createParallelGroup(Alignment.LEADING)
+       .addGroup(gl_panel_calls.createSequentialGroup()
+                 .addComponent(txtCalls, GroupLayout.PREFERRED_SIZE, 34, GroupLayout.PREFERRED_SIZE)
+                 .addPreferredGap(ComponentPlacement.RELATED)
+                 .addComponent(callsTextAreaSP, GroupLayout.PREFERRED_SIZE, 68, GroupLayout.PREFERRED_SIZE)
+                 .addGap(47))
+       );
+    panel_calls.setLayout(gl_panel_calls);
+    
+
+    // Set layout on top content pane
+    
     frmCarreterasim.getContentPane().setLayout(groupLayout);
   }
 }
