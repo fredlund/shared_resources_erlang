@@ -363,36 +363,24 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
         String str = cs.time+": "+call;
         cs.callsTextArea.append(str+"\n");
         System.out.println(str);
-        if (call.name.equals("enter") && call.returned && call.result instanceof Position) {
-          Position pos = (Position) call.result;
+        
+        if (call.name.equals("enter") && call.returned) {
+          Position pos = call.result;
           JLabel lbl = cs.carretera[pos.getX()][pos.getY()];
-          if (call.parm1 instanceof String) {
-            String carName = (String) call.parm1;
-            lbl.setText(carName);
-          }
-        } if (call.name.equals("move") && call.returned && call.result instanceof Position) {
-          Position pos = (Position) call.result;
-          if (call.parm1 instanceof String) {
-            String carName = (String) call.parm1;
-            removeCar(cs,carName);
-            JLabel lbl = cs.carretera[pos.getX()][pos.getY()];
-            lbl.setText(carName);
-          }
-        } if (call.name.equals("exit") && call.returned) {
-          if (call.parm1 instanceof String) {
-            String carName = (String) call.parm1;
-            removeCar(cs,carName);
-          }
-        } if (call.name.equals("moving")) {
-          Position pos = (Position) call.result;
-          if (call.parm1 instanceof String && call.parm2 instanceof Integer) {
-            String carName = (String) call.parm1;
-            Integer velocidad = (Integer) call.parm2;
-            for (int i=0; i<cs.carretera.length; i++)
-              for (int j=0; j<cs.carretera[0].length; j++)
-                if (cs.carretera[i][j].getText().equals(carName))
-                  cs.carretera[i][j].setText(carName+"@"+Integer.valueOf(cs.time+velocidad));
-          }
+          lbl.setText(call.car);
+        } else if (call.name.equals("move") && call.returned) {
+          Position pos = call.result;
+          removeCar(cs,call.car);
+          JLabel lbl = cs.carretera[pos.getX()][pos.getY()];
+          lbl.setText(call.car);
+        } else if (call.name.equals("exit") && call.returned) {
+            removeCar(cs,call.car);
+        } else if (call.name.equals("moving") && !call.returned) {
+          Position pos = call.result;
+          for (int i=0; i<cs.carretera.length; i++)
+            for (int j=0; j<cs.carretera[0].length; j++)
+              if (cs.carretera[i][j].getText().equals(call.car))
+                cs.carretera[i][j].setText(call.car+"@"+Integer.valueOf(cs.time+call.velocidad));
         } else if (call.name.equals("tick") && call.returned) {
           ++cs.time;
           cs.timeLab.setText(Integer.valueOf(cs.time).toString());
@@ -435,7 +423,7 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
       Thread carTh = new Thread(car) {
           public void run() {
             Call call = null;
-            Object result = null;
+            Position result = null;
             
             if (!terminated.get()) {
               call = Call.enter(car); sendToGUI(call); result = cr.enter(car); sendToGUI(call.returned(result));
@@ -532,27 +520,27 @@ class CallAndGeneration {
 
 class Call {
   String name;
-  Object parm1=null;
-  Object parm2=null;
+  String car=null;
+  Integer velocidad=null;
   boolean returned;
-  Object result=null;
+  Position result=null;
   
   Call() { }
   
   static Call enter(String car) {
-    Call call = new Call(); call.name = "enter"; call.parm1 = car; call.returned = false; return call;
+    Call call = new Call(); call.name = "enter"; call.car = car; call.returned = false; return call;
   }
   
   static Call move(String car) {
-    Call call = new Call(); call.name = "move"; call.parm1 = car; call.returned = false; return call;
+    Call call = new Call(); call.name = "move"; call.car = car; call.returned = false; return call;
   }
   
   static Call exit(String car) {
-    Call call = new Call(); call.name = "exit"; call.parm1 = car; call.returned = false; return call;
+    Call call = new Call(); call.name = "exit"; call.car = car; call.returned = false; return call;
   }
   
   static Call moving(String car, int velocidad) {
-    Call call = new Call(); call.name = "moving"; call.parm1 = car; call.parm2 = velocidad; call.returned = false; return call;
+    Call call = new Call(); call.name = "moving"; call.car = car; call.velocidad = velocidad; call.returned = false; return call;
   }
   
   static Call tick() {
@@ -560,18 +548,18 @@ class Call {
   }
   
   public Call returned() {
-    Call newCall = new Call(); newCall.name = name; newCall.parm1 = parm1; newCall.parm2 = parm2;
+    Call newCall = new Call(); newCall.name = name; newCall.car = car; newCall.velocidad = velocidad;
     newCall.returned = true; newCall.result = null; return newCall;
   }
   
-  public Call returned(Object result) {
+  public Call returned(Position result) {
     Call newCall = returned(); newCall.result = result; return newCall;
   }
   
   public String getCallString() {
     String str = name+"(";
-    if (parm1 != null) str +=parm1;
-    if (parm2 != null) str +=","+parm2;
+    if (car != null) str +=car;
+    if (velocidad != null) str +=","+velocidad;
     str += ")";
     return str;
   }
