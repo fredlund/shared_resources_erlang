@@ -231,20 +231,22 @@ public class CarreteraSim {
     // Panel time_options: time and time tick option
 
     GroupLayout gl_panel_options = new GroupLayout(panel_options);
+    gl_panel_options.setAutoCreateGaps(true);
+    gl_panel_options.setAutoCreateContainerGaps(true);
     gl_panel_options.setHorizontalGroup
       (
        gl_panel_options.createSequentialGroup()
        .addComponent(lblTime)
        .addComponent(timeLab)
+       .addPreferredGap(ComponentPlacement.UNRELATED)
        .addComponent(stepTicksBox)
        );
     gl_panel_options.setVerticalGroup
       (
        gl_panel_options.createParallelGroup(Alignment.BASELINE)
-       .addGroup(gl_panel_options.createSequentialGroup()
-                 .addComponent(lblTime)
-                 .addComponent(timeLab))
-                 .addComponent(stepTicksBox)
+       .addComponent(lblTime)
+       .addComponent(timeLab)
+       .addComponent(stepTicksBox)
       );
     panel_options.setLayout(gl_panel_options);
     
