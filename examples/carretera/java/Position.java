@@ -27,4 +27,8 @@ public class Position {
   public int hashCode() {
     return getX()*100 + getY();
   }
+  
+  public String toString() {
+	  return "<"+getX()+","+getY()+">";
+  }
 }

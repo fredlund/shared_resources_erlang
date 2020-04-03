@@ -1,8 +1,9 @@
 package cc.carretera;
 
-public interface CarreteraRecurso {
-  public Position enter(String cocheId, int velocidad);
-  public Position move(String cocheId, int velocidad);
-  public void exit(String cocheId, int velocidad);
+public interface Carretera {
+  public Position enter(String car);
+  public Position move(String car);
+  public void moving(String car, int velocidad);
+  public void exit(String car);
   public void tick();
 }
