@@ -151,27 +151,27 @@ public class CarreteraSim {
       });
     
     // Top panel layout
-    GroupLayout groupLayout = new GroupLayout(frmCarreterasim.getContentPane());
-    groupLayout.setHorizontalGroup
+    GroupLayout gl_top = new GroupLayout(frmCarreterasim.getContentPane());
+    gl_top.setHorizontalGroup
       (
-       groupLayout.createParallelGroup(Alignment.TRAILING)
-       .addGroup(groupLayout.createSequentialGroup()
-                 .addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
+       gl_top.createParallelGroup(Alignment.TRAILING)
+       .addGroup(gl_top.createSequentialGroup()
+                 .addGroup(gl_top.createParallelGroup(Alignment.LEADING)
                            .addComponent(panel_calls, GroupLayout.PREFERRED_SIZE, 450, GroupLayout.PREFERRED_SIZE)
                            .addComponent(panel_actions, GroupLayout.PREFERRED_SIZE, 450, GroupLayout.PREFERRED_SIZE)
-                           .addGroup(groupLayout.createSequentialGroup()
+                           .addGroup(gl_top.createSequentialGroup()
                                      .addContainerGap()
                                      .addComponent(panel_options, GroupLayout.PREFERRED_SIZE, 450, Short.MAX_VALUE))
-                           .addGroup(groupLayout.createSequentialGroup()
+                           .addGroup(gl_top.createSequentialGroup()
                                      .addContainerGap()
                                      .addComponent(panel_carretera, GroupLayout.PREFERRED_SIZE, 450, GroupLayout.PREFERRED_SIZE)))
                  .addContainerGap())
        );
     
-    groupLayout.setVerticalGroup
+    gl_top.setVerticalGroup
       (
-       groupLayout.createParallelGroup(Alignment.LEADING)
-       .addGroup(groupLayout.createSequentialGroup()
+       gl_top.createParallelGroup(Alignment.LEADING)
+       .addGroup(gl_top.createSequentialGroup()
                  .addComponent(panel_options, GroupLayout.PREFERRED_SIZE, 41, GroupLayout.PREFERRED_SIZE)
                  .addPreferredGap(ComponentPlacement.UNRELATED)
                  .addComponent(panel_carretera, GroupLayout.PREFERRED_SIZE, 106, GroupLayout.PREFERRED_SIZE)
@@ -233,28 +233,19 @@ public class CarreteraSim {
     GroupLayout gl_panel_options = new GroupLayout(panel_options);
     gl_panel_options.setHorizontalGroup
       (
-       gl_panel_options.createParallelGroup(Alignment.LEADING)
-       .addGroup(gl_panel_options.createSequentialGroup()
-                 .addComponent(lblTime)
-                 .addPreferredGap(ComponentPlacement.UNRELATED)
-                 .addComponent(timeLab)
-                 .addPreferredGap(ComponentPlacement.UNRELATED)
-                 .addComponent(stepTicksBox)
-                 .addGap(18))
+       gl_panel_options.createSequentialGroup()
+       .addComponent(lblTime)
+       .addComponent(timeLab)
+       .addComponent(stepTicksBox)
        );
     gl_panel_options.setVerticalGroup
       (
-       gl_panel_options.createParallelGroup(Alignment.LEADING)
+       gl_panel_options.createParallelGroup(Alignment.BASELINE)
        .addGroup(gl_panel_options.createSequentialGroup()
-                 .addContainerGap(12, Short.MAX_VALUE)
-                 .addGroup(gl_panel_options.createParallelGroup(Alignment.TRAILING)
-                           .addGroup(gl_panel_options.createParallelGroup(Alignment.BASELINE)
-                                     .addComponent(stepTicksBox))
-                           .addGroup(gl_panel_options.createParallelGroup(Alignment.BASELINE)
-                                     .addComponent(lblTime, GroupLayout.PREFERRED_SIZE, 15, GroupLayout.PREFERRED_SIZE)
-                                     .addComponent(timeLab)))
-                 .addContainerGap())
-       );
+                 .addComponent(lblTime)
+                 .addComponent(timeLab))
+                 .addComponent(stepTicksBox)
+      );
     panel_options.setLayout(gl_panel_options);
     
     
@@ -315,7 +306,7 @@ public class CarreteraSim {
 
     // Set layout on top content pane
     
-    frmCarreterasim.getContentPane().setLayout(groupLayout);
+    frmCarreterasim.getContentPane().setLayout(gl_top);
   }
 }
 
