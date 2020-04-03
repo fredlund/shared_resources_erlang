@@ -20,6 +20,7 @@ import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.swing.border.LineBorder;
 
@@ -51,6 +52,7 @@ public class CarreteraSim {
   Sim sim;
   BlockingQueue<Integer> tickQueue;
   boolean stepTicks = false;
+  int generation = 0;
   
   /**
    * Launch the application.
@@ -81,7 +83,7 @@ public class CarreteraSim {
   private void initialize() {
     frmCarreterasim = new JFrame();
     frmCarreterasim.setTitle("CarreteraSim");
-    frmCarreterasim.setBounds(100, 100, 450, 300);
+    frmCarreterasim.setBounds(100, 100, 525, 500);
     frmCarreterasim.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
     
     JLabel lblTime = new JLabel("Time:"); 
@@ -124,7 +126,7 @@ public class CarreteraSim {
     txtCalls.setColumns(10);
     
     callsTextArea = new JTextArea();
-    callsTextArea.setColumns(40);
+    callsTextArea.setColumns(20);
     callsTextArea.setRows(20);
     JScrollPane callsTextAreaSP = new JScrollPane(callsTextArea);
     
@@ -135,95 +137,115 @@ public class CarreteraSim {
           System.exit(0);
         }
       });
+
+    JButton btnPauseSim = new JButton("Pause simulation");
+    btnPauseSim.addActionListener(new ActionListener() {
+        public void actionPerformed(ActionEvent e) {
+          try {
+            tickQueue.put(-1);
+            if (btnPauseSim.getText().equals("Pause simulation"))
+              btnPauseSim.setText("Restart simulation");
+            else
+              btnPauseSim.setText("Pause simulation");
+          } catch (InterruptedException e1) {
+            // TODO Auto-generated catch block
+            e1.printStackTrace();
+          }
+        }
+      });
+    btnPauseSim.setEnabled(false);
+    
     JButton btnStartSim = new JButton("Start simulation");
     final CarreteraSim win = this;
     btnStartSim.addActionListener(new ActionListener() {
         public void actionPerformed(ActionEvent e) {
+
+          ++generation;
+          
+          if (sim != null && tickQueue != null) {
+            try {
+              tickQueue.put(-10);
+            } catch (InterruptedException e1) {
+              // TODO Auto-generated catch block
+              e1.printStackTrace();
+            }
+          }
+
           tickQueue = new LinkedBlockingQueue<Integer>();
           time = 0;
           timeLab.setText(Integer.valueOf(time).toString());
-          sim = new Sim(win);
-          tickQueue = tickQueue;
+          sim = new Sim(win,generation,tickQueue);
           stepTicks = stepTicksBox.isSelected();
           btnDoTimeTick.setEnabled(stepTicks);
+          btnPauseSim.setEnabled(!stepTicks);
+          btnPauseSim.setText("Pause simulation");
+          
+          for (JLabel[] lblRow : carretera)
+            for (JLabel lbl : lblRow)
+              lbl.setText("--------");
+          callsTextArea.setText("");
+          
           sim.execute();
         }
       });
     
     // Top panel layout
     GroupLayout gl_top = new GroupLayout(frmCarreterasim.getContentPane());
+    gl_top.setAutoCreateGaps(true);
+    gl_top.setAutoCreateContainerGaps(true);
     gl_top.setHorizontalGroup
       (
-       gl_top.createParallelGroup(Alignment.TRAILING)
-       .addGroup(gl_top.createSequentialGroup()
-                 .addGroup(gl_top.createParallelGroup(Alignment.LEADING)
-                           .addComponent(panel_calls, GroupLayout.PREFERRED_SIZE, 450, GroupLayout.PREFERRED_SIZE)
-                           .addComponent(panel_actions, GroupLayout.PREFERRED_SIZE, 450, GroupLayout.PREFERRED_SIZE)
-                           .addGroup(gl_top.createSequentialGroup()
-                                     .addContainerGap()
-                                     .addComponent(panel_options, GroupLayout.PREFERRED_SIZE, 450, Short.MAX_VALUE))
-                           .addGroup(gl_top.createSequentialGroup()
-                                     .addContainerGap()
-                                     .addComponent(panel_carretera, GroupLayout.PREFERRED_SIZE, 450, GroupLayout.PREFERRED_SIZE)))
-                 .addContainerGap())
+       gl_top.createParallelGroup(Alignment.CENTER)
+       .addComponent(panel_calls)
+       .addComponent(panel_actions)
+       .addComponent(panel_options)
+       .addComponent(panel_carretera)
        );
     
     gl_top.setVerticalGroup
       (
-       gl_top.createParallelGroup(Alignment.LEADING)
-       .addGroup(gl_top.createSequentialGroup()
-                 .addComponent(panel_options, GroupLayout.PREFERRED_SIZE, 41, GroupLayout.PREFERRED_SIZE)
-                 .addPreferredGap(ComponentPlacement.UNRELATED)
-                 .addComponent(panel_carretera, GroupLayout.PREFERRED_SIZE, 106, GroupLayout.PREFERRED_SIZE)
-                 .addPreferredGap(ComponentPlacement.RELATED)
-                 .addComponent(panel_calls, GroupLayout.PREFERRED_SIZE, 68, GroupLayout.PREFERRED_SIZE)
-                 .addPreferredGap(ComponentPlacement.RELATED)
-                 .addComponent(panel_actions, GroupLayout.DEFAULT_SIZE, 36, Short.MAX_VALUE)
-                 .addGap(6))
-       );
-    
+       gl_top.createSequentialGroup()
+       .addComponent(panel_options)
+       .addComponent(panel_carretera)
+       .addComponent(panel_calls)
+       .addComponent(panel_actions)
+      );
+
 
     // Panel 1: carretera
 
     GroupLayout gl_panel_carretera = new GroupLayout(panel_carretera);
+    gl_panel_carretera.setAutoCreateGaps(true);
+    gl_panel_carretera.setAutoCreateContainerGaps(true);
     gl_panel_carretera.setHorizontalGroup
       (
-       gl_panel_carretera.createParallelGroup(Alignment.LEADING)
-       .addGroup(gl_panel_carretera.createSequentialGroup()
-                 .addGap(20)
-                 .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
-                           .addComponent(lbl0_0, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE)
-                           .addComponent(lbl0_1, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE))
-                 .addPreferredGap(ComponentPlacement.RELATED)
-                 .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
-                           .addComponent(lbl1_1, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE)
-                           .addComponent(lbl1_0, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE))
-                 .addPreferredGap(ComponentPlacement.RELATED)
-                 .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
-                           .addComponent(lbl2_1, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE)
-                           .addComponent(lbl2_0, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE))
-                 .addPreferredGap(ComponentPlacement.RELATED)
-                 .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
-                           .addComponent(lbl3_0, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE)
-                           .addComponent(lbl3_1, GroupLayout.DEFAULT_SIZE, 101, Short.MAX_VALUE))
-                 .addGap(10))
-       );
+       gl_panel_carretera.createSequentialGroup()
+       .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
+                 .addComponent(lbl0_0, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE)
+                 .addComponent(lbl0_1, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE))
+       .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
+                 .addComponent(lbl1_1, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE)
+                 .addComponent(lbl1_0, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE))
+       .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
+                 .addComponent(lbl2_1, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE)
+                 .addComponent(lbl2_0, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE))
+       .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
+                 .addComponent(lbl3_0, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE)
+                 .addComponent(lbl3_1, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE))
+      );
     gl_panel_carretera.setVerticalGroup
       (
-       gl_panel_carretera.createParallelGroup(Alignment.LEADING)
-       .addGroup(gl_panel_carretera.createSequentialGroup()
-                 .addGap(20)
-                 .addGroup(gl_panel_carretera.createParallelGroup(Alignment.BASELINE)
-                           .addComponent(lbl0_1, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
-                           .addComponent(lbl1_1, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
-                           .addComponent(lbl3_1, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
-                           .addComponent(lbl2_1, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE))
-                 .addGroup(gl_panel_carretera.createParallelGroup(Alignment.BASELINE, false)
-                           .addComponent(lbl0_0, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
-                           .addComponent(lbl1_0, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
-                           .addComponent(lbl2_0, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE)
-                           .addComponent(lbl3_0, GroupLayout.PREFERRED_SIZE, 31, GroupLayout.PREFERRED_SIZE))
-                 .addGap(10))
+       gl_panel_carretera.createSequentialGroup()
+       .addGroup(gl_panel_carretera.createParallelGroup(Alignment.BASELINE)
+                 .addComponent(lbl0_1, GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE)
+                 .addComponent(lbl1_1, GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE)
+                 .addComponent(lbl3_1, GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE)
+                 .addComponent(lbl2_1, GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE))
+       .addGroup(gl_panel_carretera.createParallelGroup(Alignment.BASELINE, false)
+                 .addComponent(lbl0_0, GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE)
+                 .addComponent(lbl1_0, GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE)
+                 .addComponent(lbl2_0, GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE)
+                 .addComponent(lbl3_0, GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE))
        );
     panel_carretera.setLayout(gl_panel_carretera);
     
@@ -238,7 +260,8 @@ public class CarreteraSim {
        gl_panel_options.createSequentialGroup()
        .addComponent(lblTime)
        .addComponent(timeLab)
-       .addPreferredGap(ComponentPlacement.UNRELATED)
+       //.addPreferredGap(ComponentPlacement.UNRELATED)
+       .addGap(150)
        .addComponent(stepTicksBox)
        );
     gl_panel_options.setVerticalGroup
@@ -255,27 +278,25 @@ public class CarreteraSim {
     // Panel actions: tick button, start simulation and quit
     
     GroupLayout gl_panel_actions = new GroupLayout(panel_actions);
+    gl_panel_actions.setAutoCreateGaps(true);
+    gl_panel_actions.setAutoCreateContainerGaps(true);
     gl_panel_actions.setHorizontalGroup
       (
-       gl_panel_actions.createParallelGroup(Alignment.LEADING)
-       .addGroup(gl_panel_actions.createSequentialGroup()
-                 .addGap(10)
-                 .addComponent(btnDoTimeTick)
-                 .addPreferredGap(ComponentPlacement.RELATED, 238, Short.MAX_VALUE)
-                 .addComponent(btnStartSim)
-                 .addPreferredGap(ComponentPlacement.RELATED)
-                 .addComponent(btnQuit)
-                 .addContainerGap())
+       gl_panel_actions.createSequentialGroup()
+       .addComponent(btnDoTimeTick)
+       .addPreferredGap(ComponentPlacement.UNRELATED)
+       .addComponent(btnPauseSim)
+       .addComponent(btnStartSim)
+       .addPreferredGap(ComponentPlacement.UNRELATED)
+       .addComponent(btnQuit)
        );
     gl_panel_actions.setVerticalGroup
       (
-       gl_panel_actions.createParallelGroup(Alignment.LEADING)
-       .addGroup(gl_panel_actions.createSequentialGroup()
-                 .addGap(5)
-                 .addGroup(gl_panel_actions.createParallelGroup(Alignment.BASELINE)
-                           .addComponent(btnQuit)
-                           .addComponent(btnStartSim)
-                           .addComponent(btnDoTimeTick)))
+       gl_panel_actions.createParallelGroup(Alignment.BASELINE)
+       .addComponent(btnQuit)
+       .addComponent(btnPauseSim)
+       .addComponent(btnStartSim)
+       .addComponent(btnDoTimeTick)
        );
     panel_actions.setLayout(gl_panel_actions);
 
@@ -283,25 +304,20 @@ public class CarreteraSim {
     // Panel calls: calls text window and label
 
     GroupLayout gl_panel_calls = new GroupLayout(panel_calls);
+    gl_panel_calls.setAutoCreateGaps(true);
+    gl_panel_calls.setAutoCreateContainerGaps(true);
+
     gl_panel_calls.setHorizontalGroup
       (
        gl_panel_calls.createParallelGroup(Alignment.LEADING)
-       .addGroup(Alignment.TRAILING, gl_panel_calls.createSequentialGroup()
-                 .addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                 .addComponent(txtCalls, GroupLayout.PREFERRED_SIZE, 100, GroupLayout.PREFERRED_SIZE)
-                 .addContainerGap())
-       .addGroup(gl_panel_calls.createSequentialGroup()
-                 .addComponent(callsTextAreaSP, GroupLayout.PREFERRED_SIZE, 100, GroupLayout.PREFERRED_SIZE)
-                 .addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+       .addComponent(txtCalls)
+       .addComponent(callsTextAreaSP)
        );
     gl_panel_calls.setVerticalGroup
       (
-       gl_panel_calls.createParallelGroup(Alignment.LEADING)
-       .addGroup(gl_panel_calls.createSequentialGroup()
-                 .addComponent(txtCalls, GroupLayout.PREFERRED_SIZE, 34, GroupLayout.PREFERRED_SIZE)
-                 .addPreferredGap(ComponentPlacement.RELATED)
-                 .addComponent(callsTextAreaSP, GroupLayout.PREFERRED_SIZE, 68, GroupLayout.PREFERRED_SIZE)
-                 .addGap(47))
+       gl_panel_calls.createSequentialGroup()
+       .addComponent(txtCalls, GroupLayout.PREFERRED_SIZE, 20, GroupLayout.PREFERRED_SIZE)
+       .addComponent(callsTextAreaSP, GroupLayout.PREFERRED_SIZE, 200, GroupLayout.PREFERRED_SIZE)
        );
     panel_calls.setLayout(gl_panel_calls);
     
@@ -312,15 +328,20 @@ public class CarreteraSim {
   }
 }
 
-class Sim extends SwingWorker<Void,Object> {
+class Sim extends SwingWorker<Void,CallAndGeneration> {
   Random rnd;
   String[] cars = {"vw", "seat", "volvo", "toyota", "fiat", "ford", "citroen", "porsche"};
   Map<String,Integer> velocidades;
   int numCars;
   CarreteraSim cs;
+  int generation;
+  BlockingQueue<Integer> tickQueue;
   
-  Sim(CarreteraSim cs) {
+  Sim(CarreteraSim cs, int generation, BlockingQueue<Integer> tickQueue) {
     this.cs = cs;
+    this.generation = generation;
+    this.tickQueue = tickQueue;
+
     this.velocidades = new HashTableMap<>();
     velocidades.put("vw",4); velocidades.put("seat",3); velocidades.put("volvo",1);
     velocidades.put("toyota",1); velocidades.put("fiat",2); velocidades.put("ford",1);
@@ -335,18 +356,18 @@ class Sim extends SwingWorker<Void,Object> {
   }
   
   @Override
-  protected void process(List<Object> messages) {
-    for (Object msg : messages) {
-      System.out.println("received "+msg);
-      if (msg instanceof Call) {
-        Call call = (Call) msg;
-        cs.callsTextArea.append(cs.time+": "+call+"\n");
+  protected void process(List<CallAndGeneration> messages) {
+    for (CallAndGeneration msg : messages) {
+      if (msg.generation == generation) {
+        Call call = msg.call;
+        String str = cs.time+": "+call;
+        cs.callsTextArea.append(str+"\n");
+        System.out.println(str);
         if (call.name.equals("enter") && call.returned && call.result instanceof Position) {
           Position pos = (Position) call.result;
           JLabel lbl = cs.carretera[pos.getX()][pos.getY()];
           if (call.parm1 instanceof String) {
             String carName = (String) call.parm1;
-            System.out.println("setting "+carName+" at enter");
             lbl.setText(carName);
           }
         } if (call.name.equals("move") && call.returned && call.result instanceof Position) {
@@ -355,7 +376,6 @@ class Sim extends SwingWorker<Void,Object> {
             String carName = (String) call.parm1;
             removeCar(cs,carName);
             JLabel lbl = cs.carretera[pos.getX()][pos.getY()];
-            System.out.println("setting "+carName+" at move");
             lbl.setText(carName);
           }
         } if (call.name.equals("exit") && call.returned) {
@@ -381,10 +401,15 @@ class Sim extends SwingWorker<Void,Object> {
     }
   }
   
+  void sendToGUI(Call call) {
+    publish(new CallAndGeneration(call,generation));
+  }
+  
   @Override
   protected Void doInBackground() throws Exception {
     boolean stepTicks = cs.stepTicks;
     rnd = new Random();
+    AtomicBoolean terminated = new AtomicBoolean(false);
     
     // Shuffle cars
     for (int i=0; i<cars.length*5; i++) {
@@ -412,15 +437,41 @@ class Sim extends SwingWorker<Void,Object> {
             Call call = null;
             Object result = null;
             
-            call = Call.enter(car); publish(call); result = cr.enter(car); publish(call.returned(result));
-            call = Call.moving(car,velocidad); publish(call); cr.moving(car,velocidad); publish(call.returned());
-            call = Call.move(car); publish(call); result = cr.move(car); publish(call.returned(result));
-            call = Call.moving(car,velocidad); publish(call); cr.moving(car,velocidad); publish(call.returned());
-            call = Call.move(car); publish(call); result = cr.move(car); publish(call.returned(result));
-            call = Call.moving(car,velocidad); publish(call); cr.moving(car,velocidad); publish(call.returned());
-            call = Call.move(car); publish(call); result = cr.move(car); publish(call.returned(result));
-            call = Call.moving(car,velocidad); publish(call); cr.moving(car,velocidad); publish(call.returned());
-            call = Call.exit(car); publish(call); cr.exit(car); publish(call.returned());
+            if (!terminated.get()) {
+              call = Call.enter(car); sendToGUI(call); result = cr.enter(car); sendToGUI(call.returned(result));
+            }
+            
+            if (!terminated.get()) {
+              call = Call.moving(car,velocidad); sendToGUI(call); cr.moving(car,velocidad); sendToGUI(call.returned());
+            }
+            
+            if (!terminated.get()) {
+              call = Call.move(car); sendToGUI(call); result = cr.move(car); sendToGUI(call.returned(result));
+            }
+            
+            if (!terminated.get()) {
+              call = Call.moving(car,velocidad); sendToGUI(call); cr.moving(car,velocidad); sendToGUI(call.returned());
+            }
+            
+            if (!terminated.get()) {
+              call = Call.move(car); sendToGUI(call); result = cr.move(car); sendToGUI(call.returned(result));
+            }
+            
+            if (!terminated.get()) {
+              call = Call.moving(car,velocidad); sendToGUI(call); cr.moving(car,velocidad); sendToGUI(call.returned());
+            }
+            
+            if (!terminated.get()) {
+              call = Call.move(car); sendToGUI(call); result = cr.move(car); sendToGUI(call.returned(result));
+            }
+            
+            if (!terminated.get()) {
+              call = Call.moving(car,velocidad); sendToGUI(call); cr.moving(car,velocidad); sendToGUI(call.returned());
+            }
+            
+            if (!terminated.get()) {
+              call = Call.exit(car); sendToGUI(call); cr.exit(car); sendToGUI(call.returned());
+            }
             carsToExit.decrementAndGet();
           }
         };
@@ -430,29 +481,52 @@ class Sim extends SwingWorker<Void,Object> {
     Thread timeThread = new Thread("tick") {
         public void run() {
           do {
+            Integer cmd = null;
             if (stepTicks) {
               try {
-                cs.tickQueue.take();
+                cmd = tickQueue.take();
+                terminated.compareAndSet(false,cmd != null && cmd == -10);
               } catch (InterruptedException e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
               }
             } else {
-              
               try {
                 Thread.sleep(5000);
+                
+                cmd = tickQueue.poll();
+                boolean stopped = (cmd != null && cmd == -1);
+                terminated.compareAndSet(false,cmd != null && cmd == -10);
+                
+                while (stopped && !terminated.get()) {
+                  cmd = tickQueue.take();
+                  terminated.compareAndSet(false,cmd != null && cmd == -10);
+                  stopped = !(cmd != null && cmd == -1);
+                }
               } catch (InterruptedException e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
               }
             }
             
-            Call call = Call.tick(); publish(call); cr.tick(); publish(call.returned()); 
-          } while (carsToExit.get() > 0);
+            if (!terminated.get()) {
+              Call call = Call.tick(); sendToGUI(call); cr.tick(); sendToGUI(call.returned());
+            }
+          } while (!terminated.get() && carsToExit.get() > 0);
         }
       };	
     timeThread.start();
     return null;
+  }
+}
+
+class CallAndGeneration {
+  Call call;
+  Integer generation;
+  
+  CallAndGeneration(Call call, int generation) {
+    this.call = call;
+    this.generation = generation;
   }
 }
 
@@ -507,7 +581,6 @@ class Call {
     if (returned) {
       str += " returned";
       if (result != null) str += " "+result;
-      str += ";";
     }
     return str;
   }
