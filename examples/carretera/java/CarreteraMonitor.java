@@ -11,7 +11,6 @@ public class CarreteraMonitor implements Carretera {
   final private int carriles;
   
   final private Monitor mutex;
-  final private Monitor.Cond entering;
   final private Monitor.Cond[] waitingToMove;
   final private PriorityQueue<Integer,String> moving;
   final private Map<String,Monitor.Cond> movingConds;
@@ -24,9 +23,8 @@ public class CarreteraMonitor implements Carretera {
     this.distance = distance;
     this.carriles = carriles;
     mutex = new Monitor();
-    entering = mutex.newCond(); 
-    waitingToMove = new Monitor.Cond[distance-1];
-    for (int x=0; x<distance-1; x++)
+    waitingToMove = new Monitor.Cond[distance];
+    for (int x=0; x<distance; x++)
       waitingToMove[x] = mutex.newCond();
     cars = new String[distance][carriles];
     moving = new SortedListPriorityQueue<Integer,String>();
@@ -36,7 +34,7 @@ public class CarreteraMonitor implements Carretera {
   public Position enter(String car) {
     mutex.enter();
     Integer freeCarril = freeCarril(0);
-    if (freeCarril == null) entering.await();
+    if (freeCarril == null) waitingToMove[0].await();
     freeCarril = freeCarril(0);
     cars[0][freeCarril] = car;
     mutex.leave();
@@ -47,7 +45,7 @@ public class CarreteraMonitor implements Carretera {
     mutex.enter();
     Position pos = position(car);
     Integer freeCarril = freeCarril(pos.getX()+1);
-    if (freeCarril == null) waitingToMove[pos.getX()].await();
+    if (freeCarril == null) waitingToMove[pos.getX()+1].await();
     freeCarril = freeCarril(pos.getX()+1);
     cars[pos.getX()+1][freeCarril] = car;
     freeCell(pos);
@@ -64,11 +62,7 @@ public class CarreteraMonitor implements Carretera {
   
   private void freeCell(Position pos) {
     cars[pos.getX()][pos.getY()] = null;
-    Monitor.Cond waitCond;
-    
-    if (pos.getX()>0) waitCond = waitingToMove[pos.getX()-1];
-    else waitCond = entering;
-    
+    Monitor.Cond waitCond = waitingToMove[pos.getX()];
     if (waitCond.waiting() > 0)
       waitCond.signal();
   }

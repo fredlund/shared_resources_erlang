@@ -24,8 +24,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.swing.border.LineBorder;
 
-import es.upm.aedlib.map.HashTableMap;
-import es.upm.aedlib.map.Map;
+import java.util.Map;
+import java.util.HashMap;
 
 import java.awt.Color;
 import javax.swing.GroupLayout;
@@ -342,7 +342,7 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
     this.generation = generation;
     this.tickQueue = tickQueue;
 
-    this.velocidades = new HashTableMap<>();
+    this.velocidades = new HashMap<>();
     velocidades.put("vw",4); velocidades.put("seat",3); velocidades.put("volvo",1);
     velocidades.put("toyota",1); velocidades.put("fiat",2); velocidades.put("ford",1);
     velocidades.put("citroen",2); velocidades.put("porsche",3); 
