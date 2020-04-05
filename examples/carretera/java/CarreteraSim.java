@@ -467,7 +467,7 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
         ("\n*** Error: distance and carriles cannot be smaller than 1");
       System.exit(1);
     }
-
+    
     System.out.println
       ("Simulation of "+numCars+" cars moving in a carretera of distance "
        +distance+" with "+carriles+" lanes");
@@ -483,68 +483,75 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
             Position result = null;
             int currX = 0;
             
-            // Do the car process
-            if (!terminated.get()) {
-              call = Call.enter(car); sendToGUI(call); result = cr.enter(car); sendToGUI(call.returned(result));
-            }
-
-            if (result.getX() != currX) {
-              System.out.println
-                ("\n*** Error: the call to "+call+" returned a X coordinate "+
-                 result.getX()+" != "+currX);
-              System.exit(1);
-            }
-
-            if (result.getY() < 0 || result.getY() >= carriles) {
-              System.out.println
-                ("\n*** Error: the call to "+call+" returned a Y coordinate "+
-                 result.getY()+" < 0 or >= the number of carriles = "+carriles);
-              System.exit(1);
-            }
-
-            if (!terminated.get()) {
-              call = Call.moving(car,velocidad); sendToGUI(call); cr.moving(car,velocidad); sendToGUI(call.returned());
-            }
-
-            while (!terminated.get() && currX < distance - 1) {
-
+            try {
+              // Do the car process
               if (!terminated.get()) {
-                call = Call.move(car);
-                sendToGUI(call);
-                result = cr.move(car);
-                sendToGUI(call.returned(result));
+                call = Call.enter(car); sendToGUI(call); result = cr.enter(car); sendToGUI(call.returned(result));
               }
-
-              ++currX;
+              
               if (result.getX() != currX) {
                 System.out.println
                   ("\n*** Error: the call to "+call+" returned a X coordinate "+
                    result.getX()+" != "+currX);
                 System.exit(1);
               }
-
+              
               if (result.getY() < 0 || result.getY() >= carriles) {
                 System.out.println
                   ("\n*** Error: the call to "+call+" returned a Y coordinate "+
                    result.getY()+" < 0 or >= the number of carriles = "+carriles);
                 System.exit(1);
               }
-
+              
               if (!terminated.get()) {
                 call = Call.moving(car,velocidad); sendToGUI(call); cr.moving(car,velocidad); sendToGUI(call.returned());
               }
+              
+              while (!terminated.get() && currX < distance - 1) {
+                
+                if (!terminated.get()) {
+                  call = Call.move(car);
+                  sendToGUI(call);
+                  result = cr.move(car);
+                  sendToGUI(call.returned(result));
+                }
+                
+                ++currX;
+                if (result.getX() != currX) {
+                  System.out.println
+                    ("\n*** Error: the call to "+call+" returned a X coordinate "+
+                     result.getX()+" != "+currX);
+                  System.exit(1);
+                }
+                
+                if (result.getY() < 0 || result.getY() >= carriles) {
+                  System.out.println
+                    ("\n*** Error: the call to "+call+" returned a Y coordinate "+
+                     result.getY()+" < 0 or >= the number of carriles = "+carriles);
+                  System.exit(1);
+                }
+                
+                if (!terminated.get()) {
+                  call = Call.moving(car,velocidad); sendToGUI(call); cr.moving(car,velocidad); sendToGUI(call.returned());
+                }
+              }
+              
+              if (!terminated.get()) {
+                call = Call.exit(car); sendToGUI(call); cr.exit(car); sendToGUI(call.returned());
+              }
+              carsToExit.decrementAndGet();
+            } catch (Throwable exc) {
+              System.out.println
+                ("*** Error: exeption "+exc+" raised when calling "+call+"\n");
+              exc.printStackTrace();
+              terminated.set(true);
             }
-            
-            if (!terminated.get()) {
-              call = Call.exit(car); sendToGUI(call); cr.exit(car); sendToGUI(call.returned());
-            }
-            carsToExit.decrementAndGet();
           }
         };
       carTh.start();
     }
     
-
+    
     // Avance time -- either manualy (step ticks) or automatically.
     // Listens to orders from the GUI to pause or quit the current simulation.
     Thread timeThread = new Thread("tick") {
@@ -577,9 +584,17 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
                 e.printStackTrace();
               }
             }
-            
+
+            Call call = null;
             if (!terminated.get()) {
-              Call call = Call.tick(); sendToGUI(call); cr.tick(); sendToGUI(call.returned());
+              try {
+                call = Call.tick(); sendToGUI(call); cr.tick(); sendToGUI(call.returned());
+              } catch (Throwable exc) {
+                System.out.println
+                  ("*** Error: exeption "+exc+" raised when calling \n"+call);
+                exc.printStackTrace();
+                terminated.set(true);
+              }
             }
           } while (!terminated.get() && carsToExit.get() > 0);
         }
@@ -595,7 +610,7 @@ class CallAndGeneration {
   Call call;
   Integer generation;
   
-CallAndGeneration(Call call, int generation) {
+  CallAndGeneration(Call call, int generation) {
     this.call = call;
     this.generation = generation;
   }
@@ -611,7 +626,7 @@ class Call {
   Position result=null;
   
   Call(String name) { this.name = name; this.returned = false; }
-
+  
   Call(Call call) {
     this.name = call.name;
     this.car = call.car;
