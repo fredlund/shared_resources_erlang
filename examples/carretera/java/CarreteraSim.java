@@ -1,8 +1,6 @@
 /*
  * Simulates a carretera in a GUI window.
  *
- * TODO: 
- * - vary dimensions of carretera
  */
 package cc.carretera;
 
@@ -46,6 +44,13 @@ import java.util.function.Supplier;
 
 public class CarreteraSim {
   
+  // Dimensions
+  int distance;
+  int carriles;
+
+  // Random number generation
+  Random rnd;
+
   // GUI state
   private JFrame frmCarreterasim;
   JTextArea callsTextArea;
@@ -96,9 +101,13 @@ public class CarreteraSim {
    * Setup the GUI.
    */
   private void initialize() {
+    rnd = new Random();
+    distance = 2+rnd.nextInt(4);
+    carriles = 1+rnd.nextInt(3);
+    
     frmCarreterasim = new JFrame();
     frmCarreterasim.setTitle("CarreteraSim");
-    frmCarreterasim.setBounds(100, 100, 525, 500);
+    frmCarreterasim.setBounds(100, 100, Math.max(400,200+100*distance), Math.max(500,300+carriles*100));
     frmCarreterasim.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
     
     JLabel lblTime = new JLabel("Time:"); 
@@ -117,21 +126,15 @@ public class CarreteraSim {
         }
       });
     btnDoTimeTick.setEnabled(false);
-    
-    JLabel lbl0_1 = new JLabel("--------");
-    JLabel lbl1_1 = new JLabel("--------");
-    JLabel lbl2_1 = new JLabel("--------");
-    JLabel lbl3_1 = new JLabel("--------");
-    JLabel lbl0_0 = new JLabel("--------");
-    JLabel lbl1_0 = new JLabel("--------");
-    JLabel lbl2_0 = new JLabel("--------");
-    JLabel lbl3_0 = new JLabel("--------");
-    
-    carretera = new JLabel[][] { { lbl0_0, lbl0_1}, { lbl1_0, lbl1_1 }, { lbl2_0, lbl2_1 }, { lbl3_0, lbl3_1 } };
-    
+    carretera = new JLabel[distance][carriles];
+    for (int x=0; x<distance; x++)
+      for (int y=0; y<carriles; y++)
+        carretera[x][y] = new JLabel("--------");
+
     JPanel panel_options = new JPanel();
     JPanel panel_carretera = new JPanel();
     panel_carretera.setBorder(new LineBorder(new Color(0, 0, 0)));
+
     JPanel panel_actions = new JPanel();
     JPanel panel_calls = new JPanel();
     
@@ -189,7 +192,7 @@ public class CarreteraSim {
           tickQueue = new LinkedBlockingQueue<Integer>();
           time = 0;
           timeLab.setText(Integer.valueOf(time).toString());
-          sim = new Sim(win,generation,tickQueue,4,2);
+          sim = new Sim(win,rnd,generation,tickQueue,distance,carriles);
           stepTicks = stepTicksBox.isSelected();
           btnDoTimeTick.setEnabled(stepTicks);
           btnPauseSim.setEnabled(!stepTicks);
@@ -230,38 +233,40 @@ public class CarreteraSim {
     // Panel 1: carretera
     
     GroupLayout gl_panel_carretera = new GroupLayout(panel_carretera);
+    GroupLayout.ParallelGroup[] horizontalGroups = new GroupLayout.ParallelGroup[distance];
+    GroupLayout.ParallelGroup[] verticalGroups = new GroupLayout.ParallelGroup[carriles];
+
+    for (int x=0; x<distance; x++) {
+      GroupLayout.ParallelGroup g =
+        gl_panel_carretera.createParallelGroup(Alignment.LEADING);
+      horizontalGroups[x] =
+        g;
+      for (int y=0; y<carriles; y++)
+        g.addComponent(carretera[x][y], GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE);
+    }
+
+    for (int y=0; y<carriles; y++) {
+      GroupLayout.ParallelGroup g =
+        gl_panel_carretera.createParallelGroup(Alignment.BASELINE);
+      verticalGroups[y] =
+        g;
+      for (int x=0; x<distance; x++)
+        g.addComponent(carretera[x][y], GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE);
+    }
+
     gl_panel_carretera.setAutoCreateGaps(true);
     gl_panel_carretera.setAutoCreateContainerGaps(true);
-    gl_panel_carretera.setHorizontalGroup
-      (
-       gl_panel_carretera.createSequentialGroup()
-       .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
-                 .addComponent(lbl0_0, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE)
-                 .addComponent(lbl0_1, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE))
-       .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
-                 .addComponent(lbl1_1, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE)
-                 .addComponent(lbl1_0, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE))
-       .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
-                 .addComponent(lbl2_1, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE)
-                 .addComponent(lbl2_0, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE))
-       .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
-                 .addComponent(lbl3_0, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE)
-                 .addComponent(lbl3_1, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE))
-       );
-    gl_panel_carretera.setVerticalGroup
-      (
-       gl_panel_carretera.createSequentialGroup()
-       .addGroup(gl_panel_carretera.createParallelGroup(Alignment.BASELINE)
-                 .addComponent(lbl0_1, GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE)
-                 .addComponent(lbl1_1, GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE)
-                 .addComponent(lbl3_1, GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE)
-                 .addComponent(lbl2_1, GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE))
-       .addGroup(gl_panel_carretera.createParallelGroup(Alignment.BASELINE, false)
-                 .addComponent(lbl0_0, GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE)
-                 .addComponent(lbl1_0, GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE)
-                 .addComponent(lbl2_0, GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE)
-                 .addComponent(lbl3_0, GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE))
-       );
+    GroupLayout.SequentialGroup horizontalGroup =
+      gl_panel_carretera.createSequentialGroup();
+    for (int x=0; x<distance; x++)
+      horizontalGroup.addGroup(horizontalGroups[x]);
+    gl_panel_carretera.setHorizontalGroup(horizontalGroup);
+
+    GroupLayout.SequentialGroup verticalGroup =
+      gl_panel_carretera.createSequentialGroup();
+    for (int y=0; y<carriles; y++)
+      verticalGroup.addGroup(verticalGroups[y]);
+    gl_panel_carretera.setVerticalGroup(verticalGroup);
     panel_carretera.setLayout(gl_panel_carretera);
     
     
@@ -377,12 +382,13 @@ class Sim extends SwingWorker<Void,Object> {
   int carriles;
   
   
-  Sim(CarreteraSim cs, int generation, BlockingQueue<Integer> tickQueue, int distance, int carriles) {
+  Sim(CarreteraSim cs, Random rnd, int generation, BlockingQueue<Integer> tickQueue, int distance, int carriles) {
     this.cs = cs;
     this.generation = generation;
     this.tickQueue = tickQueue;
     this.distance = distance;
     this.carriles = carriles;
+    this.rnd = rnd;
     
     // Set car velocities (vw is punished for "dieselgate"...)
     this.velocidades = new HashMap<>();
@@ -465,7 +471,6 @@ class Sim extends SwingWorker<Void,Object> {
   @Override
   protected Void doInBackground() throws Exception {
     boolean stepTicks = cs.stepTicks;
-    rnd = new Random();
     AtomicBoolean terminated = new AtomicBoolean(false);
     
     // Shuffle cars
