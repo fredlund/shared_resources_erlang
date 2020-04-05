@@ -1,5 +1,9 @@
 /*
  * Simulates a carretera in a GUI window.
+ *
+ * TODO: 
+ * - vary dimensions of carretera
+ * - report exceptions on calling CarreteraMon/CarreterabCS
  */
 package cc.carretera;
 
@@ -486,47 +490,36 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
       // One thread per car executes the car protocol (enter, moving, [move, moving]*, exit)
       Thread carTh = new Thread(car) {
           public void run() {
-            Call call = null;
             Position result = null;
             int currX = 0;
             
             // Do the car process
             if (!terminated.get()) {
-              call = Call.enter(car);
-              sendToGUI(call);
               terminated.compareAndSet
-                (false,!doResultCall(() -> cr.enter(car), call, currX, carriles));
+                (false,!doResultCall(() -> cr.enter(car), Call.enter(car), currX, carriles));
             }
             
             if (!terminated.get()) {
-              call = Call.moving(car,velocidad);
-              sendToGUI(call);
               terminated.compareAndSet
-                (false,!doCall(() -> cr.moving(car,velocidad), call));
+                (false,!doCall(() -> cr.moving(car,velocidad), Call.moving(car,velocidad)));
             }
             
             while (!terminated.get() && currX < distance - 1) {
               
               if (!terminated.get()) {
-                call = Call.move(car);
-                sendToGUI(call);
                 terminated.compareAndSet
-                  (false,!doResultCall(() -> cr.move(car), call, ++currX, carriles));
+                  (false,!doResultCall(() -> cr.move(car), Call.move(car), ++currX, carriles));
               }
               
               if (!terminated.get()) {
-                call = Call.moving(car,velocidad);
-                sendToGUI(call);
                 terminated.compareAndSet
-                  (false,!doCall(() -> cr.moving(car,velocidad), call));
+                  (false,!doCall(() -> cr.moving(car,velocidad), Call.moving(car,velocidad)));
               }
             }
             
             if (!terminated.get()) {
-              call = Call.exit(car);
-              sendToGUI(call);
               terminated.compareAndSet
-                (false,!doCall(() -> cr.exit(car), call));
+                (false,!doCall(() -> cr.exit(car), Call.exit(car)));
             }
             
             carsToExit.decrementAndGet();
@@ -569,11 +562,8 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
               }
             }
             
-            Call call = null;
             if (!terminated.get()) {
-                call = Call.tick();
-                sendToGUI(call);
-                terminated.compareAndSet(false,!doCall(() -> cr.tick(), call));
+                terminated.compareAndSet(false,!doCall(() -> cr.tick(), Call.tick()));
             }
           } while (!terminated.get() && carsToExit.get() > 0);
         }
@@ -589,7 +579,9 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
   }
   
   boolean doCall(Runnable callCode, Call oldCall) {
+    sendToGUI(oldCall);
     Call call = new Call(oldCall);
+
     boolean callResult = true;
     
     try {
@@ -609,6 +601,7 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
   }
   
   boolean doResultCall(Supplier<Position> callCode, Call oldCall, int expectedX, int carriles) {
+    sendToGUI(oldCall);
     Call call = new Call(oldCall);
     boolean callResult = true;
     Position position = null;
