@@ -14,7 +14,6 @@ import javax.swing.JSeparator;
 import javax.swing.JButton;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
-
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -24,12 +23,9 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 import javax.swing.border.LineBorder;
-
 import java.util.Map;
 import java.util.HashMap;
-
 import java.awt.Color;
 import javax.swing.GroupLayout;
 import javax.swing.GroupLayout.Alignment;
@@ -42,6 +38,7 @@ import javax.swing.LayoutStyle.ComponentPlacement;
 import javax.swing.SwingWorker;
 import java.awt.Component;
 import javax.swing.JCheckBox;
+import java.util.function.Supplier;
 
 
 public class CarreteraSim {
@@ -405,6 +402,20 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
     for (CallAndGeneration msg : messages) {
       if (msg.generation == generation) {
         Call call = msg.call;
+
+        if (call.raisedException) {
+          String str = "\n*** Error: exception thrown:\n"+call.exception;
+          System.out.println(str);
+          call.exception.printStackTrace();
+          cs.callsTextArea.append(str+"\n");
+          for (StackTraceElement e : call.exception.getStackTrace()) {
+            cs.callsTextArea.append(e+"\n");
+          }
+        } else if (call.failed) {
+          String str = "\n*** Error: "+call.failMessage;
+          cs.callsTextArea.append(str+"\n");
+          System.out.println(str);
+        } else {
         String str = cs.time+": "+call;
         cs.callsTextArea.append(str+"\n");
         System.out.println(str);
@@ -430,13 +441,9 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
           ++cs.time;
           cs.timeLab.setText(Integer.valueOf(cs.time).toString());
         }
+        }
       }
     }
-  }
-  
-  // Send a message from the simulation to the GUI
-  void sendToGUI(Call call) {
-    publish(new CallAndGeneration(call,generation));
   }
   
   // Main simulation thread
@@ -483,69 +490,46 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
             Position result = null;
             int currX = 0;
             
-            try {
-              // Do the car process
-              if (!terminated.get()) {
-                call = Call.enter(car); sendToGUI(call); result = cr.enter(car); sendToGUI(call.returned(result));
-              }
-              
-              if (result.getX() != currX) {
-                System.out.println
-                  ("\n*** Error: the call to "+call+" returned a X coordinate "+
-                   result.getX()+" != "+currX);
-                System.exit(1);
-              }
-              
-              if (result.getY() < 0 || result.getY() >= carriles) {
-                System.out.println
-                  ("\n*** Error: the call to "+call+" returned a Y coordinate "+
-                   result.getY()+" < 0 or >= the number of carriles = "+carriles);
-                System.exit(1);
-              }
-              
-              if (!terminated.get()) {
-                call = Call.moving(car,velocidad); sendToGUI(call); cr.moving(car,velocidad); sendToGUI(call.returned());
-              }
-              
-              while (!terminated.get() && currX < distance - 1) {
-                
-                if (!terminated.get()) {
-                  call = Call.move(car);
-                  sendToGUI(call);
-                  result = cr.move(car);
-                  sendToGUI(call.returned(result));
-                }
-                
-                ++currX;
-                if (result.getX() != currX) {
-                  System.out.println
-                    ("\n*** Error: the call to "+call+" returned a X coordinate "+
-                     result.getX()+" != "+currX);
-                  System.exit(1);
-                }
-                
-                if (result.getY() < 0 || result.getY() >= carriles) {
-                  System.out.println
-                    ("\n*** Error: the call to "+call+" returned a Y coordinate "+
-                     result.getY()+" < 0 or >= the number of carriles = "+carriles);
-                  System.exit(1);
-                }
-                
-                if (!terminated.get()) {
-                  call = Call.moving(car,velocidad); sendToGUI(call); cr.moving(car,velocidad); sendToGUI(call.returned());
-                }
-              }
-              
-              if (!terminated.get()) {
-                call = Call.exit(car); sendToGUI(call); cr.exit(car); sendToGUI(call.returned());
-              }
-              carsToExit.decrementAndGet();
-            } catch (Throwable exc) {
-              System.out.println
-                ("*** Error: exeption "+exc+" raised when calling "+call+"\n");
-              exc.printStackTrace();
-              terminated.set(true);
+            // Do the car process
+            if (!terminated.get()) {
+              call = Call.enter(car);
+              sendToGUI(call);
+              terminated.compareAndSet
+                (false,!doResultCall(() -> cr.enter(car), call, currX, carriles));
             }
+            
+            if (!terminated.get()) {
+              call = Call.moving(car,velocidad);
+              sendToGUI(call);
+              terminated.compareAndSet
+                (false,!doCall(() -> cr.moving(car,velocidad), call));
+            }
+            
+            while (!terminated.get() && currX < distance - 1) {
+              
+              if (!terminated.get()) {
+                call = Call.move(car);
+                sendToGUI(call);
+                terminated.compareAndSet
+                  (false,!doResultCall(() -> cr.move(car), call, ++currX, carriles));
+              }
+              
+              if (!terminated.get()) {
+                call = Call.moving(car,velocidad);
+                sendToGUI(call);
+                terminated.compareAndSet
+                  (false,!doCall(() -> cr.moving(car,velocidad), call));
+              }
+            }
+            
+            if (!terminated.get()) {
+              call = Call.exit(car);
+              sendToGUI(call);
+              terminated.compareAndSet
+                (false,!doCall(() -> cr.exit(car), call));
+            }
+            
+            carsToExit.decrementAndGet();
           }
         };
       carTh.start();
@@ -584,23 +568,89 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
                 e.printStackTrace();
               }
             }
-
+            
             Call call = null;
             if (!terminated.get()) {
-              try {
-                call = Call.tick(); sendToGUI(call); cr.tick(); sendToGUI(call.returned());
-              } catch (Throwable exc) {
-                System.out.println
-                  ("*** Error: exeption "+exc+" raised when calling \n"+call);
-                exc.printStackTrace();
-                terminated.set(true);
-              }
+                call = Call.tick();
+                sendToGUI(call);
+                terminated.compareAndSet(false,!doCall(() -> cr.tick(), call));
             }
           } while (!terminated.get() && carsToExit.get() > 0);
         }
       };	
     timeThread.start();
     return null;
+  }
+  
+  // Send a message from the simulation to the GUI
+  Call sendToGUI(Call call) {
+    publish(new CallAndGeneration(call,generation));
+    return call;
+  }
+  
+  boolean doCall(Runnable callCode, Call oldCall) {
+    Call call = new Call(oldCall);
+    boolean callResult = true;
+    
+    try {
+      callCode.run();
+    } catch (Throwable exc) {
+      call.raisedException = true;
+      call.exception = exc;
+      callResult = false;
+    };
+    
+    if (callResult) {
+      call.returned();
+    }
+    
+    sendToGUI(call);
+    return callResult;
+  }
+  
+  boolean doResultCall(Supplier<Position> callCode, Call oldCall, int expectedX, int carriles) {
+    Call call = new Call(oldCall);
+    boolean callResult = true;
+    Position position = null;
+    
+    try {
+      position = callCode.get();
+    } catch (Throwable exc) {
+      call.raisedException = true;
+      call.exception = exc;
+      callResult = false;
+    };
+    
+    if (callResult) {
+      call.returned(position);
+      callResult = checkCall(call, expectedX, carriles);
+    }
+    
+    sendToGUI(call);
+    return callResult;
+  }
+  
+  private boolean checkCall(Call call, int expectedX, int carriles) {
+    Position result = call.result;
+    
+    if (result == null) {
+      call.failed = true;
+      call.failMessage =
+        "The call to "+call.getCallString()+" returned a NULL value";
+      return false;
+    } else if (result.getX() != expectedX) {
+      call.failed = true;
+      call.failMessage =
+        "The call to "+call.getCallString()+" returned a X coordinate "+
+        result.getX()+" != expected value "+expectedX;
+      return false;
+    } else  if (result.getY() < 0 || result.getY() >= carriles) {
+      call.failed = true;
+      call.failMessage =
+        "he call to "+call.getCallString()+" returned a Y coordinate "+
+        result.getY()+" < 0 or >= the number of carriles = "+carriles;
+      return false;
+    } else return true;
   }
 }
 
@@ -624,6 +674,10 @@ class Call {
   Integer velocidad=null;
   boolean returned;
   Position result=null;
+  boolean failed=false;
+  String failMessage=null;
+  boolean raisedException=false;
+  Throwable exception;
   
   Call(String name) { this.name = name; this.returned = false; }
   
@@ -632,7 +686,11 @@ class Call {
     this.car = call.car;
     this.velocidad = call.velocidad;
     this.returned = call.returned;
-    this.returned = call.returned;
+    this.result = call.result;
+    this.failed = call.failed;
+    this.failMessage = call.failMessage;
+    this.raisedException = call.raisedException;
+    this.exception = call.exception;
   }
   
   static Call enter(String car) {
@@ -655,16 +713,13 @@ class Call {
     Call call = new Call("tick"); return call;
   }
   
-  public Call returned() {
-    Call newCall = new Call(this);
-    newCall.returned = true;
-    return newCall;
+  public void returned() {
+    this.returned = true;
   }
   
-  public Call returned(Position result) {
-    Call newCall = returned();
-    newCall.result = result;
-    return newCall;
+  public void returned(Position result) {
+    this.returned = true;
+    this.result = result;
   }
   
   public String getCallString() {
