@@ -476,7 +476,7 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
       String car = cars[i];
       int velocidad = velocidades.get(car);
       
-      // One thread per car
+      // One thread per car executes the car protocol (enter, moving, [move, moving]*, exit)
       Thread carTh = new Thread(car) {
           public void run() {
             Call call = null;
@@ -501,12 +501,12 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
                  result.getY()+" < 0 or >= the number of carriles = "+carriles);
               System.exit(1);
             }
-            
+
+            if (!terminated.get()) {
+              call = Call.moving(car,velocidad); sendToGUI(call); cr.moving(car,velocidad); sendToGUI(call.returned());
+            }
+
             while (!terminated.get() && currX < distance - 1) {
-              call = Call.moving(car,velocidad);
-              sendToGUI(call);
-              cr.moving(car,velocidad);
-              sendToGUI(call.returned());
 
               if (!terminated.get()) {
                 call = Call.move(car);
@@ -528,6 +528,10 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
                   ("\n*** Error: the call to "+call+" returned a Y coordinate "+
                    result.getY()+" < 0 or >= the number of carriles = "+carriles);
                 System.exit(1);
+              }
+
+              if (!terminated.get()) {
+                call = Call.moving(car,velocidad); sendToGUI(call); cr.moving(car,velocidad); sendToGUI(call.returned());
               }
             }
             
