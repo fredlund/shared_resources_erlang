@@ -1,3 +1,6 @@
+/*
+ * Simulates a carretera in a GUI window.
+ */
 package cc.carretera;
 
 import java.awt.EventQueue;
@@ -37,23 +40,35 @@ import java.awt.FlowLayout;
 import javax.swing.JScrollPane;
 import javax.swing.LayoutStyle.ComponentPlacement;
 import javax.swing.SwingWorker;
-
 import java.awt.Component;
 import javax.swing.JCheckBox;
 
+
 public class CarreteraSim {
   
+  // GUI state
   private JFrame frmCarreterasim;
   JTextArea callsTextArea;
-  
   JLabel[][] carretera;
-  int time = 0;
   JLabel timeLab;
+
+  // Current time
+  int time = 0;
+
+  // Simulation
   Sim sim;
+
+  // For sending messages to simulation from GUI
   BlockingQueue<Integer> tickQueue;
+
+  // Manually step ticks or not
   boolean stepTicks = false;
-  int generation = 0;
   
+  // Current generation -- we keep a count of the number of times
+  // the simulation was started to keep from displaying spurious messages
+  int generation = 0;
+
+
   /**
    * Launch the application.
    */
@@ -78,7 +93,7 @@ public class CarreteraSim {
   }
   
   /**
-   * Initialize the contents of the frame.
+   * Setup the GUI.
    */
   private void initialize() {
     frmCarreterasim = new JFrame();
@@ -174,7 +189,7 @@ public class CarreteraSim {
           tickQueue = new LinkedBlockingQueue<Integer>();
           time = 0;
           timeLab.setText(Integer.valueOf(time).toString());
-          sim = new Sim(win,generation,tickQueue);
+          sim = new Sim(win,generation,tickQueue,4,2);
           stepTicks = stepTicksBox.isSelected();
           btnDoTimeTick.setEnabled(stepTicks);
           btnPauseSim.setEnabled(!stepTicks);
@@ -328,26 +343,55 @@ public class CarreteraSim {
   }
 }
 
+
+/*
+ * Run the simulation. Since we can change the GUI only in a single
+ * thread the simulation is run as a "SwingWorker", 
+ * and we send simulation events
+ * back to the GUI theread.
+ */
+
+
 class Sim extends SwingWorker<Void,CallAndGeneration> {
-  Random rnd;
+
+  // Simulation cars
   String[] cars = {"vw", "seat", "volvo", "toyota", "fiat", "ford", "citroen", "porsche"};
+
+  // Car velocicities (lower is faster!)
   Map<String,Integer> velocidades;
-  int numCars;
+
+  // Main application state (including GUI)
   CarreteraSim cs;
+
+  // Current generation
   int generation;
+
+  // Messages from GUI
   BlockingQueue<Integer> tickQueue;
+
+  // Random state
+  Random rnd;
+
+  // Dimensions of carretera
+  int distance;
+  int carriles;
   
-  Sim(CarreteraSim cs, int generation, BlockingQueue<Integer> tickQueue) {
+
+  Sim(CarreteraSim cs, int generation, BlockingQueue<Integer> tickQueue, int distance, int carriles) {
     this.cs = cs;
     this.generation = generation;
     this.tickQueue = tickQueue;
+    this.distance = distance;
+    this.carriles = carriles;
 
+    // Set car velocities (vw is punished for "dieselgate"...)
     this.velocidades = new HashMap<>();
     velocidades.put("vw",4); velocidades.put("seat",3); velocidades.put("volvo",1);
     velocidades.put("toyota",1); velocidades.put("fiat",2); velocidades.put("ford",1);
     velocidades.put("citroen",2); velocidades.put("porsche",3); 
   }
   
+  // Remove a car from the GUI
   static void removeCar(CarreteraSim cs, String car) {
     for (int i=0; i<cs.carretera.length; i++)
       for (int j=0; j<cs.carretera[0].length; j++)
@@ -355,6 +399,7 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
           cs.carretera[i][j].setText("--------");
   }
   
+  // Handles the GUI updates resulting from simulation events
   @Override
   protected void process(List<CallAndGeneration> messages) {
     for (CallAndGeneration msg : messages) {
@@ -389,10 +434,12 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
     }
   }
   
+  // Send a message from the simulation to the GUI
   void sendToGUI(Call call) {
     publish(new CallAndGeneration(call,generation));
   }
   
+  // Main simulation thread
   @Override
   protected Void doInBackground() throws Exception {
     boolean stepTicks = cs.stepTicks;
@@ -408,53 +455,80 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
       cars[two] = carOne;
     }
     
-    Carretera cr = new CarreteraMonitor(4,2);
+    // Invoke the monitor
+    Carretera cr = new CarreteraMonitor(distance,carriles);
     
     // Number of cars to simulate
     int numCars = rnd.nextInt(cars.length-1)+1;
     AtomicInteger carsToExit = new AtomicInteger(numCars);
     
-    System.out.println("Simulation of "+numCars+" cars moving in a carretera of distance 4 with 2 lanes");
+    if (distance < 1 || carriles < 1) {
+      System.out.println
+        ("\n*** Error: distance and carriles cannot be smaller than 1");
+      System.exit(1);
+    }
+
+    System.out.println
+      ("Simulation of "+numCars+" cars moving in a carretera of distance "
+       +distance+" with "+carriles+" lanes");
     
     for (int i=0; i<numCars; i++) {
       String car = cars[i];
       int velocidad = velocidades.get(car);
       
+      // One thread per car
       Thread carTh = new Thread(car) {
           public void run() {
             Call call = null;
             Position result = null;
+            int currX = 0;
             
+            // Do the car process
             if (!terminated.get()) {
               call = Call.enter(car); sendToGUI(call); result = cr.enter(car); sendToGUI(call.returned(result));
             }
-            
-            if (!terminated.get()) {
-              call = Call.moving(car,velocidad); sendToGUI(call); cr.moving(car,velocidad); sendToGUI(call.returned());
+
+            if (result.getX() != currX) {
+              System.out.println
+                ("\n*** Error: the call to "+call+" returned a X coordinate "+
+                 result.getX()+" != "+currX);
+              System.exit(1);
+            }
+
+            if (result.getY() < 0 || result.getY() >= carriles) {
+              System.out.println
+                ("\n*** Error: the call to "+call+" returned a Y coordinate "+
+                 result.getY()+" < 0 or >= the number of carriles = "+carriles);
+              System.exit(1);
             }
             
-            if (!terminated.get()) {
-              call = Call.move(car); sendToGUI(call); result = cr.move(car); sendToGUI(call.returned(result));
-            }
-            
-            if (!terminated.get()) {
-              call = Call.moving(car,velocidad); sendToGUI(call); cr.moving(car,velocidad); sendToGUI(call.returned());
-            }
-            
-            if (!terminated.get()) {
-              call = Call.move(car); sendToGUI(call); result = cr.move(car); sendToGUI(call.returned(result));
-            }
-            
-            if (!terminated.get()) {
-              call = Call.moving(car,velocidad); sendToGUI(call); cr.moving(car,velocidad); sendToGUI(call.returned());
-            }
-            
-            if (!terminated.get()) {
-              call = Call.move(car); sendToGUI(call); result = cr.move(car); sendToGUI(call.returned(result));
-            }
-            
-            if (!terminated.get()) {
-              call = Call.moving(car,velocidad); sendToGUI(call); cr.moving(car,velocidad); sendToGUI(call.returned());
+            while (!terminated.get() && currX < distance - 1) {
+              call = Call.moving(car,velocidad);
+              sendToGUI(call);
+              cr.moving(car,velocidad);
+              sendToGUI(call.returned());
+
+              if (!terminated.get()) {
+                call = Call.move(car);
+                sendToGUI(call);
+                result = cr.move(car);
+                sendToGUI(call.returned(result));
+              }
+
+              ++currX;
+              if (result.getX() != currX) {
+                System.out.println
+                  ("\n*** Error: the call to "+call+" returned a X coordinate "+
+                   result.getX()+" != "+currX);
+                System.exit(1);
+              }
+
+              if (result.getY() < 0 || result.getY() >= carriles) {
+                System.out.println
+                  ("\n*** Error: the call to "+call+" returned a Y coordinate "+
+                   result.getY()+" < 0 or >= the number of carriles = "+carriles);
+                System.exit(1);
+              }
             }
             
             if (!terminated.get()) {
@@ -466,6 +540,9 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
       carTh.start();
     }
     
+
+    // Avance time -- either manualy (step ticks) or automatically.
+    // Listens to orders from the GUI to pause or quit the current simulation.
     Thread timeThread = new Thread("tick") {
         public void run() {
           do {
@@ -508,16 +585,20 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
   }
 }
 
+// A simulation event sent to the GUI which includes the generation --
+// to discard "old" events.
 class CallAndGeneration {
   Call call;
   Integer generation;
   
-  CallAndGeneration(Call call, int generation) {
+CallAndGeneration(Call call, int generation) {
     this.call = call;
     this.generation = generation;
   }
 }
 
+
+// A simulation event sent to the GUI
 class Call {
   String name;
   String car=null;
@@ -525,35 +606,46 @@ class Call {
   boolean returned;
   Position result=null;
   
-  Call() { }
+  Call(String name) { this.name = name; this.returned = false; }
+
+  Call(Call call) {
+    this.name = call.name;
+    this.car = call.car;
+    this.velocidad = call.velocidad;
+    this.returned = call.returned;
+    this.returned = call.returned;
+  }
   
   static Call enter(String car) {
-    Call call = new Call(); call.name = "enter"; call.car = car; call.returned = false; return call;
+    Call call = new Call("enter"); call.car = car; return call;
   }
   
   static Call move(String car) {
-    Call call = new Call(); call.name = "move"; call.car = car; call.returned = false; return call;
+    Call call = new Call("move"); call.car = car; return call;
   }
   
   static Call exit(String car) {
-    Call call = new Call(); call.name = "exit"; call.car = car; call.returned = false; return call;
+    Call call = new Call("exit"); call.car = car; return call;
   }
   
   static Call moving(String car, int velocidad) {
-    Call call = new Call(); call.name = "moving"; call.car = car; call.velocidad = velocidad; call.returned = false; return call;
+    Call call = new Call("moving"); call.car = car; call.velocidad = velocidad; return call;
   }
   
   static Call tick() {
-    Call call = new Call(); call.name = "tick"; call.returned = false; return call;
+    Call call = new Call("tick"); return call;
   }
   
   public Call returned() {
-    Call newCall = new Call(); newCall.name = name; newCall.car = car; newCall.velocidad = velocidad;
-    newCall.returned = true; newCall.result = null; return newCall;
+    Call newCall = new Call(this);
+    newCall.returned = true;
+    return newCall;
   }
   
   public Call returned(Position result) {
-    Call newCall = returned(); newCall.result = result; return newCall;
+    Call newCall = returned();
+    newCall.result = result;
+    return newCall;
   }
   
   public String getCallString() {
