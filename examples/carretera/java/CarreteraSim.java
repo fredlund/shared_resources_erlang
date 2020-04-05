@@ -3,7 +3,6 @@
  *
  * TODO: 
  * - vary dimensions of carretera
- * - report exceptions on calling CarreteraMon/CarreterabCS
  */
 package cc.carretera;
 
@@ -52,24 +51,24 @@ public class CarreteraSim {
   JTextArea callsTextArea;
   JLabel[][] carretera;
   JLabel timeLab;
-
+  
   // Current time
   int time = 0;
-
+  
   // Simulation
   Sim sim;
-
+  
   // For sending messages to simulation from GUI
   BlockingQueue<Integer> tickQueue;
-
+  
   // Manually step ticks or not
   boolean stepTicks = false;
   
   // Current generation -- we keep a count of the number of times
   // the simulation was started to keep from displaying spurious messages
   int generation = 0;
-
-
+  
+  
   /**
    * Launch the application.
    */
@@ -153,7 +152,7 @@ public class CarreteraSim {
           System.exit(0);
         }
       });
-
+    
     JButton btnPauseSim = new JButton("Pause simulation");
     btnPauseSim.addActionListener(new ActionListener() {
         public void actionPerformed(ActionEvent e) {
@@ -175,7 +174,7 @@ public class CarreteraSim {
     final CarreteraSim win = this;
     btnStartSim.addActionListener(new ActionListener() {
         public void actionPerformed(ActionEvent e) {
-
+          
           ++generation;
           
           if (sim != null && tickQueue != null) {
@@ -186,7 +185,7 @@ public class CarreteraSim {
               e1.printStackTrace();
             }
           }
-
+          
           tickQueue = new LinkedBlockingQueue<Integer>();
           time = 0;
           timeLab.setText(Integer.valueOf(time).toString());
@@ -225,11 +224,11 @@ public class CarreteraSim {
        .addComponent(panel_carretera)
        .addComponent(panel_calls)
        .addComponent(panel_actions)
-      );
-
-
+       );
+    
+    
     // Panel 1: carretera
-
+    
     GroupLayout gl_panel_carretera = new GroupLayout(panel_carretera);
     gl_panel_carretera.setAutoCreateGaps(true);
     gl_panel_carretera.setAutoCreateContainerGaps(true);
@@ -248,7 +247,7 @@ public class CarreteraSim {
        .addGroup(gl_panel_carretera.createParallelGroup(Alignment.LEADING)
                  .addComponent(lbl3_0, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE)
                  .addComponent(lbl3_1, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE))
-      );
+       );
     gl_panel_carretera.setVerticalGroup
       (
        gl_panel_carretera.createSequentialGroup()
@@ -265,9 +264,9 @@ public class CarreteraSim {
        );
     panel_carretera.setLayout(gl_panel_carretera);
     
-
+    
     // Panel time_options: time and time tick option
-
+    
     GroupLayout gl_panel_options = new GroupLayout(panel_options);
     gl_panel_options.setAutoCreateGaps(true);
     gl_panel_options.setAutoCreateContainerGaps(true);
@@ -286,11 +285,11 @@ public class CarreteraSim {
        .addComponent(lblTime)
        .addComponent(timeLab)
        .addComponent(stepTicksBox)
-      );
+       );
     panel_options.setLayout(gl_panel_options);
     
     
-
+    
     // Panel actions: tick button, start simulation and quit
     
     GroupLayout gl_panel_actions = new GroupLayout(panel_actions);
@@ -315,14 +314,14 @@ public class CarreteraSim {
        .addComponent(btnDoTimeTick)
        );
     panel_actions.setLayout(gl_panel_actions);
-
-
+    
+    
     // Panel calls: calls text window and label
-
+    
     GroupLayout gl_panel_calls = new GroupLayout(panel_calls);
     gl_panel_calls.setAutoCreateGaps(true);
     gl_panel_calls.setAutoCreateContainerGaps(true);
-
+    
     gl_panel_calls.setHorizontalGroup
       (
        gl_panel_calls.createParallelGroup(Alignment.LEADING)
@@ -337,7 +336,7 @@ public class CarreteraSim {
        );
     panel_calls.setLayout(gl_panel_calls);
     
-
+    
     // Set layout on top content pane
     
     frmCarreterasim.getContentPane().setLayout(gl_top);
@@ -353,38 +352,38 @@ public class CarreteraSim {
  */
 
 
-class Sim extends SwingWorker<Void,CallAndGeneration> {
-
+class Sim extends SwingWorker<Void,Object> {
+  
   // Simulation cars
   String[] cars = {"vw", "seat", "volvo", "toyota", "fiat", "ford", "citroen", "porsche"};
-
+  
   // Car velocicities (lower is faster!)
   Map<String,Integer> velocidades;
-
+  
   // Main application state (including GUI)
   CarreteraSim cs;
-
+  
   // Current generation
   int generation;
-
+  
   // Messages from GUI
   BlockingQueue<Integer> tickQueue;
-
+  
   // Random state
   Random rnd;
-
+  
   // Dimensions of carretera
   int distance;
   int carriles;
   
-
+  
   Sim(CarreteraSim cs, int generation, BlockingQueue<Integer> tickQueue, int distance, int carriles) {
     this.cs = cs;
     this.generation = generation;
     this.tickQueue = tickQueue;
     this.distance = distance;
     this.carriles = carriles;
-
+    
     // Set car velocities (vw is punished for "dieselgate"...)
     this.velocidades = new HashMap<>();
     velocidades.put("vw",4); velocidades.put("seat",3); velocidades.put("volvo",1);
@@ -402,50 +401,62 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
   
   // Handles the GUI updates resulting from simulation events
   @Override
-  protected void process(List<CallAndGeneration> messages) {
-    for (CallAndGeneration msg : messages) {
-      if (msg.generation == generation) {
-        Call call = msg.call;
-
-        if (call.raisedException) {
-          String str = "\n*** Error: exception thrown:\n"+call.exception;
-          System.out.println(str);
-          call.exception.printStackTrace();
-          cs.callsTextArea.append(str+"\n");
-          for (StackTraceElement e : call.exception.getStackTrace()) {
-            cs.callsTextArea.append(e+"\n");
-          }
-        } else if (call.failed) {
-          String str = "\n*** Error: "+call.failMessage;
-          cs.callsTextArea.append(str+"\n");
-          System.out.println(str);
-        } else {
-        String str = cs.time+": "+call;
+  protected void process(List<Object> messages) {
+    for (Object preMsg : messages) {
+      if (preMsg instanceof String) {
+        String str = (String) preMsg;
         cs.callsTextArea.append(str+"\n");
         System.out.println(str);
+      } else if (preMsg instanceof CallAndGeneration) {
+        CallAndGeneration msg = (CallAndGeneration) preMsg;
+        if (msg.generation == generation) {
+          Call call = msg.call;
+          
+          if (call.raisedException) {
+            String str = "\n*** Error: exception thrown:\n"+call.exception;
+            System.out.println(str);
+            call.exception.printStackTrace();
+            cs.callsTextArea.append(str+"\n");
+            for (StackTraceElement e : call.exception.getStackTrace()) {
+              cs.callsTextArea.append(e+"\n");
+            }
+          } else if (call.failed) {
+            String str = "\n*** Error: "+call.failMessage;
+            cs.callsTextArea.append(str+"\n");
+            System.out.println(str);
+          } else {
+            String str = cs.time+": "+call;
+            cs.callsTextArea.append(str+"\n");
+            System.out.println(str);
+            
+            if (call.name.equals("enter") && call.returned) {
+              Position pos = call.result;
+              JLabel lbl = cs.carretera[pos.getX()][pos.getY()];
+              lbl.setText(call.car);
+            } else if (call.name.equals("move") && call.returned) {
+              Position pos = call.result;
+              removeCar(cs,call.car);
+              JLabel lbl = cs.carretera[pos.getX()][pos.getY()];
+              lbl.setText(call.car);
+            } else if (call.name.equals("exit") && call.returned) {
+              removeCar(cs,call.car);
+            } else if (call.name.equals("moving") && !call.returned) {
+              Position pos = call.result;
+              for (int i=0; i<cs.carretera.length; i++)
+                for (int j=0; j<cs.carretera[0].length; j++)
+                  if (cs.carretera[i][j].getText().equals(call.car))
+                    cs.carretera[i][j].setText(call.car+"@"+Integer.valueOf(cs.time+call.velocidad));
+            } else if (call.name.equals("tick") && call.returned) {
+              ++cs.time;
+              cs.timeLab.setText(Integer.valueOf(cs.time).toString());
+            }
+          }
+        }
         
-        if (call.name.equals("enter") && call.returned) {
-          Position pos = call.result;
-          JLabel lbl = cs.carretera[pos.getX()][pos.getY()];
-          lbl.setText(call.car);
-        } else if (call.name.equals("move") && call.returned) {
-          Position pos = call.result;
-          removeCar(cs,call.car);
-          JLabel lbl = cs.carretera[pos.getX()][pos.getY()];
-          lbl.setText(call.car);
-        } else if (call.name.equals("exit") && call.returned) {
-            removeCar(cs,call.car);
-        } else if (call.name.equals("moving") && !call.returned) {
-          Position pos = call.result;
-          for (int i=0; i<cs.carretera.length; i++)
-            for (int j=0; j<cs.carretera[0].length; j++)
-              if (cs.carretera[i][j].getText().equals(call.car))
-                cs.carretera[i][j].setText(call.car+"@"+Integer.valueOf(cs.time+call.velocidad));
-        } else if (call.name.equals("tick") && call.returned) {
-          ++cs.time;
-          cs.timeLab.setText(Integer.valueOf(cs.time).toString());
-        }
-        }
+      } else {
+        String str = "\n*** Internal error: unknown message "+preMsg+" received";
+        cs.callsTextArea.append(str+"\n");
+        System.out.println(str);
       }
     }
   }
@@ -467,8 +478,24 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
     }
     
     // Invoke the monitor
-    Carretera cr = new CarreteraMonitor(distance,carriles);
+    Carretera crPre = null;
     
+    try {
+      crPre = new CarreteraMonitor(distance,carriles);
+    } catch (Throwable exc) {
+      String str =
+        "\n*** Error: calling CarreteraMonitor("+distance+","+carriles+") raised the exception "+exc;
+      for (StackTraceElement e : exc.getStackTrace())
+        str += e.toString()+"\n";
+      publish(str);
+      return null;
+    }
+
+    // This strange looking code is to pass a Java check that variables used in
+    // lambda expressions must be final or effectively final. Since crPre is set
+    // in the try it does not pass the test (even if we assign crPre also in the catch part)
+    Carretera cr = crPre;
+
     // Number of cars to simulate
     int numCars = rnd.nextInt(cars.length-1)+1;
     AtomicInteger carsToExit = new AtomicInteger(numCars);
@@ -563,7 +590,7 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
             }
             
             if (!terminated.get()) {
-                terminated.compareAndSet(false,!doCall(() -> cr.tick(), Call.tick()));
+              terminated.compareAndSet(false,!doCall(() -> cr.tick(), Call.tick()));
             }
           } while (!terminated.get() && carsToExit.get() > 0);
         }
@@ -581,7 +608,7 @@ class Sim extends SwingWorker<Void,CallAndGeneration> {
   boolean doCall(Runnable callCode, Call oldCall) {
     sendToGUI(oldCall);
     Call call = new Call(oldCall);
-
+    
     boolean callResult = true;
     
     try {
