@@ -35,17 +35,17 @@ debug() ->
 debug2() ->
   ClassPath = 
     [
-     "java/carretera/classes",
-     "/home/fred/svns/courses/cc/lib/cclib.jar",
+     "java/classes",
+     "/home/fred/Downloads/cclib-0.4.9.jar",
      "/home/fred/svns/courses/aed/trunk/lib/aedlib.jar"
     ],
   {ok,Java} = 
     java:start_node([{call_timeout,infinity},
                      {add_to_java_classpath,ClassPath}]),
   Class =
-    'cc.carretera.QuePasaMonitor',
+    'cc.carretera.CarreteraMonitor',
   Controller = 
-    java:new(Java,Class,[]),
+    java:new(Java,Class,[3,2]),
   shr_debug:debug
     (fun () ->
 	 shr_java_controller:start_link(Controller,[])
@@ -55,7 +55,7 @@ test() ->
   DataSpec = {carretera_shr,[]},
   WaitSpec = shr_always,
   Class =
-    'cc.carretera.QuePasaMonitor',
+    'cc.carretera.CarreteraMonitor',
   Dir = 
     ".",
   Prop =
@@ -83,7 +83,7 @@ start_controller(Class,Dirs) ->
       ClassPath = 
 	Dirs  ++
 	[
-         "/home/fred/svns/courses/cc/lib/cclib.jar",
+         "/home/fred/Downloads/cclib-0.4.9.jar",
 	 "/home/fred/svns/courses/cc/lib/jcsp-1.1-rc4/jcsp.jar",
          "/home/fred/svns/courses/aed/trunk/lib/aedlib.jar"
         ],
@@ -100,7 +100,7 @@ start_controller(Class,Dirs) ->
       Controller = java:new(Java,Class,[]),
       %%io:format("Location of ~p is ~p~n",[Class,print_where(Java,Controller)]),
       case Class of
-	'cc.carretera.QuePasaCSP' -> 
+	'cc.carretera.CarreteraCSP' -> 
 	  PM = 
             report_java_exception
               (java:new(Java,'org.jcsp.lang.ProcessManager',[Controller])),
@@ -184,17 +184,17 @@ stop_java() ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%% carretera:test_users_par_with_class('cc.carretera.QuePasaCSP',["160223","160243","160347","16I034","16M022","16M044","16M072"]).
-%% carretera:test_users_nopar_with_class('cc.carretera.QuePasaMonitor',["150291"]).
+%% carretera:test_users_par_with_class('cc.carretera.CarreteraCSP',["160223","160243","160347","16I034","16M022","16M044","16M072"]).
+%% carretera:test_users_nopar_with_class('cc.carretera.CarreteraMonitor',["150291"]).
 
 test_users_nopar() ->
-  test_users_with_class('cc.carretera.QuePasaMonitor',[no_par]).
+  test_users_with_class('cc.carretera.CarreteraMonitor',[no_par]).
 test_users_nopar_csp() ->
-  test_users_with_class('cc.carretera.QuePasaCSP',[no_par]).
+  test_users_with_class('cc.carretera.CarreteraCSP',[no_par]).
 test_users_par() ->
-  test_users_with_class('cc.carretera.QuePasaMonitor',[no_junit]).
+  test_users_with_class('cc.carretera.CarreteraMonitor',[no_junit]).
 test_users_par_csp() ->
-  test_users_with_class('cc.carretera.QuePasaCSP',[no_junit]).
+  test_users_with_class('cc.carretera.CarreteraCSP',[no_junit]).
 
 test_users_nopar_with_class(Class,Users) ->
   test_users_with_class(Class,[no_par],Users).
@@ -203,7 +203,7 @@ test_users_par_with_class(Class,Users) ->
 
 test_users_with_class(Class,PreOptions) ->
   if
-    Class == 'cc.carretera.QuePasaMonitor' ->
+    Class == 'cc.carretera.CarreteraMonitor' ->
       test_users_mon(PreOptions);
     true ->
       test_users_csp(PreOptions)
@@ -211,21 +211,21 @@ test_users_with_class(Class,PreOptions) ->
 test_users_with_class(Class,PreOptions,Users) ->
   File = 
     if
-      Class=='cc.carretera.QuePasaMonitor' -> "QuePasaMonitor.java";
-      true -> "QuePasaCSP.java"
+      Class=='cc.carretera.CarreteraMonitor' -> "CarreteraMonitor.java";
+      true -> "CarreteraCSP.java"
     end,
   EntregaDir =
     if 
-      Class=='cc.carretera.QuePasaMonitor' -> "/home/fred/cc_2018_mon_jul_reduced";
+      Class=='cc.carretera.CarreteraMonitor' -> "/home/fred/cc_2018_mon_jul_reduced";
       true -> "/home/fred/cc_2018_csp_jul_reduced"
     end,
   test_users(Class,File,EntregaDir,PreOptions,Users).
 
 test_users_mon(PreOptions) ->
-  test_users('cc.carretera.QuePasaMonitor',"QuePasaMonitor.java","/home/fred/cc_2018_mon_jul_reduced",PreOptions).
-%%  test_users('cc.carretera.QuePasaMonitor',"QuePasaMonitor.java","/home/fred/gits/src/cc_2018/buggy_quePasa",PreOptions).
+  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/cc_2018_mon_jul_reduced",PreOptions).
+%%  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/gits/src/cc_2018/buggy_quePasa",PreOptions).
 test_users_csp(PreOptions) ->
-  test_users('cc.carretera.QuePasaCSP',"QuePasaCSP.java","/home/fred/cc_2018_csp_jul_reduced",PreOptions).
+  test_users('cc.carretera.CarreteraCSP',"CarreteraCSP.java","/home/fred/cc_2018_csp_jul_reduced",PreOptions).
 
 test_users(Class,File,EntregaDir,PreOptions) ->
   put(failing_tests,[]),
@@ -393,7 +393,7 @@ unique_filename1(PreFix) ->
   {A,B,C} = os:timestamp(),
   io_lib:format(PreFix++"quepasa_test_suite_~p_~p_~p.suite",[A,B,C]).
 
-%% carretera:create_entrega_dir_from_bugs("/home/fred/svns/courses/cc/2017-2018-s2/practicas/codigo/testing/sequenceTester/examples/quePasa/monitors/","buggy_quePasa","javac -d . -cp /home/fred/svns/courses/aed/trunk/lib/aedlib.jar:/home/fred/svns/courses/cc/lib/cclib.jar:/home/fred/svns/courses/cc/lib/jcsp-1.1-rc4/jcsp.jar *java").
+%% carretera:create_entrega_dir_from_bugs("/home/fred/svns/courses/cc/2017-2018-s2/practicas/codigo/testing/sequenceTester/examples/quePasa/monitors/","buggy_quePasa","javac -d . -cp /home/fred/svns/courses/aed/trunk/lib/aedlib.jar:/home/fred/Downloads/cclib-0.4.9.jar:/home/fred/svns/courses/cc/lib/jcsp-1.1-rc4/jcsp.jar *java").
 %%
 
 create_entrega_dir_from_bugs(FromDir,ToDir,CompileFun) ->
@@ -477,7 +477,7 @@ check_not_error({N,Text}) ->
 %% carretera:tests_to_junit("quepasa_2018_may_mon_1527.suite").
 %% carretera:tests_to_junit("quepasa_2018_may_mon.suite").
 %% carretera:tests_to_junit("quepasa_test_suite_csp_may.suite").
-%% get_groups:get_java_groups('cc.carretera.QuePasaMonitor',"QuePasaMonitor.java","/home/fred/cc_2018_mon_jun").
+%% get_groups:get_java_groups('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/cc_2018_mon_jun").
 %%
 %% carretera:tests_to_junit("TesterJulMon","mon_jul","quepasa_test_suite_1531_242991_709018.suite").
 %% carretera:tests_to_junit("TesterJulCSP","csp_jul","quepasa_test_suite_1531_287626_712097.suite").
