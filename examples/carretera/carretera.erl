@@ -1,4 +1,4 @@
--module(carretera_control).
+-module(carretera).
 
 -include("tester.hrl").
 -include_lib("eqc/include/eqc.hrl").

@@ -18,6 +18,7 @@ public class CarreteraMonitor implements Carretera {
   // State
   private int time = 0;
   private String[][] cars;
+  private int[][] moveTimeRemaining;
   
   public CarreteraMonitor(int distance, int carriles) {
     this.distance = distance;
@@ -27,27 +28,30 @@ public class CarreteraMonitor implements Carretera {
     for (int x=0; x<distance; x++)
       waitingToMove[x] = mutex.newCond();
     cars = new String[distance][carriles];
+    moveTimeRemaining = new int[distance][carriles];
     moving = new SortedListPriorityQueue<Integer,String>();
     movingConds = new HashTableMap<String,Monitor.Cond>();
   }
   
-  public Position enter(String car) {
+  public Position enter(String car, int velocidad) {
     mutex.enter();
     Integer freeCarril = freeCarril(0);
     if (freeCarril == null) waitingToMove[0].await();
     freeCarril = freeCarril(0);
     cars[0][freeCarril] = car;
+    moveTimeRemaining[0][freeCarril] = velocidad+time;
     mutex.leave();
     return new Position(0,freeCarril);
   }
   
-  public Position move(String car) {
+  public Position move(String car, int velocidad) {
     mutex.enter();
     Position pos = position(car);
     Integer freeCarril = freeCarril(pos.getX()+1);
     if (freeCarril == null) waitingToMove[pos.getX()+1].await();
     freeCarril = freeCarril(pos.getX()+1);
     cars[pos.getX()+1][freeCarril] = car;
+    moveTimeRemaining[pos.getX()+1][freeCarril] = velocidad+time;
     freeCell(pos);
     mutex.leave();
     return new Position(pos.getX()+1,freeCarril);
@@ -67,12 +71,15 @@ public class CarreteraMonitor implements Carretera {
       waitCond.signal();
   }
   
-  public void moving(String car, int velocidad) {
+  public void moving(String car) {
     mutex.enter();
     Position pos = position(car);
-    moving.enqueue(velocidad+time,car);
-    Monitor.Cond movingCond = getMovingCond(car);
-    movingCond.await();
+    int arrivalTime = moveTimeRemaining[pos.getX()][pos.getY()];
+    if (arrivalTime > time) {
+      moving.enqueue(arrivalTime,car);
+      Monitor.Cond movingCond = getMovingCond(car);
+      movingCond.await();
+    }
     signalMoving();
     mutex.leave();
   }

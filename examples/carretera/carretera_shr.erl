@@ -1,4 +1,4 @@
--module(carretera_control_shr).
+-module(carretera_shr).
 
 -define(XLIMIT,3).
 
@@ -7,7 +7,7 @@
 -export([initial_state/2,pre/2,cpre/2,post/3,return/3,return_value/2]).
 -export([print_state/1]).
 
--record(state,{segments=[]}).
+-record(state,{segments=[],distance,carriles}).
 -record(segment,{location,coche=undefined,tiempoQueda=undefined}).
 
 %%-define(debug,true).
@@ -19,48 +19,57 @@
 -endif.
 
 
-initial_state(_,_) ->
+initial_state(_,Options) ->
+  Distance = proplists:get_value(distance,Options),
+  Carriles = proplists:get_value(carriles,Options),
   #state
     {
+     distance=Distance,
+     carriles=Carriles,
      segments=
        lists:flatmap
          (fun (X) -> 
-              [#segment{location={X,0}},#segment{location={X,1}}]
+              lists:map
+                (fun (Y) -> 
+                     #segment{location={X,Y}}
+                 end, lists:seq(0,Carriles))
           end,
-          lists:seq(0,?NUM_SEGMENTS-1))
+          lists:seq(0,Distance))
     }.
 
 pre(_Call,_State) ->
   ?LOG("pre(~p,~p)~n",[_Call,_State]),
   true.
 
-cpre({enter,[_CocheId,_Velocidad]},State) ->
+cpre({enter,[_CocheId]},State) ->
   isfree_segment({0,0},State) orelse isfree_segment({0,1},State);
-post({exit,[CocheId,_Velocidad]},_Return,State) ->
-  Location = location(CocheId,State),
-  (timeRemaining(Location,State) =< 0);
-cpre({move,[CocheId,_Velocidad]},State) ->
+cpre({move,[CocheId]},State) ->
   {X,_Y} = Location = location(CocheId,State),
   ?LOG
     ("move(~p,~p); location=~p seg=~p~n",
-     [CocheId,_Velocidad,Location,se<gment(Location,State)]),
+     [CocheId,_Velocidad,Location,segment(Location,State)]),
   (timeRemaining(Location,State) =< 0)
     andalso (isfree_segment({X+1,0},State) orelse isfree_segment({X+1,1},State));
+cpre({moving,[CocheId,_Velocidad]},State) ->
+  arrived(CocheId,State);
 cpre(_,_State) ->
   true.
 
-post({enter,[CocheId,Velocidad]},Return={_X,_Y},State) ->
+post({enter,[CocheId]},Return={_X,_Y},State) ->
   move_to_segment(Return,CocheId,Velocidad,State);
-post({move,[CocheId,Velocidad]},Return={_X,_Y},State) ->
+post({exit,[CocheId]},_Return,State) ->
+  Location = location(CocheId,State),
+  (timeRemaining(Location,State) =< 0);
+post({move,[CocheId]},Return={_X,_Y},State) ->
   Location = location(CocheId,State),
   move_to_segment(Return,CocheId,Velocidad,
                   free_segment(Location,State));
 post({tick,_},_Return,State) ->
   tick(State).
 
-return(State,{enter,[CocheId,_Velocidad]},Result) ->
+return(State,{enter,[CocheIdd,_Velocidad]},Result) ->
   check_return(State,CocheId,Result);
-return(State,{move,[CocheId,_Velocidad]},Result) ->
+return(State,{move,[CocheId]},Result) ->
   check_return(State,CocheId,Result);
 return(_State,_,Result) ->
   Result==void.
@@ -146,6 +155,10 @@ free_segment(Location,State) ->
       State#state
         {segments=lists:keyreplace(Location,#segment.location,State#state.segments,NewSegment)}
   end.
+
+arrived(CocheId,State) ->
+  Segment = segment(location(CocheId,State),State),
+  Segment#segment.tiempoQueda==0.
 
 tick(State) ->
   State#state

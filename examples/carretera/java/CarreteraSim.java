@@ -409,15 +409,21 @@ class Sim extends SwingWorker<Void,Object> {
   @Override
   protected void process(List<Object> messages) {
     for (Object preMsg : messages) {
+
+      // A message sent?
       if (preMsg instanceof String) {
         String str = (String) preMsg;
         cs.callsTextArea.append(str+"\n");
         System.out.println(str);
-      } else if (preMsg instanceof CallAndGeneration) {
+      }
+
+      // Else we must have been sent a call and a generation
+      else if (preMsg instanceof CallAndGeneration) {
         CallAndGeneration msg = (CallAndGeneration) preMsg;
         if (msg.generation == generation) {
           Call call = msg.call;
           
+          // Call raised an exception?
           if (call.raisedException) {
             String str = "\n*** Error: exception thrown:\n"+call.exception;
             System.out.println(str);
@@ -426,11 +432,17 @@ class Sim extends SwingWorker<Void,Object> {
             for (StackTraceElement e : call.exception.getStackTrace()) {
               cs.callsTextArea.append(e+"\n");
             }
-          } else if (call.failed) {
+          }
+
+          // Call failed?
+          else if (call.failed) {
             String str = "\n*** Error: "+call.failMessage;
             cs.callsTextArea.append(str+"\n");
             System.out.println(str);
-          } else {
+          }
+
+          // Call returned normally
+          else {
             String str = cs.time+": "+call;
             cs.callsTextArea.append(str+"\n");
             System.out.println(str);
@@ -438,20 +450,14 @@ class Sim extends SwingWorker<Void,Object> {
             if (call.name.equals("enter") && call.returned) {
               Position pos = call.result;
               JLabel lbl = cs.carretera[pos.getX()][pos.getY()];
-              lbl.setText(call.car);
+              lbl.setText(call.car+"@"+Integer.valueOf(cs.time+call.velocidad));
             } else if (call.name.equals("move") && call.returned) {
               Position pos = call.result;
               removeCar(cs,call.car);
               JLabel lbl = cs.carretera[pos.getX()][pos.getY()];
-              lbl.setText(call.car);
+              lbl.setText(call.car+"@"+Integer.valueOf(cs.time+call.velocidad));
             } else if (call.name.equals("exit") && call.returned) {
               removeCar(cs,call.car);
-            } else if (call.name.equals("moving") && !call.returned) {
-              Position pos = call.result;
-              for (int i=0; i<cs.carretera.length; i++)
-                for (int j=0; j<cs.carretera[0].length; j++)
-                  if (cs.carretera[i][j].getText().equals(call.car))
-                    cs.carretera[i][j].setText(call.car+"@"+Integer.valueOf(cs.time+call.velocidad));
             } else if (call.name.equals("tick") && call.returned) {
               ++cs.time;
               cs.timeLab.setText(Integer.valueOf(cs.time).toString());
@@ -528,24 +534,24 @@ class Sim extends SwingWorker<Void,Object> {
             // Do the car process
             if (!terminated.get()) {
               terminated.compareAndSet
-                (false,!doResultCall(() -> cr.enter(car), Call.enter(car), currX, carriles));
+                (false,!doResultCall(() -> cr.enter(car,velocidad), Call.enter(car,velocidad), currX, carriles));
             }
             
             if (!terminated.get()) {
               terminated.compareAndSet
-                (false,!doCall(() -> cr.moving(car,velocidad), Call.moving(car,velocidad)));
+                (false,!doCall(() -> cr.moving(car), Call.moving(car)));
             }
             
             while (!terminated.get() && currX < distance - 1) {
               
               if (!terminated.get()) {
                 terminated.compareAndSet
-                  (false,!doResultCall(() -> cr.move(car), Call.move(car), ++currX, carriles));
+                  (false,!doResultCall(() -> cr.move(car,velocidad), Call.move(car,velocidad), ++currX, carriles));
               }
               
               if (!terminated.get()) {
                 terminated.compareAndSet
-                  (false,!doCall(() -> cr.moving(car,velocidad), Call.moving(car,velocidad)));
+                  (false,!doCall(() -> cr.moving(car), Call.moving(car)));
               }
             }
             
@@ -605,13 +611,13 @@ class Sim extends SwingWorker<Void,Object> {
   }
   
   // Send a message from the simulation to the GUI
-  Call sendToGUI(Call call) {
+  Call sendCallToGUI(Call call) {
     publish(new CallAndGeneration(call,generation));
     return call;
   }
   
   boolean doCall(Runnable callCode, Call oldCall) {
-    sendToGUI(oldCall);
+    sendCallToGUI(oldCall);
     Call call = new Call(oldCall);
     
     boolean callResult = true;
@@ -628,12 +634,12 @@ class Sim extends SwingWorker<Void,Object> {
       call.returned();
     }
     
-    sendToGUI(call);
+    sendCallToGUI(call);
     return callResult;
   }
   
   boolean doResultCall(Supplier<Position> callCode, Call oldCall, int expectedX, int carriles) {
-    sendToGUI(oldCall);
+    sendCallToGUI(oldCall);
     Call call = new Call(oldCall);
     boolean callResult = true;
     Position position = null;
@@ -651,7 +657,7 @@ class Sim extends SwingWorker<Void,Object> {
       callResult = checkCall(call, expectedX, carriles);
     }
     
-    sendToGUI(call);
+    sendCallToGUI(call);
     return callResult;
   }
   
@@ -718,20 +724,20 @@ class Call {
     this.exception = call.exception;
   }
   
-  static Call enter(String car) {
-    Call call = new Call("enter"); call.car = car; return call;
+  static Call enter(String car, int velocidad) {
+    Call call = new Call("enter"); call.car = car; call.velocidad = velocidad; return call;
   }
   
-  static Call move(String car) {
-    Call call = new Call("move"); call.car = car; return call;
+  static Call move(String car, int velocidad) {
+    Call call = new Call("move"); call.car = car; call.velocidad = velocidad; return call;
   }
   
   static Call exit(String car) {
     Call call = new Call("exit"); call.car = car; return call;
   }
   
-  static Call moving(String car, int velocidad) {
-    Call call = new Call("moving"); call.car = car; call.velocidad = velocidad; return call;
+  static Call moving(String car) {
+    Call call = new Call("moving"); call.car = car; return call;
   }
   
   static Call tick() {
