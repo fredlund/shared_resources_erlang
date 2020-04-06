@@ -103,7 +103,7 @@ public class CarreteraSim {
   private void initialize() {
     rnd = new Random();
     distance = 2+rnd.nextInt(4);
-    carriles = 1+rnd.nextInt(3);
+    carriles = 2+rnd.nextInt(2);
     
     frmCarreterasim = new JFrame();
     frmCarreterasim.setTitle("CarreteraSim");
