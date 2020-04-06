@@ -19,9 +19,10 @@
 -endif.
 
 
-initial_state(_,Options) ->
-  Distance = proplists:get_value(distance,Options),
-  Carriles = proplists:get_value(carriles,Options),
+initial_state(DataOptions,_GeneralOptions) ->
+  Distance = proplists:get_value(distance,DataOptions),
+  Carriles = proplists:get_value(carriles,DataOptions),
+  io:format("~p: Distance=~p Carriles=~p~n",[?MODULE,Distance,Carriles]),
   #state
     {
      distance=Distance,
@@ -47,7 +48,7 @@ cpre({move,[CocheId,_Velocidad]},State) ->
   {X,_Y} = _Location = location(CocheId,State),
   ?LOG
     ("move(~p,~p); location=~p seg=~p~n",
-     [CocheId,_Velocidad,_Location,segment(Location,State)]),
+     [CocheId,_Velocidad,_Location,segment(_Location,State)]),
   isfree_segment({X+1,0},State) orelse isfree_segment({X+1,1},State);
 cpre({moving,[CocheId]},State) ->
   arrived(CocheId,State);
@@ -65,7 +66,7 @@ post({move,[CocheId,Velocidad]},Return={_X,_Y},State) ->
                   free_segment(Location,State));
 post({tick,_},_Return,State) ->
   tick(State);
-post(_,_,State) ->
+post({moving,_},_,State) ->
   State.
 
 return(State,{enter,[CocheId,_Velocidad]},Result) ->
@@ -89,7 +90,8 @@ return_value(Call,State) ->
       select_next_location({-1,0},State);
     {move,[CocheId,_]} ->
       select_next_location(location(CocheId,State),State);
-    _ ->
+    Call ->
+      ?LOG("call ~p should not return anything~n",[Call]),
       void
   end.
 
@@ -120,16 +122,21 @@ segment(Location,State) ->
   end.
 
 location(CocheId,State) ->
-  location1(CocheId,State#state.segments).
-location1(CocheId,[Segment|Rest]) ->
+  location1(CocheId,State#state.segments,State#state.segments).
+location1(CocheId,[Segment|Rest],Segments) ->
   ?LOG("location1(~p,~p)~n",[CocheId,Segment]),
   if
     Segment#segment.coche == CocheId ->
       Segment#segment.location;
     true -> 
-      location1(CocheId,Rest)
-  end.
-    
+      location1(CocheId,Rest,Segments)
+  end;
+location1(CocheId,[],Segments) ->
+  io:format
+    ("~n*** Error: could not find car ~p in segments~n  ~p~n",
+     [CocheId,Segments]),
+  error(bad).
+
 move_to_segment(Location,CocheId,Velocidad,State) ->
   ?LOG
     ("move_to_segment(~p,~p,~p)~nin ~p~n",

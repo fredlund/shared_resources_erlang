@@ -7,6 +7,7 @@
 %% private exports
 -export([job_new_waiting/3, executable_jobs/4, job_next_states/5]).
 -export([is_deterministic/1]).
+-export([resource_call/1]).
 
 %%-define(debug,true).
 -include("debug.hrl").

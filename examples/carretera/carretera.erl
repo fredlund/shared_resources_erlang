@@ -5,22 +5,31 @@
 
 -compile(export_all).
 
+cars() ->
+  [
+   {car_gnr_fsm,[volvo,1]},
+   {car_gnr_fsm,[saab,1]},
+   {car_gnr_fsm,[vw,8]},
+   {car_gnr_fsm,[toyota,1]},
+   {car_gnr_fsm,[citroen,2]},
+   {car_gnr_fsm,[fiat,3]}
+  ].
+
 sample() ->
   CommonOpts = 
     [
-     {data_spec,{carretera_shr,[]}}
+     {data_spec,{carretera_shr,[{distance,3},{carriles,2}]}}
     ,{waiting_spec,{shr_always,[]}}
     ,{test_gen_spec,
-      {shr_gnr_fsms,
-       [{3,{escritor_gnr_fsm,void}},
-        {3,{lector_gnr_fsm,void}}]}}
+      {shr_gnr_fsms,cars() ++ [{tick_gnr_fsm,[]}]}}
     ],
   shr_sample_resource:generate(CommonOpts).
 
 debug() ->
   shr_debug:debug
     (fun () ->
-	 shr_gen_resource:start({carretera_shr,[]},shr_always,[{distance,3},{carriles,2}])
+	 shr_gen_resource:start
+           ({carretera_shr,[{distance,3},{carriles,2}]},shr_always,[])
      end).
 
 debug2() ->

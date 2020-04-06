@@ -54,6 +54,7 @@ do_run(N,State) when is_integer(N), N>0 ->
         shr_corr_resource:job_new_waiting
           (Job,State#state.state,State#state.waiting_module),
       ResultState = repeat_until_stable(State1#state{state=OneState}),
+      ?LOG("Execute ~p: result state:~n  ~p~n",[PreCall,ResultState]),
       FinishedJobs = 
         job_minus
           (OneState#onestate.waiting,
@@ -79,11 +80,22 @@ repeat_until_stable(State) ->
       State;
     Jobs ->
       {Job,_RestJobs} = pick(Jobs),
-      Result = DataModule:return_value(Job#job.call,IndState#onestate.sdata),
+      ?LOG
+         ("will execute ~p~n",
+          [Job]),
+      Result = 
+        DataModule:return_value
+          (shr_corr_resource:resource_call(Job#job.call),
+           IndState#onestate.sdata),
+      ?LOG
+         ("result of ~p in~n  ~p~nis ~p~n",
+          [Job#job.call,IndState#onestate.sdata,Result]),
       NextIndStates = 
-	shr_corr_resource:job_next_states(Job,Result,IndState,DataModule,WaitingModule),
+	shr_corr_resource:job_next_states
+          (Job,Result,IndState,DataModule,WaitingModule),
       N = random:uniform(length(NextIndStates)),
       NextIndState = lists:nth(N,NextIndStates),
+      ?LOG("execute ~p, next state:~n  ~p~n",[Job,NextIndState]),
       repeat_until_stable(State#state{state=NextIndState})
   end.
 
