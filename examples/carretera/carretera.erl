@@ -7,12 +7,12 @@
 
 cars() ->
   [
-   {car_gnr_fsm,[volvo,1]},
-   {car_gnr_fsm,[saab,1]},
-   {car_gnr_fsm,[vw,8]},
-   {car_gnr_fsm,[toyota,1]},
-   {car_gnr_fsm,[citroen,2]},
-   {car_gnr_fsm,[fiat,3]}
+   {car_gnr_fsm,[volvo,1,{weight,2000}]},
+   {car_gnr_fsm,[saab,1,{weight,2000}]},
+   {car_gnr_fsm,[vw,8,{weight,2000}]},
+   {car_gnr_fsm,[toyota,1,{weight,2000}]},
+   {car_gnr_fsm,[citroen,2,{weight,2000}]},
+   {car_gnr_fsm,[fiat,3,{weight,2000}]}
   ].
 
 sample() ->
