@@ -107,7 +107,7 @@ public class CarreteraSim {
     
     frmCarreterasim = new JFrame();
     frmCarreterasim.setTitle("CarreteraSim");
-    frmCarreterasim.setBounds(100, 100, Math.max(400,200+100*distance), Math.max(500,300+carriles*100));
+    frmCarreterasim.setBounds(100, 100, Math.max(500,200+100*distance), Math.max(500,300+carriles*100));
     frmCarreterasim.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
     
     JLabel lblTime = new JLabel("Time:"); 
