@@ -7,12 +7,12 @@
 
 cars() ->
   [
-   {car_gnr_fsm,[volvo,1,{weight,2000}]},
-   {car_gnr_fsm,[saab,1,{weight,2000}]},
-   {car_gnr_fsm,[vw,8,{weight,2000}]},
-   {car_gnr_fsm,[toyota,1,{weight,2000}]},
-   {car_gnr_fsm,[citroen,2,{weight,2000}]},
-   {car_gnr_fsm,[fiat,3,{weight,2000}]}
+   {car_gnr_fsm,["volvo",1,{weight,2000}]},
+   {car_gnr_fsm,["saab",1,{weight,2000}]},
+   {car_gnr_fsm,["vw",8,{weight,2000}]},
+   {car_gnr_fsm,["toyota",1,{weight,2000}]},
+   {car_gnr_fsm,["citroen",2,{weight,2000}]},
+   {car_gnr_fsm,["fiat",3,{weight,2000}]}
   ].
 
 sample() ->
@@ -61,10 +61,8 @@ test() ->
   Prop =
     shr_test_resource_implementation:prop_tri
       (
-      {shr_gnr_fsms,
-       [{3,{escritor_gnr_fsm,void}},
-        {3,{lector_gnr_fsm,void}}]},
-      start_controller(Class,""),
+      {shr_gnr_fsms,cars() ++ [{tick_gnr_fsm,[]}]},
+      start_controller(Class,"",[]),
       stop_java(),
       DataSpec,
       WaitSpec,
@@ -78,7 +76,9 @@ test() ->
      ),
   shr_test_jobs:check_prop(fun (_Opts) -> Prop end,[]).
 
-start_controller(Class,Dirs) ->  
+start_controller(Class,Dirs,Options) ->  
+  Distance = proplists:get_value(distance,Options),
+  Carriles = proplists:get_value(carriles,Options),
   fun (_Options) ->
       ClassPath = 
 	Dirs  ++
@@ -97,7 +97,7 @@ start_controller(Class,Dirs) ->
 			      {add_to_java_classpath,ClassPath}]),
       timer:sleep(1000),
       shr_utils:put(java,Java),
-      Controller = java:new(Java,Class,[]),
+      Controller = java:new(Java,Class,[Distance,Carriles]),
       %%io:format("Location of ~p is ~p~n",[Class,print_where(Java,Controller)]),
       case Class of
 	'cc.carretera.CarreteraCSP' -> 
@@ -162,16 +162,12 @@ convert_result(Result) ->
   PreConvertedResult = shr_java_controller:std_converter(Result),
   case java:is_object_ref(PreConvertedResult) of
     true ->
-      case java:instanceof(PreConvertedResult,'cc.carretera.Mensaje') of
+      case java:instanceof(PreConvertedResult,'cc.carretera.Position') of
         true ->
-          ConvertedResult =
-            carretera_shr:mensaje
-            (
-              java:call(PreConvertedResult,getRemitente,[]),
-              java:string_to_list(java:call(PreConvertedResult,getGrupo,[])),
-              java:string_to_list(java:call(PreConvertedResult,getContenidos,[]))
-            ),
-          ConvertedResult;
+          {
+          java:call(PreConvertedResult,getX,[]),
+          java:call(PreConvertedResult,getY,[])
+         };
         false -> PreConvertedResult
       end;
     false -> PreConvertedResult
@@ -188,7 +184,7 @@ stop_java() ->
 %% carretera:test_users_nopar_with_class('cc.carretera.CarreteraMonitor',["150291"]).
 
 test_users_nopar() ->
-  test_users_with_class('cc.carretera.CarreteraMonitor',[no_par]).
+  test_users_with_class('cc.carretera.CarreteraMonitor',[{distance,4},{carriles,2},no_par]).
 test_users_nopar_csp() ->
   test_users_with_class('cc.carretera.CarreteraCSP',[no_par]).
 test_users_par() ->
@@ -216,16 +212,16 @@ test_users_with_class(Class,PreOptions,Users) ->
     end,
   EntregaDir =
     if 
-      Class=='cc.carretera.CarreteraMonitor' -> "/home/fred/cc_2018_mon_jul_reduced";
-      true -> "/home/fred/cc_2018_csp_jul_reduced"
+      Class=='cc.carretera.CarreteraMonitor' -> "/home/fred/cc_2020_mon_exp";
+      true -> "/home/fred/cc_2020_csp_mon_exp"
     end,
   test_users(Class,File,EntregaDir,PreOptions,Users).
 
 test_users_mon(PreOptions) ->
-  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/cc_2018_mon_jul_reduced",PreOptions).
-%%  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/gits/src/cc_2018/buggy_quePasa",PreOptions).
+  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/cc_2020_mon_exp",PreOptions).
+%%  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/gits/src/cc_2020/buggy_carretera",PreOptions).
 test_users_csp(PreOptions) ->
-  test_users('cc.carretera.CarreteraCSP',"CarreteraCSP.java","/home/fred/cc_2018_csp_jul_reduced",PreOptions).
+  test_users('cc.carretera.CarreteraCSP',"CarreteraCSP.java","/home/fred/cc_2020_csp_jul_reduced",PreOptions).
 
 test_users(Class,File,EntregaDir,PreOptions) ->
   put(failing_tests,[]),
@@ -275,15 +271,13 @@ mtest(Class,User,Group,Dir,Time,PreOptions) ->
   io:format
     ("~n~n~nTesting ~p in group ~p with implementation in ~p submitted at ~p~n~n",
      [User,Group,Dir,Time]),
-  DataSpec = {carretera_shr,[]},
+  DataSpec = {carretera_shr,[{distance,3},{carriles,2}]},
   WaitSpec = shr_always,
   PreProp =
     shr_test_resource_implementation:prop_tri
       (
-      {shr_gnr_fsms,
-       [{3,{escritor_gnr_fsm,[]}},
-        {3,{lector_gnr_fsm,[]}}]},
-      start_controller(Class,[Dir,"/home/fred/gits/src/cc_2018/quePasaClasses"]),
+      {shr_gnr_fsms,cars() ++ [{tick_gnr_fsm,[]}]},
+      start_controller(Class,[Dir,"/home/fred/gits/src/cc_2020/carreteraClasses"],PreOptions),
       stop_java(),
       DataSpec,
       WaitSpec,
@@ -393,7 +387,7 @@ unique_filename1(PreFix) ->
   {A,B,C} = os:timestamp(),
   io_lib:format(PreFix++"quepasa_test_suite_~p_~p_~p.suite",[A,B,C]).
 
-%% carretera:create_entrega_dir_from_bugs("/home/fred/svns/courses/cc/2017-2018-s2/practicas/codigo/testing/sequenceTester/examples/quePasa/monitors/","buggy_quePasa","javac -d . -cp /home/fred/svns/courses/aed/trunk/lib/aedlib.jar:/home/fred/Downloads/cclib-0.4.9.jar:/home/fred/svns/courses/cc/lib/jcsp-1.1-rc4/jcsp.jar *java").
+%% carretera:create_entrega_dir_from_bugs("/home/fred/svns/courses/cc/2017-2018-s2/practicas/codigo/testing/sequenceTester/examples/carretera/monitors/","buggy_carretera","javac -d . -cp /home/fred/svns/courses/aed/trunk/lib/aedlib.jar:/home/fred/Downloads/cclib-0.4.9.jar:/home/fred/svns/courses/cc/lib/jcsp-1.1-rc4/jcsp.jar *java").
 %%
 
 create_entrega_dir_from_bugs(FromDir,ToDir,CompileFun) ->
@@ -477,7 +471,7 @@ check_not_error({N,Text}) ->
 %% carretera:tests_to_junit("quepasa_2018_may_mon_1527.suite").
 %% carretera:tests_to_junit("quepasa_2018_may_mon.suite").
 %% carretera:tests_to_junit("quepasa_test_suite_csp_may.suite").
-%% get_groups:get_java_groups('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/cc_2018_mon_jun").
+%% get_groups:get_java_groups('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/cc_2020_mon_jun").
 %%
 %% carretera:tests_to_junit("TesterJulMon","mon_jul","quepasa_test_suite_1531_242991_709018.suite").
 %% carretera:tests_to_junit("TesterJulCSP","csp_jul","quepasa_test_suite_1531_287626_712097.suite").
