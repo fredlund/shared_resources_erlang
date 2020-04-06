@@ -270,7 +270,7 @@ gen_mach_cmd(State,CorrState) ->
       {void,State};
     _ ->
       ?LET(Machine,
-	   one_machine(NonBlocked),
+	   one_machine(NonBlocked,State#fstate.global_state,CorrState),
 	   begin
 	     MachId = Machine#machine.id,
 	     MachineState = Machine#machine.state,
@@ -295,11 +295,26 @@ gen_mach_cmd(State,CorrState) ->
 	   end)
   end.
 
-one_machine(Machines) ->
+one_machine(Machines,GlobalState,CorrState) ->
   eqc_gen:frequency
     (lists:map
-       (fun (Machine) -> {Machine#machine.weight,Machine} end, 
-	Machines)).
+       (fun (Machine) -> 
+            {Machine#machine.weight,Machine} 
+        end, 
+	lists:filter
+          (fun (Machine) ->
+               Module = Machine#machine.module,
+               MachineId = Machine#machine.id,
+               MachineState = Machine#machine.state,
+               case lists:member({precondition,4},Module:module_info(exports)) of
+                 true ->
+                   Module:precondition
+                     (MachineId,MachineState,GlobalState,CorrState);
+                 false ->
+                   true
+               end
+           end, 
+           Machines))).
 		    
 limit_states(State,CorrState) ->
   case proplists:get_value(limit_card_state,State#fstate.options) of
@@ -336,7 +351,7 @@ next_state(State,Result,_Commands,CorrState) ->
 	     Module:next_state
 	       (MachineId,
 		MachineState,
-		State#fstate.global_state,
+		S#fstate.global_state,
                 CorrState,
 		Job#job.call),
 	   S#fstate
