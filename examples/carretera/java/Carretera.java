@@ -1,25 +1,46 @@
 package cc.carretera;
 
 public interface Carretera {
+  /**
+   * Un coche pide permiso para entrar en el primer segmento de la
+   * carretera con una determinada velocidad
+   *
+   * @param id identificador del coche
+   * @param tks número de ticks necearios para atravesar un segmento (velocidad)
+   *
+   * @return posición (segmento/carril) que ocupa el coche, ver clase Pos
+   */
+  Pos entrar(String id, int tks);
 
-  // A car asks for permission to enter the carretera 
-  // with the given velocity (less is higher).
-  // Returns a new position to which the car may move.
-  public Position enter(String car, int velocidad);
+  /**
+   * Un coche pide permiso para entrar en el siguiente segmento con
+   * una determinada velocidad.
+   *
+   * @param id identificador del coche
+   * @param tks número de ticks necearios para atravesar un segmento (velocidad)
+   *
+   * @return posición (segmento/carril) que ocupa el coche, ver clase Pos
+   */
+  Pos avanzar(String id, int tks);
 
-  // A car asks for passing to a new segment of the carretera
-  // with the given velocity.
-  // Returns a new position to which the car may move.
-  public Position move(String car, int velocidad);
+  /**
+   * Un coche "circula" a lo largo del segmento en el que está. La
+   * operación termina cuando el coche ha llegado al final del segmento.
+   *
+   * @param id identificador del coche
+   */
+  void circulando(String id);
 
-  // A car announces that it begins the move to the new permitted position.
-  // Returns when the system (a sensor, not modelled) indicates that the
-  // car has arrived.
-  public void moving(String car);
+  /**
+   * Un coche abandona el último segmento.
+   *
+   * @param id identificador del coche
+   */
+  void salir(String id);
 
-  // A car announces that it leaves the carretera.
-  public void exit(String car);
-
-  // Time avances.
-  public void tick();
+  /**
+   * Hace avanzar el tiempo de forma que a cada coche en la carretera
+   * le queda un tick menos para llegar al final de su segmento.
+   */
+  void tick();
 }

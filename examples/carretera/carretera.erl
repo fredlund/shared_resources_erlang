@@ -162,11 +162,11 @@ convert_result(Result) ->
   PreConvertedResult = shr_java_controller:std_converter(Result),
   case java:is_object_ref(PreConvertedResult) of
     true ->
-      case java:instanceof(PreConvertedResult,'cc.carretera.Position') of
+      case java:instanceof(PreConvertedResult,'cc.carretera.Pos') of
         true ->
           {
-          java:call(PreConvertedResult,getX,[]),
-          java:call(PreConvertedResult,getY,[])
+          java:call(PreConvertedResult,getSegmento,[]),
+          java:call(PreConvertedResult,getCarril,[])
          };
         false -> PreConvertedResult
       end;

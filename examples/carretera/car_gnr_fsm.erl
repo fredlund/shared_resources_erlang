@@ -23,23 +23,23 @@ precondition(_,_,GlobalState,_CorrState,_) ->
 
 command(_Id,#state{distance=Distance,doing=Doing,pos=Pos,car=Car,velocidad=Velocidad}=State,_GlobalState,_CorrState) ->
   case State#state.doing of
-    outside -> {controller,enter,[Car,Velocidad]};
-    moving -> {controller,moving,[Car]};
-    move when Pos<Distance-1 -> {controller,move,[Car,Velocidad]};
-    move -> {controller,exit,[Car]};
+    outside -> {controller,entrar,[Car,Velocidad]};
+    circulando -> {controller,circulando,[Car]};
+    avanzar when Pos<Distance-1 -> {controller,avanzar,[Car,Velocidad]};
+    avanzar -> {controller,salir,[Car]};
     exited -> stopped
   end.
 
 next_state(MachineId,#state{pos=Pos}=State,GlobalState,_,Call) ->
   NewLocalState =
     case Call of
-      {_,enter,_} ->
-        State#state{doing=moving,pos=0};
-      {_,moving,_} ->
-        State#state{doing=move};
-      {_,move,_} ->
-        State#state{doing=moving,pos=Pos+1};
-      {_,exit,_} ->
+      {_,entrar,_} ->
+        State#state{doing=circulando,pos=0};
+      {_,circulando,_} ->
+        State#state{doing=avanzar};
+      {_,avanzar,_} ->
+        State#state{doing=circulando,pos=Pos+1};
+      {_,salir,_} ->
         State#state{doing=exited,pos=Pos+1}
     end,
   {NewLocalState,GlobalState}.

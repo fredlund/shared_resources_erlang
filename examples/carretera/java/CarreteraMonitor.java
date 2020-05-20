@@ -5,128 +5,187 @@ import es.upm.aedlib.priorityqueue.PriorityQueue;
 import es.upm.aedlib.priorityqueue.SortedListPriorityQueue;
 import es.upm.aedlib.map.Map;
 import es.upm.aedlib.map.HashTableMap;
+import es.upm.aedlib.Pair;
+import es.upm.aedlib.set.Set;
+import es.upm.aedlib.set.HashTableMapSet;
+import es.upm.aedlib.indexedlist.IndexedList;
+import es.upm.aedlib.indexedlist.ArrayIndexedList;
+import java.util.Random;
+
 
 public class CarreteraMonitor implements Carretera {
-  final private int distance;
-  final private int carriles;
-  
+
+  // Resource State
+  private final Map<String,Pair<Pos,Integer>> carretera;
+
+  // Monitors and conditions
   final private Monitor mutex;
   final private Monitor.Cond[] waitingToMove;
   final private PriorityQueue<Integer,String> moving;
   final private Map<String,Monitor.Cond> movingConds;
+
+  // Object state
+  final private int segmentos;
+  final private int carriles;
+  final Random rnd;
   
-  // State
-  private int time = 0;
-  private String[][] cars;
-  private int[][] moveTimeRemaining;
-  
-  public CarreteraMonitor(int distance, int carriles) {
-    this.distance = distance;
+  public CarreteraMonitor(int segmentos, int carriles) {
+    this.segmentos = segmentos;
     this.carriles = carriles;
+    this.rnd = new Random();
+
     mutex = new Monitor();
-    waitingToMove = new Monitor.Cond[distance];
-    for (int x=0; x<distance; x++)
-      waitingToMove[x] = mutex.newCond();
-    cars = new String[distance][carriles];
-    moveTimeRemaining = new int[distance][carriles];
+    waitingToMove = new Monitor.Cond[segmentos];
+    for (int segmento=0; segmento<segmentos; segmento++)
+      waitingToMove[segmento] = mutex.newCond();
     moving = new SortedListPriorityQueue<Integer,String>();
     movingConds = new HashTableMap<String,Monitor.Cond>();
+
+    carretera = new HashTableMap<String,Pair<Pos,Integer>>();
   }
-  
-  public Position enter(String car, int velocidad) {
+
+  public Pos entrar(String car, int tks) {
     mutex.enter();
-    Integer freeCarril = freeCarril(0);
-    if (freeCarril == null) waitingToMove[0].await();
-    freeCarril = freeCarril(0);
-    cars[0][freeCarril] = car;
-    moveTimeRemaining[0][freeCarril] = velocidad+time;
+
+    Integer freeCarril = freeCarril(1);
+
+    if (freeCarril == null) waitingToMove[1-1].await();
+
+    freeCarril = freeCarril(1);
+    Pos pos = new Pos(1,freeCarril);
+    carretera.put(car, new Pair<Pos,Integer>(pos,tks));
+
     mutex.leave();
-    return new Position(0,freeCarril);
+    return pos;
   }
-  
-  public Position move(String car, int velocidad) {
+
+  public Pos avanzar(String car, int tks) {
     mutex.enter();
-    Position pos = position(car);
-    Integer freeCarril = freeCarril(pos.getX()+1);
-    if (freeCarril == null) waitingToMove[pos.getX()+1].await();
-    freeCarril = freeCarril(pos.getX()+1);
-    cars[pos.getX()+1][freeCarril] = car;
-    moveTimeRemaining[pos.getX()+1][freeCarril] = velocidad+time;
-    freeCell(pos);
+
+    Pos pos = pos(car);
+    Integer freeCarril = freeCarril(pos.getSegmento()+1);
+
+    if (freeCarril == null) waitingToMove[pos.getSegmento()+1-1].await();
+
+    freeCarril = freeCarril(pos.getSegmento()+1);
+    Pos newPos = new Pos(pos.getSegmento()+1,freeCarril);
+    carretera.put(car, new Pair<Pos,Integer>(newPos,tks));
+
+    signalPosFree(pos);
+
     mutex.leave();
-    return new Position(pos.getX()+1,freeCarril);
+    return newPos;
   }
-  
-  public void exit(String car) {
+
+  public void salir(String car) {
     mutex.enter();
-    Position pos = position(car);
-    freeCell(pos);
+
+    Pos pos = pos(car);
+    carretera.remove(car);
+
+    signalPosFree(pos);
+
     mutex.leave();
   }
-  
-  private void freeCell(Position pos) {
-    cars[pos.getX()][pos.getY()] = null;
-    Monitor.Cond waitCond = waitingToMove[pos.getX()];
-    if (waitCond.waiting() > 0)
-      waitCond.signal();
-  }
-  
-  public void moving(String car) {
+
+  public void circulando(String car) {
     mutex.enter();
-    Position pos = position(car);
-    int arrivalTime = moveTimeRemaining[pos.getX()][pos.getY()];
-    if (arrivalTime > time) {
-      moving.enqueue(arrivalTime,car);
+
+    Integer tksRemaining = tks(car);
+    if (tksRemaining > 0) {
       Monitor.Cond movingCond = getMovingCond(car);
       movingCond.await();
     }
+
     signalMoving();
+
     mutex.leave();
   }
-  
+
   public void tick() {
     mutex.enter();
-    ++time;
+
+    // Avoid problems with ConcurrentModificationException
+    Set<String> domainCarretera = new HashTableMapSet<String>();
+    for (String car : carretera.keys())
+      domainCarretera.add(car);
+
+    for (String car : domainCarretera) {
+      Pair<Pos,Integer> pair = carretera.get(car);
+      if (pair.getRight() > 0)
+        carretera.put(car, new Pair<Pos,Integer>(pair.getLeft(),pair.getRight()-1));
+
+    }
+
     signalMoving();
+
     mutex.leave();
   }
-  
+
+  // Signal that there is a free position for a segment
+  private void signalPosFree(Pos pos) {
+    Monitor.Cond waitCond = waitingToMove[pos.getSegmento()-1];
+    if (waitCond.waiting() > 0)
+      waitCond.signal();
+  }
+
+  // Signal moving cars that have moved sufficiently (tks == 0)
   public void signalMoving() {
-    if (moving.size() > 0) {
-      Entry<Integer,String> first = moving.first();
-      if (first.getKey() <= time) {
-        Monitor.Cond movingCond = getMovingCond(first.getValue());
+    for (Entry<String,Pair<Pos,Integer>> entry : carretera.entries()) {
+      if (entry.getValue().getRight() == 0) {
+        Monitor.Cond movingCond = getMovingCond(entry.getKey());
         if (movingCond.waiting() > 0) {
           movingCond.signal();
+          // Para profesores de programacion II : cierro los ojos!
+          break; 
         }
-        moving.dequeue();
       }
     }
   }
-  
+
+  // Find the condition for a car which is signalled when it has finished moving
   private Monitor.Cond getMovingCond(String car) {
     Monitor.Cond movingCond = movingConds.get(car);
     if (movingCond == null) {
       movingCond = mutex.newCond();
       movingConds.put(car, movingCond);
-    } 
-    
+    }
+
     return movingCond;
   }
-  
-  private Position position(String car) {
-    for (int x=0; x<distance; x++)
-      for (int y=0; y<carriles; y++) {
-        String otherCar = cars[x][y];
-        if (otherCar != null && car.equals(otherCar))
-          return new Position(x,y);
-      }
-    return null;
+
+  // Returns the position of a car in the carretera
+  private Pos pos(String car) {
+    Pair<Pos,Integer> pair = carretera.get(car);
+    return pair.getLeft();
   }
-  
-  private Integer freeCarril(int x) {
-    for (int y=0; y<carriles; y++)
-      if (cars[x][y] == null) return y;
-    return null;
+
+  // Returns the ticks remaining for a car in the carretera
+  private Integer tks(String car) {
+    Pair<Pos,Integer> pair = carretera.get(car);
+    return pair.getRight();
+  }
+
+  // Return a free carril at segmento, or null if there is no free carril
+  private Integer freeCarril(int segmento) {
+    Set<Integer> occupiedCarriles = new HashTableMapSet<Integer>();
+    IndexedList<Integer> freeCarriles = new ArrayIndexedList<Integer>();
+
+    for (String car : carretera.keys()) {
+      Pos pos = carretera.get(car).getLeft();
+      if (pos.getSegmento() == segmento)
+        occupiedCarriles.add(pos.getCarril());
+    }
+
+    for (int i=1; i<=carriles; i++) {
+      if (!occupiedCarriles.contains(i))
+        freeCarriles.add(freeCarriles.size(),i);
+    }
+
+    // Nondeterministic reply for better testing
+    if (freeCarriles.size() > 0) {
+      int carrilIndex = rnd.nextInt(freeCarriles.size());
+      return freeCarriles.get(carrilIndex);
+    } else return null;
   }
 }

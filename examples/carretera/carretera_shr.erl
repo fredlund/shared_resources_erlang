@@ -46,18 +46,18 @@ pre(_Call,_State) ->
 cpre(Call,State) ->
   Result = 
     case Call of
-      {enter,[_CocheId,_Velocidad]} ->  
+      {entrar,[_CocheId,_Velocidad]} ->  
         isfree_segment({0,0},State) orelse isfree_segment({0,1},State);
-      {move,[CocheId,_Velocidad]} ->
+      {avanzar,[CocheId,_Velocidad]} ->
         {X,_Y} = _Location = location(CocheId,State),
         ?LOG
-           ("move(~p,~p); location=~p seg=~p~n",
+           ("avanzar(~p,~p); location=~p seg=~p~n",
             [CocheId,_Velocidad,_Location,segment(_Location,State)]),
         isfree_segment({X+1,0},State) orelse isfree_segment({X+1,1},State);
-      {moving,[CocheId]} ->
+      {circulando,[CocheId]} ->
         arrived(CocheId,State);
       {tick,[]} -> true;
-      {exit,_} -> true
+      {salir,_} -> true
     end,
   ?LOG("cpre(~p,~p) => ~p~n",[Call,State,Result]),
   Result.
@@ -65,18 +65,18 @@ cpre(Call,State) ->
 post(Call,Return,State) ->
   Result =
     case Call of
-      {enter,[CocheId,Velocidad]} ->
-        move_to_segment(Return,CocheId,Velocidad,State);
-      {exit,[CocheId]} ->
+      {entrar,[CocheId,Velocidad]} ->
+        avanzar_to_segment(Return,CocheId,Velocidad,State);
+      {salir,[CocheId]} ->
         Location = location(CocheId,State),
         free_segment(Location,State);
-      {move,[CocheId,Velocidad]} ->
+      {avanzar,[CocheId,Velocidad]} ->
         Location = location(CocheId,State),
-        move_to_segment(Return,CocheId,Velocidad,
+        avanzar_to_segment(Return,CocheId,Velocidad,
                         free_segment(Location,State));
       {tick,_} ->
         tick(State);
-      {moving,_} ->
+      {circulando,_} ->
         State
     end,
   ?LOG("post(~p,~p,~p) => ~p~n",[Call,Return,State,Result]),
@@ -85,9 +85,9 @@ post(Call,Return,State) ->
 return(State,Call,Result) ->
   Return =
     case Call of
-      {enter,[CocheId,_Velocidad]} ->
+      {entrar,[CocheId,_Velocidad]} ->
         check_return({-1,0},State,CocheId,Result);
-      {move,[CocheId,_Velocidad]} ->
+      {avanzar,[CocheId,_Velocidad]} ->
         check_return(location(CocheId,State),State,CocheId,Result);
       _ -> Result==void
     end,
@@ -95,22 +95,29 @@ return(State,Call,Result) ->
   Return.
 
 check_return({X,_Y},State,CocheId,Result) ->
-  FreeNextLocations = 
+  PreFreeNextLocations = 
     lists:filter
       (fun (Location) -> isfree_segment(Location,State) end,
        [{X+1,0},{X+1,1}]),
+  FreeNextLocations =
+    lists:map(fun ({X,Y}) -> {X+1,Y+1} end, PreFreeNextLocations),
   lists:member(Result,FreeNextLocations).
 
 return_value(Call,State) ->
-  Result =
+  PreResult =
     case Call of
-      {enter,[_,_]} ->
+      {entrar,[_,_]} ->
         select_next_location({-1,0},State);
-      {move,[CocheId,_]} ->
+      {avanzar,[CocheId,_]} ->
         select_next_location(location(CocheId,State),State);
       Call ->
         ?LOG("call ~p should not return anything~n",[Call]),
         void
+    end,
+  Result = 
+    case PreResult of
+      {X,Y} -> {X+1,Y+1};
+      Other -> Other
     end,
   ?LOG("return_value(~p,~p) => ~p~n",[Call,State,Result]),
   Result.
@@ -156,10 +163,14 @@ location1(CocheId,[],Segments) ->
      [CocheId,Segments]),
   error(bad).
 
-move_to_segment(Location,CocheId,Velocidad,State) ->
+avanzar_to_segment(PreLocation,CocheId,Velocidad,State) ->
   ?LOG
-    ("move_to_segment(~p,~p,~p)~nin ~p~n",
-     [Location,CocheId,Velocidad,State]),
+    ("avanzar_to_segment(~p,~p,~p)~nin ~p~n",
+     [PreLocation,CocheId,Velocidad,State]),
+  Location = 
+    case PreLocation of
+      {X,Y} -> {X-1,Y-1}
+    end,
   Segment = segment(Location,State),
   if
     Segment#segment.coche==undefined ->
