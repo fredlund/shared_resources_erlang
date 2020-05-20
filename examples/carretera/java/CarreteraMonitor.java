@@ -40,8 +40,9 @@ public class CarreteraMonitor implements Carretera {
       waitingToMove[segmento] = mutex.newCond();
     moving = new SortedListPriorityQueue<Integer,String>();
     movingConds = new HashTableMap<String,Monitor.Cond>();
-
     carretera = new HashTableMap<String,Pair<Pos,Integer>>();
+
+    System.out.println("*** WARNING: you are running the solution");
   }
 
   public Pos entrar(String car, int tks) {

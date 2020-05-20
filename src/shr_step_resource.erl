@@ -232,7 +232,7 @@ do_step(Transition,Info) ->
                      {check,shr_call(Call),State#state.state}
                  end,
                Returns = {Call,ReturnValue,ReturnCheck},
-               case DataModule:post(shr_call(Call),void,State#state.state) of
+               case DataModule:post(shr_call(Call),ReturnValue,State#state.state) of
                  {'$shr_nondeterministic',NewStates} -> 
                    lists:map(fun (NS) -> {NS,Returns} end, NewStates);
                  NewDataState -> 

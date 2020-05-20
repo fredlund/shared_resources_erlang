@@ -7,8 +7,8 @@
 -export([initial_state/2,pre/2,cpre/2,post/3,return/3,return_value/2]).
 -export([print_state/1]).
 
--record(state,{segments=[],distance,carriles,time=0}).
--record(segment,{location,coche=undefined,arrivalTime=undefined}).
+-record(state,{segments=[],distance,carriles}).
+-record(segment,{location,coche=undefined,tks=undefined}).
 
 %%-define(debug,true).
 -ifdef(debug).
@@ -175,7 +175,7 @@ avanzar_to_segment(PreLocation,CocheId,Velocidad,State) ->
   if
     Segment#segment.coche==undefined ->
       NewSegment = 
-        Segment#segment{coche=CocheId,arrivalTime=Velocidad+State#state.time},
+        Segment#segment{coche=CocheId,tks=Velocidad},
       State#state
         {segments=lists:keystore(Location,#segment.location,State#state.segments,NewSegment)}
   end.
@@ -185,17 +185,28 @@ free_segment(Location,State) ->
   if
     Segment#segment.coche=/=undefined ->
       NewSegment = 
-        Segment#segment{coche=undefined,arrivalTime=undefined},
+        Segment#segment{coche=undefined,tks=undefined},
       State#state
         {segments=lists:keystore(Location,#segment.location,State#state.segments,NewSegment)}
   end.
 
 arrived(CocheId,State) ->
   Segment = segment(location(CocheId,State),State),
-  State#state.time >= Segment#segment.arrivalTime.
+  Segment#segment.tks==0.
 
 tick(State) ->
-  State#state{time=State#state.time+1}.
+  State#state
+    {segments=
+       lists:map
+         (fun (Segment) ->
+              case Segment#segment.tks of
+                N when is_integer(N), N>0 ->
+                  Segment#segment{tks=N-1};
+                _ ->
+                  Segment
+              end
+          end, State#state.segments)}.
+                     
 
 
 

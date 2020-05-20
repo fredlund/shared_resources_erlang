@@ -18,8 +18,16 @@ initial_state(_Id,[Car,Velocidad],Options) ->
      doing=outside,car=Car,velocidad=Velocidad}
   }.
  
-precondition(_,_,GlobalState,_CorrState,_) ->
-  true.
+precondition(_,#state{distance=Distance,doing=Doing,pos=Pos,car=Car}=State,_GlobalState,_CorrState,{_,Op,[Coche|_]}) ->
+  (Coche == Car) and
+    case {Doing,Op} of
+      {outside,entrar} -> true;
+      {circulando,circulando} -> true;
+      {avanzar,avanzar} when Pos<Distance-1 -> true;
+      {avanzar,salir} -> true;
+      {exited,stopped} -> true;
+      _ -> false
+    end.
 
 command(_Id,#state{distance=Distance,doing=Doing,pos=Pos,car=Car,velocidad=Velocidad}=State,_GlobalState,_CorrState) ->
   case State#state.doing of
