@@ -2,6 +2,7 @@
 
 -include("tester.hrl").
 -include_lib("eqc/include/eqc.hrl").
+-include_lib("ecsv/include/ecsv.hrl").
 
 -compile(export_all).
 
@@ -186,6 +187,8 @@ stop_java() ->
 
 test_users_nopar() ->
   test_users_with_class('cc.carretera.CarreteraMonitor',[{distance,4},{carriles,2},no_par]).
+test_users_nopar(Users) ->
+  test_users_with_class('cc.carretera.CarreteraMonitor',[{distance,4},{carriles,2},no_par],Users).
 test_users_nopar_csp() ->
   test_users_with_class('cc.carretera.CarreteraCSP',[no_par]).
 test_users_par() ->
@@ -219,50 +222,52 @@ test_users_with_class(Class,PreOptions,Users) ->
   test_users(Class,File,EntregaDir,PreOptions,Users).
 
 test_users_mon(PreOptions) ->
-  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/cc_2020_mon_exp",PreOptions).
+  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/cc_2020_mon_exp",PreOptions,all).
 %%  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/gits/src/cc_2020/buggy_carretera",PreOptions).
 test_users_csp(PreOptions) ->
-  test_users('cc.carretera.CarreteraCSP',"CarreteraCSP.java","/home/fred/cc_2020_csp_jul_reduced",PreOptions).
+  test_users('cc.carretera.CarreteraCSP',"CarreteraCSP.java","/home/fred/cc_2020_csp_jul_reduced",PreOptions,all).
 
-test_users(Class,File,EntregaDir,PreOptions) ->
+test_users(Class,File,EntregaDir,PreOptions,Users) ->
   put(failing_tests,[]),
-  io:format("File=~p~n",[File]),
+  {ok,EntregaInfo} = read_entrega_info("/home/fred/cc_2020_mon_exp/prac1.csv"),
   Entregas = find_entregas(File,EntregaDir),
   LenEntregas = length(Entregas),
-  io:format("Will test ~p entregas.~n",[LenEntregas]),
+  if
+    Users==all ->
+      io:format("Will test ~p entregas.~n",[LenEntregas]);
+    true ->
+      ok
+  end,
   lists:foreach
-    (fun ({Id,Entrega}) ->
-	 io:format("Testing entrega ~p of ~p~n",[Id,LenEntregas]),
-	 mtest(Class,Entrega,PreOptions)
+    (fun ({Id,Entrega={Name,_}}) ->
+         TestIt =
+           if
+             Users==all -> 
+               true;
+             true ->
+               lists:member(Name,Users) 
+           end,
+         DoTest = 
+           TestIt andalso
+           case lists:keyfind(Name,1,EntregaInfo) of
+             false ->
+               io:format("*** WARNING: cannot find group ~s~n",[Name]),
+               true;
+             Tuple ->
+               element(2,Tuple)=/="0"
+           end,
+         if
+           DoTest ->
+             mtest(Class,Entrega,PreOptions);
+           true ->
+             ok
+         end
      end, lists:zip(lists:seq(1,LenEntregas),Entregas)),
   case get(failing_tests) of
     [] -> ok;
     FailingTestCases when is_list(FailingTestCases) ->
       F = unique_filename(),
       ok = file:write_file(F,term_to_binary({failed,FailingTestCases})),
-      io:format("wrote failed test cases to ~s~n",[F])
-  end.
-
-test_users(Class,File,EntregaDir,PreOptions,Users) ->
-  error(not_working),
-  put(failing_tests,[]),
-  Entregas = find_entregas(File,EntregaDir),
-  io:format("Len(Entregas)=~p~n",[length(Entregas)]),
-  lists:foreach
-    (fun (Entrega) ->
-	 case Entrega of
-	   {User,_,_,_,_} ->
-	     case lists:member(User,Users) of
-	       true -> mtest(Class,Entrega,PreOptions);
-	       false -> ok
-	     end
-	 end
-     end, Entregas),
-  case get(failing_tests) of
-    [] -> ok;
-    FailingTestCases when is_list(FailingTestCases) ->
-      F = unique_filename(),
-      file:write_file(F,term_to_binary({failed,FailingTestCases})),
       io:format("wrote failed test cases to ~s~n",[F])
   end.
 
@@ -616,6 +621,27 @@ print_args([Arg]) ->
 print_args([Arg|Rest]) ->
   io_lib:format("~p,~s",[Arg,print_args(Rest)]).
 
+read_entrega_info(CSVFileName) ->
+  {ok,File} = file:open(CSVFileName,[read]),
+  try
+    ecsv:process_csv_file_with
+      (File,
+       fun process_entrega_info/2,
+       [],
+       #ecsv_opts{delimiter=$,})
+  after file:close(File)
+  end.
+
+process_entrega_info({eof},Acc) ->
+  Acc;
+process_entrega_info({newline,["Group"|_]},Acc) ->
+  Acc;
+process_entrega_info({newline,L},Acc) when is_list(L) ->
+  [Group,Mark,Notes,Date] = L,
+  [{Group,Mark,Notes,Date}|Acc];
+process_entrega_info({newline,Line}, _Changes) ->
+  io:format("*** Error: malformed network line: ~p~n",[Line]),
+  throw(bad).
 
 
   
