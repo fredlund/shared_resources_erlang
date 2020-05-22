@@ -222,22 +222,33 @@ do_step(Transition,Info) ->
 	     {unblocked=[Call|Transition#transition.unblocked]},
 	   NewDataStatesAndReturns =
              begin
-               ReturnValue = 
-                 DataModule:return_value(shr_call(Call),State#state.state),
-               ReturnCheck =
-                 if
-                   ReturnValue =/= undefined ->
-                     void;
-                   true ->
-                     {check,shr_call(Call),State#state.state}
+               ReturnValues = 
+                 case DataModule:return_value(shr_call(Call),State#state.state) of
+                   {'$shr_nondeterministic',RValues} -> RValues;
+                   Other -> [Other]
                  end,
-               Returns = {Call,ReturnValue,ReturnCheck},
-               case DataModule:post(shr_call(Call),ReturnValue,State#state.state) of
-                 {'$shr_nondeterministic',NewStates} -> 
-                   lists:map(fun (NS) -> {NS,Returns} end, NewStates);
-                 NewDataState -> 
-                   [{NewDataState,Returns}]
-               end
+               lists:flatmap
+                 (fun (ReturnValue) ->
+                      ReturnCheck =
+                        if
+                          ReturnValue =/= undefined ->
+                            void;
+                          true ->
+                            {check,shr_call(Call),State#state.state}
+                        end,
+                      Returns = {Call,ReturnValue,ReturnCheck},
+                      try DataModule:post(shr_call(Call),ReturnValue,State#state.state) of
+                          {'$shr_nondeterministic',NewStates} -> 
+                          lists:map(fun (NS) -> {NS,Returns} end, NewStates);
+                          NewDataState -> 
+                          [{NewDataState,Returns}]
+                      catch Error:Reason ->
+                          io:format
+                            ("~p:post: executing ~p~n with return value ~p in state~n~p~nfailed with ~p:~p~nStacktrace:~n~p~n",
+                             [DataModule,shr_call(Call),ReturnValue,State#state.state,Error,Reason,erlang:get_stacktrace()]),
+                          error(bad)
+                      end
+                  end, ReturnValues)
              end,
 	   lists:map
 	     (fun ({NewDataState,NewReturn}) ->

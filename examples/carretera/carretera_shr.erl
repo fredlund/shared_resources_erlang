@@ -101,10 +101,10 @@ return_value(Call,State) ->
   Result =
     case Call of
       {entrar,[_,_]} ->
-        free_cell_at_segmento(1,State);
+        shr_utils:nondeterministic(free_positions_at_segmento(1,State));
       {avanzar,[CocheId,_]} ->
         {X,_} = location(CocheId,State),
-        free_cell_at_segmento(X+1,State);
+        shr_utils:nondeterministic(free_positions_at_segmento(X+1,State));
       Call ->
         ?LOG("call ~p should not return anything~n",[Call]),
         void
@@ -124,13 +124,11 @@ cells_at_segmento(Segmento,State) ->
 free_cells_at_segmento(Segmento,State) ->
   lists:filter(fun (#cell{coche=Coche}) -> Coche==undefined end, cells_at_segmento(Segmento,State)).
                     
+free_positions_at_segmento(Segmento,State) ->
+  lists:map(fun (Cell) -> Cell#cell.location end, free_cells_at_segmento(Segmento,State)).
+
 segmento_has_free_carril(Segmento,State) ->
   free_cells_at_segmento(Segmento,State) =/= [].
-
-free_cell_at_segmento(Segmento,State) ->
-  case free_cells_at_segmento(Segmento,State) of
-    [FirstCell|_] -> FirstCell
-  end.
 
 cell(Location,State) ->
   case lists:keyfind(Location,#cell.location,State#state.cells) of

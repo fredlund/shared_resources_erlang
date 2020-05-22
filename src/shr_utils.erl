@@ -97,12 +97,12 @@ module(Module) when is_atom(Module) ->
 module({Module,_}) when is_atom(Module) ->
   Module.
 
-nondeterministic(States=[_,_|_]) ->
-  {'$shr_nondeterministic',States};
-nondeterministic([State]) ->
-  State;
-nondeterministic(State) when not(is_list(State)) ->
-  State.
+nondeterministic(Elements=[_,_|_]) ->
+  {'$shr_nondeterministic',Elements};
+nondeterministic([Element]) ->
+  Element;
+nondeterministic(Element) when not(is_list(Element)) ->
+  Element.
 
 setup_shr() ->
   shr_supervisor:restart(self()),
