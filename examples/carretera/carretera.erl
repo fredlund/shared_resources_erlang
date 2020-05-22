@@ -63,7 +63,7 @@ test() ->
     shr_test_resource_implementation:prop_tri
       (
       {shr_gnr_fsms,cars() ++ [{tick_gnr_fsm,[]}]},
-      start_controller(Class,"",[]),
+      start_controller(Class,"",[{distance,4},{carriles,2}]),
       stop_java(),
       DataSpec,
       WaitSpec,
@@ -89,7 +89,7 @@ start_controller(Class,Dirs,Options) ->
 	 "/home/fred/svns/courses/cc/lib/jcsp-1.1-rc4/jcsp.jar",
          "/home/fred/svns/courses/aed/trunk/lib/aedlib.jar"
         ],
-      %%io:format("ClassPath is ~p~n",[ClassPath]),
+      io:format("ClassPath is ~p~n",[ClassPath]),
       {ok,Java} =
 	shr_java_node:start_node([{call_timeout,infinity},
 			      %%{java_verbose,"FINER"},
@@ -99,6 +99,7 @@ start_controller(Class,Dirs,Options) ->
 			      {add_to_java_classpath,ClassPath}]),
       timer:sleep(1000),
       shr_utils:put(java,Java),
+      io:format("will call new ~p(~p,~p)~n",[Class,Distance,Carriles]),
       Controller = java:new(Java,Class,[Distance,Carriles]),
       %%io:format("Location of ~p is ~p~n",[Class,print_where(Java,Controller)]),
       case Class of
@@ -186,9 +187,9 @@ stop_java() ->
 %% carretera:test_users_nopar_with_class('cc.carretera.CarreteraMonitor',["150291"]).
 
 test_users_nopar() ->
-  test_users_with_class('cc.carretera.CarreteraMonitor',[{distance,4},{carriles,2},no_par]).
+  test_users_with_class('cc.carretera.CarreteraMonitor',[no_par]).
 test_users_nopar(Users) ->
-  test_users_with_class('cc.carretera.CarreteraMonitor',[{distance,4},{carriles,2},no_par],Users).
+  test_users_with_class('cc.carretera.CarreteraMonitor',[no_par],Users).
 test_users_nopar_csp() ->
   test_users_with_class('cc.carretera.CarreteraCSP',[no_par]).
 test_users_par() ->
@@ -287,7 +288,10 @@ mtest(Class,Group,Dir,PreOptions) ->
     shr_test_resource_implementation:prop_tri
       (
       {shr_gnr_fsms,cars() ++ [{tick_gnr_fsm,[]}]},
-      start_controller(Class,[Dir++"/classes","/home/fred/gits/src/cc_2020/carreteraClasses"],PreOptions),
+      start_controller
+        (Class,
+         [Dir++"/classes","/home/fred/gits/src/cc_2020/carreteraClasses"],
+         [{distance,Distance},{carriles,Carriles}|PreOptions]),
       stop_java(),
       {carretera_shr,[{distance,Distance},{carriles,Carriles}]},
       shr_always,
