@@ -289,21 +289,29 @@ mtest(Class,Group,Dir,PreOptions) ->
     ("~n~n~nTesting group ~p with implementation in ~p~n~n",
      [Group,Dir]),
   PreProp =
-    ?FORALL({Distance,Carriles},{eqc_gen:choose(1,5),eqc_gen:choose(1,3)},
-    shr_test_resource_implementation:prop_tri
-      (
-      {shr_gnr_fsms,cars() ++ [{tick_gnr_fsm,[]}]},
-      start_controller
-        (Class,
-         [Dir++"/classes","/home/fred/gits/src/cc_2020/carreteraClasses"],
-         [{distance,Distance},{carriles,Carriles}|PreOptions]),
-      stop_java(),
-      {carretera_shr,[{distance,Distance},{carriles,Carriles}]},
-      shr_always,
-      void,
-      [{completion_time,200}|PreOptions]
-      %% [{completion_time,350}|PreOptions]
-     )),
+    ?FORALL(Carriles,eqc_gen:choose(1,3),
+            begin
+              LimitDistance = 
+                if
+                  Carriles==3 -> 1;
+                  true -> 4
+                end,
+              ?FORALL(Distance,eqc_gen:choose(1,LimitDistance),
+                      shr_test_resource_implementation:prop_tri
+                        (
+                        {shr_gnr_fsms,cars() ++ [{tick_gnr_fsm,[]}]},
+                        start_controller
+                          (Class,
+                           [Dir++"/classes","/home/fred/gits/src/cc_2020/carreteraClasses"],
+                           [{distance,Distance},{carriles,Carriles}|PreOptions]),
+                        stop_java(),
+                        {carretera_shr,[{distance,Distance},{carriles,Carriles}]},
+                        shr_always,
+                        void,
+                        [{completion_time,200}|PreOptions]
+                        %% [{completion_time,350}|PreOptions]
+                       ))
+            end),
   Prop =
     case lists:member(no_par,PreOptions) of
       true ->
@@ -319,7 +327,6 @@ mtest(Class,Group,Dir,PreOptions) ->
         lists:filter
           (fun (TestCase) -> not(TestCase#test_case.test_result) end, 
            shr_test_jobs:return_test_cases()),
-      io:format("Failing test cases:~n~p~n",[AllFailingTestCases]),
       case lists:member(no_junit,PreOptions) of
         true ->
           [FailedNonrunnableTestCase|_] = AllFailingTestCases,
