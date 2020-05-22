@@ -1,17 +1,16 @@
 -module(shr_test_cases_to_junit).
 
--record(state,
-	{file,prefix,counter,data_spec,wait_spec,callrep,classname,indent}).
+-record(state,{file,prefix,counter,callrep,classname,indent,marshaller}).
 
 -include("tester.hrl").
 
 %%-define(debug,true).
 -include("debug.hrl").
 
--export([gen_junit_tests/7]).
+-export([gen_junit_tests/6]).
 
 
-gen_junit_tests(ClassName,TestCases,Prefix,DataSpec,WaitSpec,CallRep,Orderer) ->
+gen_junit_tests(ClassName,TestCases,Prefix,CallRep,Orderer,Marshaller) ->
   FileName = ClassName++".java",
   {ok,File} = file:open(FileName,[write]),
   State =
@@ -19,9 +18,9 @@ gen_junit_tests(ClassName,TestCases,Prefix,DataSpec,WaitSpec,CallRep,Orderer) ->
     {
       classname=ClassName,
       file=File,prefix=Prefix,counter=1,
-      data_spec=DataSpec,wait_spec=WaitSpec,
       callrep=CallRep,
-      indent=indent_len(1)
+      indent=indent_len(1),
+      marshaller=Marshaller
     },
   copy_file(shr_priv_dir()++"/junit_prologue.txt",State),
   io:format
@@ -55,12 +54,12 @@ gen_junit_tests([TC|Rest],State) ->
 	   Jobs
        end, BasicTestCase),
   ?LOG("~n~nWill generate code for test case:~n~p~n~n",[SimpleTestCase]),
-  DataSpec = State#state.data_spec,
-  WaitSpec = State#state.wait_spec,
+  DataSpec = shr_test_jobs:test_data_spec(TestCase),
+  WaitingSpec = shr_test_jobs:test_waiting_spec(TestCase),
   GenModule = shr_test_jobs:gen_module(TestCase),
   GenState = shr_test_jobs:initial_gen_state(TestCase),
   {Info,InitialState} = 
-    shr_step_resource:initial_state(DataSpec,WaitSpec,GenModule,GenState,[]),
+    shr_step_resource:initial_state(DataSpec,WaitingSpec,GenModule,GenState,[]),
   try shr_step_resource:repeat_step(SimpleTestCase,InitialState,Info) of
       StateSpace -> output_test_case(StateSpace,State)
   catch throw:not_deterministic ->
@@ -245,13 +244,13 @@ output_sequence(Items,State) ->
                   orelse
                   (lists:keyfind(Call#job.pid,#job.pid,FailedPres)=/=false),
                 CallRepReturn =
-                  case utils:find(fun ({Job,_,_}) -> Job#job.pid==Call#job.pid end, 
-                                  Returns) of
+                  case find(fun ({Job,_,_}) -> Job#job.pid==Call#job.pid end, 
+                            Returns) of
                     {_,ReturnValue,_} ->
                       if
                         ReturnValue=/=void ->
                           "Call.returns("++CallRep++","++
-                            marshall_term(ReturnValue)++")";
+                            marshall_term(ReturnValue,State)++")";
                         true ->
                           CallRep
                       end;
@@ -266,7 +265,7 @@ output_sequence(Items,State) ->
 		Unblocks_non_locally =
 		  lists:keydelete(Call#job.pid,#job.pid,Unblocked),
 		Unblocks =
-		  unblocks(Unblocks_non_locally,Returns),
+		  unblocks(Unblocks_non_locally,Returns,State),
 		if
 		  UnblocksCall ->
 		    ?LOG
@@ -287,7 +286,7 @@ output_sequence(Items,State) ->
 		     indent(I+1,"~s")++
 		     indent(I,")"),
 		   [make_calls(Calls,State#state{indent=I+1}),
-		    unblocks(Unblocked,Returns)])
+		    unblocks(Unblocked,Returns,State)])
 	    end
 	end, Items),
      ",").
@@ -323,12 +322,12 @@ make_calls(Calls,State) ->
        indent(I,")"),
      [CallsString]).
 
-unblocks(Calls,Returns) ->
+unblocks(Calls,Returns,State) ->
   NeedPairs = 
     lists:any
       (fun (Call) ->
-           case utils:find(fun ({Job,_,_}) -> Job#job.pid==Call#job.pid end, 
-                           Returns) of
+           case find(fun ({Job,_,_}) -> Job#job.pid==Call#job.pid end, 
+                     Returns) of
              {_,ReturnValue,_} -> true;
              _ -> false
            end
@@ -339,11 +338,11 @@ unblocks(Calls,Returns) ->
       lists:foldl
         (fun (UnblockedCall,Acc) ->
              RightElement =
-               case utils:find(fun ({Job,_,_}) -> Job#job.pid==UnblockedCall#job.pid end, 
-                               Returns) of
+               case find(fun ({Job,_,_}) -> Job#job.pid==UnblockedCall#job.pid end, 
+                         Returns) of
                  {_,ReturnValue,_} when ReturnValue=/=void -> 
                    io_lib:format("Return.returns(true,~s)",
-				 [marshall_term(ReturnValue)]);
+				 [marshall_term(ReturnValue,State)]);
                  _ -> 
                    "null"
                end,
@@ -376,7 +375,7 @@ output_final(FinalState,State) ->
 		  indent(I+1,"Alternative.alternative(")++
 		    output_state_space(Continuation,State#state{indent=I+2})++
 		    ","++
-		    indent(I+2,unblocks(AltUnblocks,Returns))++
+		    indent(I+2,unblocks(AltUnblocks,Returns,State))++
 		    ")"
 	      end, Transitions),
 	   ","),
@@ -412,9 +411,23 @@ copy_file1(From,State) ->
       ok
   end.
   
-marshall_term({mensaje,Uid,Grupo,Msg}) ->
-  io_lib:format("new Mensaje(~p,\"~s\",\"\~s\")",[Uid,Grupo,Msg]).
+marshall_term(Term,State) ->
+  if
+    State#state.marshaller=/=undefined ->
+      (State#state.marshaller)(Term);
+    true ->
+      Term
+  end.
 
+find(F,[]) ->
+  false;
+find(F,[Element|Rest]) ->
+  case F(Element) of
+    true ->
+      Element;
+    false ->
+      find(F,Rest)
+  end.
   
 
 

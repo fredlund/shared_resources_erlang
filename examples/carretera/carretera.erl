@@ -270,11 +270,16 @@ test_users(Class,File,EntregaDir,PreOptions,Users) ->
 
 find_entregas(LFile,Target) ->
   WildCard = Target++"/*",
-  lists:map
-    (fun (Dir) ->
-	 Group = filename:basename(Dir),
-	 {Group,Dir}
-     end,filelib:wildcard(WildCard)).
+  lists:foldl
+    (fun (Dir,Acc) ->
+         case filelib:is_dir(Dir) of
+           true -> 
+             Group = filename:basename(Dir),
+             [{Group,Dir}|Acc];
+           false ->
+             Acc
+         end
+     end,[],filelib:wildcard(WildCard)).
 
 mtest(Class,{Group,Dir},PreOptions) ->
   mtest(Class,Group,Dir,PreOptions).
@@ -509,10 +514,12 @@ tests_to_junit(TesterPrefix,TestPrefix,FileName) ->
     (TesterPrefix,
      TestCases,
      TestPrefix,
-     {carretera_shr,[]},
-     shr_always,
      callrep(),
-     fun order_test_cases/1).
+     fun order_test_cases/1,
+     fun marshaller/1).
+
+marshaller({X,Y}) ->
+  io_lib:format("new Pos(~p,~p)",[X,Y]).
 
 order_test_cases(TestCases) ->
   SimplifiedTestCases =
@@ -611,11 +618,14 @@ op_value(salirGrupo) -> 2;
 op_value(mandarMensaje) -> 3;
 op_value(leer) -> 3.
 
-map_name(crearGrupo) -> "CrearGrupo";
-map_name(anadirMiembro) -> "AnadirMiembro";
-map_name(salirGrupo) -> "SalirGrupo";
-map_name(mandarMensaje) -> "MandarMensaje";
-map_name(leer) -> "Leer".
+map_name(CallName) ->
+  case atom_to_list(CallName) of
+    [First|Rest] ->
+      if
+        First>=$a, First=<$z -> [First-($a-$A)|Rest];
+        true -> [First|Rest]
+      end
+  end.
 
 print_args([]) ->
   "";
@@ -645,3 +655,4 @@ process_entrega_info({newline,L},Acc) when is_list(L) ->
 process_entrega_info({newline,Line}, _Changes) ->
   io:format("*** Error: malformed network line: ~p~n",[Line]),
   throw(bad).
+

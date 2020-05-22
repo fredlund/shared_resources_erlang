@@ -1,8 +1,11 @@
 // Automatically generated file -- DO NOT EDIT
 
-import sequenceTester.*;
-import org.junit.*;
-import org.junit.runners.*;
-import es.upm.babel.cclib.Tryer;
+import es.upm.babel.sequenceTester.*;
+import org.junit.jupiter.api.*;
+import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.MethodOrderer.Alphanumeric;
+import java.time.Duration;
+import static org.junit.jupiter.api.Assertions.*;
 
-@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+
+@TestMethodOrder(Alphanumeric.class)

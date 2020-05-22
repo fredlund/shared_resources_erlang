@@ -1,15 +1,11 @@
+  @BeforeEach
+  public void setup(TestInfo testInfo) throws Exception {
+    UnitTest.setupTest(testInfo.getDisplayName());
+  }
 
-     @Before
-     public void setup() throws Exception {
- 	UnitTest.installChecker(new RoboFabTestChecker());
-	Call.reset();
-     }
-    
-     String configurationDescription() {
- 	return
-	    "Cuando Robots.NUM_ROBOTS="+Robots.NUM_ROBOTS+"; "+
-	    "Cinta.MAX_P_CONTENEDOR="+Cinta.MAX_P_CONTENEDOR+"; "+
-	    "Robots.MIN_P_PIEZA="+Robots.MIN_P_PIEZA+"; "+
-	    "Robots.MAX_P_PIEZA="+Robots.MAX_P_PIEZA+"\n";
-     }
+  private String config(Pos carreteraDimensions) {
+    int segmentos = carreteraDimensions.getSegmento();
+    int carriles = carreteraDimensions.getCarril();
+    return "segmentos="+segmentos+","+"carriles="+carriles;
+  }
 }
