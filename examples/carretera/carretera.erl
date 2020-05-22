@@ -89,7 +89,7 @@ start_controller(Class,Dirs,Options) ->
 	 "/home/fred/svns/courses/cc/lib/jcsp-1.1-rc4/jcsp.jar",
          "/home/fred/svns/courses/aed/trunk/lib/aedlib.jar"
         ],
-      io:format("ClassPath is ~p~n",[ClassPath]),
+      %%io:format("ClassPath is ~p~n",[ClassPath]),
       {ok,Java} =
 	shr_java_node:start_node([{call_timeout,infinity},
 			      %%{java_verbose,"FINER"},
@@ -99,7 +99,7 @@ start_controller(Class,Dirs,Options) ->
 			      {add_to_java_classpath,ClassPath}]),
       timer:sleep(1000),
       shr_utils:put(java,Java),
-      io:format("will call new ~p(~p,~p)~n",[Class,Distance,Carriles]),
+      %%io:format("will call new ~p(~p,~p)~n",[Class,Distance,Carriles]),
       Controller = java:new(Java,Class,[Distance,Carriles]),
       %%io:format("Location of ~p is ~p~n",[Class,print_where(Java,Controller)]),
       case Class of
@@ -232,34 +232,34 @@ test_users(Class,File,EntregaDir,PreOptions,Users) ->
   put(failing_tests,[]),
   {ok,EntregaInfo} = read_entrega_info("/home/fred/cc_2020_mon_exp/prac1.csv"),
   Entregas = find_entregas(File,EntregaDir),
-  LenEntregas = length(Entregas),
+  TesteableEntregas =
+    lists:filter
+      (fun (Entrega={Name,_}) ->
+           if
+             Users=/=all -> 
+               lists:member(Name,Users);
+             Users==all -> 
+               case lists:keyfind(Name,1,EntregaInfo) of
+                 false ->
+                   io:format("*** WARNING: cannot find group ~s~n",[Name]),
+                   true;
+                 Tuple ->
+                   element(2,Tuple)=/="0"
+               end
+           end
+       end, Entregas),
+  LenTesteableEntregas = length(TesteableEntregas),
   if
     Users==all ->
-      io:format("Will test ~p entregas.~n",[LenEntregas]);
+      io:format("~nWill test ~p entregas.~n~n",[LenTesteableEntregas]);
     true ->
       ok
   end,
   lists:foreach
-    (fun ({Id,Entrega={Name,_}}) ->
-         DoTest = 
-           lists:member(Name,Users) 
-           orelse
-           ((Users==all)
-            andalso
-            case lists:keyfind(Name,1,EntregaInfo) of
-              false ->
-                io:format("*** WARNING: cannot find group ~s~n",[Name]),
-                true;
-              Tuple ->
-                element(2,Tuple)=/="0"
-            end),
-         if
-           DoTest ->
-             mtest(Class,Entrega,PreOptions);
-           true ->
-             ok
-         end
-     end, lists:zip(lists:seq(1,LenEntregas),Entregas)),
+    (fun ({Id,Entrega={Name,_}}) -> 
+         io:format("~nTesting entrega ~p/~p~n",[Id,LenTesteableEntregas]),
+         mtest(Class,Entrega,PreOptions)
+     end, lists:zip(lists:seq(1,LenTesteableEntregas),TesteableEntregas)),
   case get(failing_tests) of
     [] -> ok;
     FailingTestCases when is_list(FailingTestCases) ->

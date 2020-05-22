@@ -22,7 +22,7 @@
 initial_state(DataOptions,_GeneralOptions) ->
   Distance = proplists:get_value(distance,DataOptions),
   Carriles = proplists:get_value(carriles,DataOptions),
-  io:format("~p: Distance=~p Carriles=~p~n",[?MODULE,Distance,Carriles]),
+  %% io:format("~p: Distance=~p Carriles=~p~n",[?MODULE,Distance,Carriles]),
   #state
     {
      distance=Distance,
