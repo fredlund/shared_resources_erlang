@@ -91,10 +91,10 @@ start_controller(Class,Dirs,Options) ->
         ],
       %%io:format("ClassPath is ~p~n",[ClassPath]),
       {ok,Java} =
-	java_node:start_node([{call_timeout,infinity},
+	shr_java_node:start_node([{call_timeout,infinity},
 			      %%{java_verbose,"FINER"},
 			      %%{log_level,all},
-%%			      {java_options,["--add-opens","java.base/jdk.internal.loader=ALL-UNNAMED"]},
+                              %%			      {java_options,["--add-opens","java.base/jdk.internal.loader=ALL-UNNAMED"]},
                               {enter_classes,[Class]},
 			      {add_to_java_classpath,ClassPath}]),
       timer:sleep(1000),
@@ -240,22 +240,18 @@ test_users(Class,File,EntregaDir,PreOptions,Users) ->
   end,
   lists:foreach
     (fun ({Id,Entrega={Name,_}}) ->
-         TestIt =
-           if
-             Users==all -> 
-               true;
-             true ->
-               lists:member(Name,Users) 
-           end,
          DoTest = 
-           TestIt andalso
-           case lists:keyfind(Name,1,EntregaInfo) of
-             false ->
-               io:format("*** WARNING: cannot find group ~s~n",[Name]),
-               true;
-             Tuple ->
-               element(2,Tuple)=/="0"
-           end,
+           lists:member(Name,Users) 
+           orelse
+           ((Users==all)
+            andalso
+            case lists:keyfind(Name,1,EntregaInfo) of
+              false ->
+                io:format("*** WARNING: cannot find group ~s~n",[Name]),
+                true;
+              Tuple ->
+                element(2,Tuple)=/="0"
+            end),
          if
            DoTest ->
              mtest(Class,Entrega,PreOptions);
@@ -286,19 +282,19 @@ mtest(Class,Group,Dir,PreOptions) ->
   io:format
     ("~n~n~nTesting group ~p with implementation in ~p~n~n",
      [Group,Dir]),
-  DataSpec = {carretera_shr,[{distance,3},{carriles,2}]},
-  WaitSpec = shr_always,
   PreProp =
+    ?FORALL({Distance,Carriles},{eqc_gen:choose(1,5),eqc_gen:choose(1,3)},
     shr_test_resource_implementation:prop_tri
       (
       {shr_gnr_fsms,cars() ++ [{tick_gnr_fsm,[]}]},
       start_controller(Class,[Dir++"/classes","/home/fred/gits/src/cc_2020/carreteraClasses"],PreOptions),
       stop_java(),
-      DataSpec,
-      WaitSpec,
+      {carretera_shr,[{distance,Distance},{carriles,Carriles}]},
+      shr_always,
       void,
-      [{completion_time,350}|PreOptions]
-     ),
+      [{completion_time,200}|PreOptions]
+      %% [{completion_time,350}|PreOptions]
+     )),
   Prop =
     case lists:member(no_par,PreOptions) of
       true ->
@@ -308,73 +304,76 @@ mtest(Class,Group,Dir,PreOptions) ->
     end,
   Result = shr_test_jobs:check_prop(fun (_Opts) -> Prop end,[]),
   if
-        not(Result) ->
-          io:format("~nGroup ~p failed.~n",[Group]),
-          AllFailingTestCases =
-            lists:filter
-              (fun (TestCase) -> not(TestCase#test_case.test_result) end, 
-               shr_test_jobs:return_test_cases()),
-          case lists:member(no_junit,PreOptions) of
-            true ->
-              [FailedNonrunnableTestCase|_] = AllFailingTestCases,
+    not(Result) ->
+      io:format("~nGroup ~p failed.~n",[Group]),
+      AllFailingTestCases =
+        lists:filter
+          (fun (TestCase) -> not(TestCase#test_case.test_result) end, 
+           shr_test_jobs:return_test_cases()),
+      io:format("Failing test cases:~n~p~n",[AllFailingTestCases]),
+      case lists:member(no_junit,PreOptions) of
+        true ->
+          [FailedNonrunnableTestCase|_] = AllFailingTestCases,
+          io:format
+            ("Failed test case:~n~s~n~n",
+             [shr_test_jobs:print_test_case(FailedNonrunnableTestCase)]);
+        false ->
+          case find_a_runnable_failing_test_case(AllFailingTestCases) of
+            {ok,FailedRunnableTestCase} ->
+              NewFailingTests =
+                case get(failing_tests) of
+                  undefined -> 
+                    [FailedRunnableTestCase];
+                  L when is_list(L) -> 
+                    [FailedRunnableTestCase|L]
+                end,
+              put(failing_tests,NewFailingTests),
+              F = unique_filename("tmp"),
+              file:write_file(F,term_to_binary({failed,NewFailingTests})),
               io:format
-                ("Failed test case:~n~s~n~n",
-                 [shr_test_jobs:print_test_case(FailedNonrunnableTestCase)]);
+                ("Failed runnable test case:~n~s~n~n",
+                 [shr_test_jobs:print_test_case(FailedRunnableTestCase)]);
             false ->
-              case find_a_runnable_failing_test_case(AllFailingTestCases,DataSpec,WaitSpec) of
-                {ok,FailedRunnableTestCase} ->
-                  NewFailingTests =
-                    case get(failing_tests) of
-                      undefined -> 
-                        [FailedRunnableTestCase];
-                      L when is_list(L) -> 
-                        [FailedRunnableTestCase|L]
-                    end,
-                  put(failing_tests,NewFailingTests),
-                  F = unique_filename("tmp"),
-                  file:write_file(F,term_to_binary({failed,NewFailingTests})),
-                  io:format
-                    ("Failed runnable test case:~n~s~n~n",
-                     [shr_test_jobs:print_test_case(FailedRunnableTestCase)]);
-                false ->
-                  io:format
-                    ("No runnable failed test case exists~n",
-                     []),
-                  [FailedNonrunnableTestCase|_] = AllFailingTestCases,
-                  NewFailingTests =
-                    case get(failing_tests) of
-                      undefined -> 
-                        [FailedNonrunnableTestCase];
-                      L when is_list(L) -> 
-                        [FailedNonrunnableTestCase|L]
-                    end,
-                  put(failing_tests,NewFailingTests),
-                  F = unique_filename("tmp"),
-                  file:write_file(F,term_to_binary({failed,NewFailingTests})),
-                  io:format
-                    ("Failed nonrunnable test case:~n~s~n~n",
-                     [shr_test_jobs:print_test_case(FailedNonrunnableTestCase)]),
-                  print_test_case_diagnostics(FailedNonrunnableTestCase,DataSpec,WaitSpec)
-              end
-          end;
-        true -> 
-          io:format("~nGroup ~p succeeded.~n",[Group])
-      end,
-      Result.
+              io:format
+                ("No runnable failed test case exists~n",
+                 []),
+              [FailedNonrunnableTestCase|_] = AllFailingTestCases,
+              NewFailingTests =
+                case get(failing_tests) of
+                  undefined -> 
+                    [FailedNonrunnableTestCase];
+                  L when is_list(L) -> 
+                    [FailedNonrunnableTestCase|L]
+                end,
+              put(failing_tests,NewFailingTests),
+              F = unique_filename("tmp"),
+              file:write_file(F,term_to_binary({failed,NewFailingTests})),
+              io:format
+                ("Failed nonrunnable test case:~n~s~n~n",
+                 [shr_test_jobs:print_test_case(FailedNonrunnableTestCase)]),
+              print_test_case_diagnostics(FailedNonrunnableTestCase)
+          end
+      end;
+    true -> 
+      io:format("~nGroup ~p succeeded.~n",[Group])
+  end,
+  Result.
 
-find_a_runnable_failing_test_case([],_,_) ->
+find_a_runnable_failing_test_case([]) ->
   false;
-find_a_runnable_failing_test_case([TestCase|Rest],DataSpec,WaitSpec) ->
-  case is_runnable(TestCase,DataSpec,WaitSpec) of
+find_a_runnable_failing_test_case([TestCase|Rest]) ->
+  case is_runnable(TestCase) of
     true -> {ok,TestCase};
-    false -> find_a_runnable_failing_test_case(Rest,DataSpec,WaitSpec)
+    false -> find_a_runnable_failing_test_case(Rest)
   end.
 
-print_test_case_diagnostics(TestCase,DataSpec,WaitSpec) ->
-  is_runnable(TestCase,DataSpec,WaitSpec).
+print_test_case_diagnostics(TestCase) ->
+  is_runnable(TestCase).
 
-is_runnable(TC,DataSpec,WaitSpec) ->
+is_runnable(TC) ->
   TestCase = TC#test_case.test_case,
+  DataSpec = shr_test_jobs:test_data_spec(TestCase),
+  WaitingSpec = shr_test_jobs:test_waiting_spec(TestCase),
   BasicTestCase = shr_test_jobs:basic_test_case(TestCase),
   SimpleTestCase =
     lists:map 
@@ -385,7 +384,7 @@ is_runnable(TC,DataSpec,WaitSpec) ->
   GenModule = shr_test_jobs:gen_module(TestCase),
   GenState = shr_test_jobs:initial_gen_state(TestCase),
   {Info,InitialState} =
-    shr_step_resource:initial_state(DataSpec,WaitSpec,GenModule,GenState,[]),
+    shr_step_resource:initial_state(DataSpec,WaitingSpec,GenModule,GenState,[]),
   io:format("Checking if ~p is runnable~n",[SimpleTestCase]),
   try shr_step_resource:repeat_step(SimpleTestCase,InitialState,Info) of
       StateSpace -> 
@@ -404,7 +403,7 @@ unique_filename(Dir) ->
   unique_filename1(Dir++"/").
 unique_filename1(PreFix) ->
   {A,B,C} = os:timestamp(),
-  io_lib:format(PreFix++"quepasa_test_suite_~p_~p_~p.suite",[A,B,C]).
+  io_lib:format(PreFix++"carretera_test_suite_~p_~p_~p.suite",[A,B,C]).
 
 %% carretera:create_entrega_dir_from_bugs("/home/fred/svns/courses/cc/2017-2018-s2/practicas/codigo/testing/sequenceTester/examples/carretera/monitors/","buggy_carretera","javac -d . -cp /home/fred/svns/courses/aed/trunk/lib/aedlib.jar:/home/fred/Downloads/cclib-0.4.9.jar:/home/fred/svns/courses/cc/lib/jcsp-1.1-rc4/jcsp.jar *java").
 %%
@@ -502,7 +501,7 @@ tests_to_junit(FileName) ->
 tests_to_junit(TesterPrefix,TestPrefix,FileName) ->
   {ok,B} = file:read_file(FileName),
   {failed,TestCases} = binary_to_term(B),
-  test_cases_to_junit:gen_junit_tests
+  shr_test_cases_to_junit:gen_junit_tests
     (TesterPrefix,
      TestCases,
      TestPrefix,
@@ -642,13 +641,3 @@ process_entrega_info({newline,L},Acc) when is_list(L) ->
 process_entrega_info({newline,Line}, _Changes) ->
   io:format("*** Error: malformed network line: ~p~n",[Line]),
   throw(bad).
-
-
-  
-
-      
-                     
-      
-               
-  
-  

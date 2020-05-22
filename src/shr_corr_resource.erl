@@ -58,7 +58,7 @@ postcondition(State,_Args,Result,TS) ->
 	       "that have been completed by the implementation "++
 	       "even though no new calls were made~n",
 	     [FinishedJobs]),
-	  maybe_print_model_state(State),
+	  maybe_print_model_state(void,State),
 	  false
       end;
     true ->
@@ -195,7 +195,7 @@ finish_jobs(State,StatesAndJobs,FinishedStates,OrigState,FinishedJobs,TS) ->
 	   "(when checking that implementation return values\n"++
 	   "are permitted by the specification)~n~n",
 	 [shr_test_jobs:print_jobs(nonsilent_jobs(FinishedJobs,State),TS)]),
-      maybe_print_model_state(OrigState),
+      maybe_print_model_state(void,OrigState),
       false;
 
     true ->
@@ -306,14 +306,35 @@ compute_transitions(#onestate{incoming=Incoming,waiting=Waiting}=IndState,
       NewAcceptStates++NewFinishStates++NewSilentStates
   end.
 
-maybe_print_model_state(State) ->
-  case State#corr_res_state.states of
-    [IndState] ->
+maybe_print_model_state(IndStates,CorrState) ->
+  {IndState,PrintStr} =
+    case IndStates of
+      [I] -> 
+        {I,"Final model state"};
+      _ -> 
+        case CorrState#corr_res_state.states of
+          [IS] -> {IS,"Model state"};
+          _ -> {void,""}
+        end
+    end,
+  if
+    IndState =/= void ->
+      ScheduleStateStr =
+        if
+          IndState#onestate.swait=/=void ->
+            "schedule state:~n  "++
+              print_schedule_state(IndState#onestate.swait,CorrState#corr_res_state.waiting_module);
+          true ->
+            ""
+        end,
       io:format
-	("Final model state:~n  ~s~nSchedule state:~n  ~s~n",
-	 [print_model_state(IndState#onestate.sdata,State#corr_res_state.data_module),
-	  print_schedule_state(IndState#onestate.swait,State#corr_res_state.waiting_module)]);
-    _ ->
+	("~s~n  ~s~n~s~n",
+	 [
+          PrintStr,
+          print_model_state(IndState#onestate.sdata,CorrState#corr_res_state.data_module),
+          ScheduleStateStr
+         ]);
+    true ->
       ok
   end.
 
@@ -376,7 +397,7 @@ return_remaining_states(OrigState,FinalStates,TS) ->
 	    (lists:usort
 	       (fun (Job1,Job2) -> Job1#job.call == Job2#job.call end,
 		lists:flatten(JobsPerFailedState)), TS)]),
-      maybe_print_model_state(OrigState);
+      maybe_print_model_state(FinalStates,OrigState);
     true ->
       ok
   end,

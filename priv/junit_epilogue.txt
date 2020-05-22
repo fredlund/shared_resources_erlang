@@ -1,0 +1,15 @@
+
+     @Before
+     public void setup() throws Exception {
+ 	UnitTest.installChecker(new RoboFabTestChecker());
+	Call.reset();
+     }
+    
+     String configurationDescription() {
+ 	return
+	    "Cuando Robots.NUM_ROBOTS="+Robots.NUM_ROBOTS+"; "+
+	    "Cinta.MAX_P_CONTENEDOR="+Cinta.MAX_P_CONTENEDOR+"; "+
+	    "Robots.MIN_P_PIEZA="+Robots.MIN_P_PIEZA+"; "+
+	    "Robots.MAX_P_PIEZA="+Robots.MAX_P_PIEZA+"\n";
+     }
+}

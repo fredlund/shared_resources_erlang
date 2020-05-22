@@ -17,7 +17,8 @@
 -export([command_parser/1]).
 -export([prop_res/1, check_prop/1, check_prop/2, eqc_printer/2]).
 
--export([return_test_cases/0,print_test_cases/0,print_test_case/1,initial_gen_state/1,gen_module/1,basic_test_case/1]).
+-export([return_test_cases/0,print_test_cases/0,print_test_case/1,basic_test_case/1]).
+-export([initial_gen_state/1,test_data_spec/1,test_waiting_spec/1,gen_module/1]).
 
 -include_lib("eqc/include/eqc.hrl").
 -include_lib("eqc/include/eqc_component.hrl").
@@ -39,6 +40,8 @@
 	{
 	  started    %% Started testing?
 	  ,options    %% Testing options
+          ,test_data_spec
+          ,test_waiting_spec
 	  ,test_gen_state
 	  ,test_corr_state
 	  ,test_gen_module
@@ -75,6 +78,8 @@ init_state(Options) ->
     {
      started=false
     ,options=Options
+    ,test_data_spec=proplists:get_value(data_spec,Options)
+    ,test_waiting_spec=proplists:get_value(waiting_spec,Options)
     ,test_gen_state=shr_utils:initial_state(TestGenSpec,Options)
     ,test_corr_state=shr_utils:initial_state(TestCorrSpec,Options)
     ,test_observers_states=TestObserversState
@@ -794,6 +799,14 @@ print_test_cases() ->
 initial_gen_state(TestCase) ->
   State = initial_state_from_test_case(TestCase),
   State#state.test_gen_state.
+
+test_data_spec(TestCase) ->
+  State = initial_state_from_test_case(TestCase),
+  State#state.test_data_spec.
+
+test_waiting_spec(TestCase) ->
+  State = initial_state_from_test_case(TestCase),
+  State#state.test_waiting_spec.
 
 gen_module(TestCase) ->
   State = initial_state_from_test_case(TestCase),
