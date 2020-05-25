@@ -217,20 +217,20 @@ test_users_with_class(Class,PreOptions,Users) ->
     end,
   EntregaDir =
     if 
-      Class=='cc.carretera.CarreteraMonitor' -> "/home/fred/cc_2020_mon_exp";
-      true -> "/home/fred/cc_2020_csp_mon_exp"
+      Class=='cc.carretera.CarreteraMonitor' -> "/home/fred/cc_2020_mon_1";
+      true -> "/home/fred/cc_2020_csp_mon_1"
     end,
   test_users(Class,File,EntregaDir,PreOptions,Users).
 
 test_users_mon(PreOptions) ->
-  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/cc_2020_mon_exp",PreOptions,all).
+  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/cc_2020_mon_1",PreOptions,all).
 %%  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/gits/src/cc_2020/buggy_carretera",PreOptions).
 test_users_csp(PreOptions) ->
   test_users('cc.carretera.CarreteraCSP',"CarreteraCSP.java","/home/fred/cc_2020_csp_jul_reduced",PreOptions,all).
 
 test_users(Class,File,EntregaDir,PreOptions,Users) ->
   put(failing_tests,[]),
-  {ok,EntregaInfo} = read_entrega_info("/home/fred/cc_2020_mon_exp/prac1.csv"),
+  {ok,EntregaInfo} = read_entrega_info("/home/fred/cc_2020_mon_1/prac1.csv"),
   Entregas = find_entregas(File,EntregaDir),
   TesteableEntregas =
     lists:filter
@@ -657,6 +657,7 @@ process_entrega_info({eof},Acc) ->
 process_entrega_info({newline,["Group"|_]},Acc) ->
   Acc;
 process_entrega_info({newline,L},Acc) when is_list(L) ->
+  %%io:format("got ~s~n",[L]),
   [Group,Mark,Notes,Date] = L,
   [{Group,Mark,Notes,Date}|Acc];
 process_entrega_info({newline,Line}, _Changes) ->
