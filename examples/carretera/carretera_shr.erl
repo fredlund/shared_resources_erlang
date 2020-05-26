@@ -7,6 +7,7 @@
 -export([initial_state/2,pre/2,cpre/2,post/4,return/4]).
 -export([print_state/1]).
 
+
 -record(state,{segmentos=[],distance,carriles}).
 -record(segmento,{segmento,coches=[]}).
 -record(coche,{pos,coche=undefined,tks=undefined}).
@@ -52,7 +53,7 @@ cpre(Call,State) ->
   ?LOG("cpre(~p,~p)~n => ~p~n",[Call,State,Result]),
   Result.
 
-post(Call,_Return,SymbolicReturn,State) ->
+post(Call,_Return,State,SymbolicReturn) ->
   Result =
     case Call of
       {entrar,[CocheId,Velocidad]} ->
@@ -73,12 +74,12 @@ post(Call,_Return,SymbolicReturn,State) ->
 
 check_liberar_hueco_returned(Segmento,State,SymbolicResult) ->
   Coches = coches_en_segmento(Segmento,State),
-  andp
+  shr_symb:andp
     ([
-      eqp(Segmento,pos_segmento(SymbolicResult)),
-      leqp(0,pos_carril(SymbolicResult)),
-      leqp(pos_carril(SymbolicResult),State#state.carriles)
-      | lists:map(fun (Coche) -> notp(eqp(SymbolicResult,Coche#coche.pos)) end, Coches)
+      shr_symb:eqp(Segmento,pos_segmento(SymbolicResult)),
+      shr_symb:leqp(0,pos_carril(SymbolicResult)),
+      shr_symb:leqp(pos_carril(SymbolicResult),State#state.carriles)
+      | lists:map(fun (Coche) -> shr_symb:notp(shr_symb:eqp(SymbolicResult,Coche#coche.pos)) end, Coches)
      ]).
 
 return(State,Call,Result,SymbolicResult) ->
@@ -126,7 +127,7 @@ coche(CocheId,State) ->
            true ->
              Coche
          end
-     end, State#state.segmentos).
+     end, void, State#state.segmentos).
 
 segmento_tiene_carril_libre(Segmento,State) ->
   length(coches_en_segmento(Segmento,State)) < State#state.carriles.
@@ -135,10 +136,10 @@ avanzar_hasta_segmento(Segmento,SymbolicResult,CocheId,Velocidad,State) ->
   ?LOG
     ("avanzar_hasta_segmento(~p,~p,~p)~nin ~p~n",
      [Segmento,CocheId,Velocidad,State]),
+  Coche = 
+    #coche{coche=CocheId,pos={Segmento,pos_carril(SymbolicResult)},tks=Velocidad},
   SegmentoRec = 
     segmento(Segmento,State),
-  Coche = 
-    #coche{coche=CocheId,pos={Segmento,pos_carril(SymbolicResult),tks=Velocidad}},
   NewSegment =
     SegmentoRec#segmento{coches=[Coche|SegmentoRec#segmento.coches]},
   State#state
@@ -179,145 +180,13 @@ tick(State) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 pos_carril(Pos) ->
-  sfun(?MODULE,pos_carril_sfun,[Pos]).
+  shr_symb:sfun(fun ({_,Carril}) -> Carril end, void, [Pos]).
 
 pos_segmento(Pos) ->
-  sfun(?MODULE,pos_segmento_sfun,[Pos]).
+  shr_symb:sfun(fun ({Segmento,_}) -> Segmento end, void, [Pos]).
 
-eqp(T1,T2) ->
-  sfun(?MODULE,eq_sfun,[T1,T2]).
 
-andp(T1,T2) ->
-  sfun(?MODULE,and_sfun,[T1,T2]).
-  
-orp(T1,T2) ->
-  sfun(?MODULE,or_sfun,[T1,T2]).
 
-leqp(T1,T2) ->
-  sfun(?MODULE,leq_sfun,[T1,T2]).
-
-ltp(T1,T2) ->
-  sfun(?MODULE,lt_sfun,[T1,T2]).
-
-geqp(T1,T2) ->
-  sfun(?MODULE,geq_sfun,[T1,T2]).
-
-gtp(T1,T2) ->
-  sfun(?MODULE,gt_sfun,[T1,T2]).
-
-notp(T) ->
-  sfun(?MODULE,not_sfun,[T]).
-
-andp([]) ->
-  true;
-andp([T]) ->
-  T;
-andp([T1,T2]) ->
-  andp(T1,T2);
-andp([T|Rest]) ->
-  andp(T,andp(Rest)).
-
-orp([]) ->
-  true;
-orp([T]) ->
-  T;
-orp([T1,T2]) ->
-  orp(T1,T2);
-orp([T|Rest]) ->
-  orp(T,orp(Rest)).
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-sfun(M,F,A) ->
-  {'$sfun',M,F,A}.
-
-is_sfun({'$sfun',_,_,_}) ->
-  true;
-is_sfun(_) ->
-  false.
-
-exec_sfun({'$sfun',M,F,A}) ->
-  apply(M,F,A).
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-has_sfun(T) ->
-  check_term(is_fun/1,T).
-
-is_symbolic(T) ->
-  check_term(is_symb_var/1,T).
-
-check_term(F,T) ->
-  F(T) orelse check_term1(F,T).
-
-check_term1(F,T) ->
-  case T of
-    _ when is_tuple(T) ->
-      check_term1(F,tuple_to_list(T));
-    [Hd|Tl] ->
-      check_term(F,Hd) orelse check_term(Tl,Hd);
-    _ when is_map(T) ->
-      check_term1(F,maps:values(T));
-    _ ->
-      false
-  end.
-
-subst(VarMap,T) ->
-  case T of
-    {var,_} ->
-      case lists:keyfind(T,1,VarMap) of
-        false ->
-          io:format
-            ("~n*** ERROR: map ~p~ndoes not contain variable ~p~n",
-             [VarMap,T]),
-          error(bad);
-        {_,Value} ->
-          Value
-      end;
-    _ when is_tuple(T) ->
-      list_to_tuple(subst(VarMap,tuple_to_list(T)));
-    [Hd|Tl] ->
-      [subst(VarMap,Hd)|subst(VarMap,Tl)];
-    _ when is_map(T) ->
-      maps:from_list(subst(VarMap,maps:to_list(T)));
-    _ ->
-      T
-  end.
-
-eval(T) ->
-  evalHead(subexpr_eval(T)).
-
-evalHead(T) ->
-  case T of
-    {'$sfun',M,F,Args} ->
-      Ground = 
-        (not(has_sfun(Args))) andalso (not(is_symbolic(Args))),
-      if
-        Ground ->
-          exec_sfun(T);
-        true ->
-          T
-      end;
-    _ -> T
-  end.
-
-subexpr_eval(T) ->
-  case evalHead(T) of
-    NewT when T=/=NewT -> NewT;
-    _ ->
-      case T of
-        _ when is_tuple(T) ->
-          list_to_tuple(subexpr_eval(tuple_to_list(T)));
-        [Hd|Tl] ->
-          [subexpr_eval(Hd)|subexpr_eval(Tl)];
-        _ when is_map(T) ->
-          maps:from_list(subexpr_eval(maps:to_list(T)));
-        _ ->
-          T
-      end
-  end.
-                   
-                       
                          
         
 

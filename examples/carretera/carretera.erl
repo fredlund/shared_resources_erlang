@@ -8,6 +8,9 @@
 
 %% carretera:test_users_nopar(["180424+180425"]).
 
+%% carretera:tests_to_junit("carretera_test_suite_1590_509067_485663.suite").
+
+
 cars() ->
   [
    {car_gnr_fsm,["volvo",1,{weight,2000}]},
@@ -267,7 +270,7 @@ test_users(Class,File,EntregaDir,PreOptions,Users) ->
     FailingTestCases when is_list(FailingTestCases) ->
       F = unique_filename(),
       ok = file:write_file(F,term_to_binary({failed,FailingTestCases})),
-      io:format("wrote failed test cases to ~s~n",[F])
+      io:format("wrote failed test cases~n~p~nto ~s~n",[FailingTestCases,F])
   end.
 
 find_entregas(LFile,Target) ->
@@ -396,7 +399,7 @@ is_runnable(TC) ->
   SimpleTestCase =
     lists:map 
       (fun (Cmds) ->  
-	   [Jobs,_,_] = element(4,Cmds),
+	   [Jobs,_,_,_] = element(4,Cmds),
 	   Jobs
        end, BasicTestCase),
   GenModule = shr_test_jobs:gen_module(TestCase),
@@ -541,7 +544,7 @@ order_test_cases(TestCases) ->
 	       BasicTestCase = shr_test_jobs:basic_test_case(TestCase),
 	       lists:map 
 		 (fun (Cmds) ->
-		      [Jobs,_,_] = element(4,Cmds),
+		      [Jobs,_,_,_] = element(4,Cmds),
 		      lists:map
 			(fun (Command) -> Command#command.call end,
 			 Jobs)

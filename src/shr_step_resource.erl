@@ -217,27 +217,43 @@ do_step(Transition,Info) ->
   CallNewTransitions =
     lists:flatmap
       (fun (Call) ->
+           SymVar = {var,Transition#transition.symVarCounter},
 	   NewTransition =
 	     Transition#transition
-	     {unblocked=[Call|Transition#transition.unblocked]},
+	     {unblocked=[Call|Transition#transition.unblocked],
+              symVarCounter=Transition#transition.symVarCounter},
 	   NewDataStatesAndReturns =
              begin
                ReturnValues = 
-                 case DataModule:return_value(shr_call(Call),State#state.state) of
-                   {'$shr_nondeterministic',RValues} -> RValues;
-                   Other -> [Other]
+                 case lists:member({return_value,2},DataModule:module_info(exports)) of
+                   true ->
+                     case DataModule:return_value(shr_call(Call),State#state.state) of
+                       {'$shr_nondeterministic',RValues} -> RValues;
+                       Other -> [Other]
+                     end;
+                   false ->
+                     [undefined]
                  end,
                lists:flatmap
                  (fun (ReturnValue) ->
+                      io:format("ReturnValue is ~p of ~p~n",[ReturnValue,shr_call(Call)]),
                       ReturnCheck =
-                        if
-                          ReturnValue =/= undefined ->
-                            void;
+                        case (ReturnValue==undefined) orelse
+                             shr_symb:is_symbolic(ReturnValue) of
                           true ->
-                            {check,shr_call(Call),State#state.state}
+                            Check = 
+                              try DataModule:return(State#state.state,shr_call(Call),undefined,SymVar) of
+                                  Ch ->
+                                  io:format("Ch is ~p~n",[Ch]),
+                                  case shr_symb:is_symbolic(Ch) of
+                                    true -> Ch;
+                                    false -> undefined
+                                  end
+                              catch _:_ -> undefined end;
+                          false -> undefined
                         end,
                       Returns = {Call,ReturnValue,ReturnCheck},
-                      try DataModule:post(shr_call(Call),ReturnValue,State#state.state) of
+                      try DataModule:post(shr_call(Call),ReturnValue,State#state.state,SymVar) of
                           {'$shr_nondeterministic',NewStates} -> 
                           lists:map(fun (NS) -> {NS,Returns} end, NewStates);
                           NewDataState -> 

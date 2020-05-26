@@ -4,7 +4,7 @@
 
 -include("tester.hrl").
 
-%%-define(debug,true).
+-define(debug,true).
 -include("debug.hrl").
 
 -export([gen_junit_tests/6]).
@@ -50,7 +50,7 @@ gen_junit_tests([TC|Rest],State) ->
   SimpleTestCase =
     lists:map 
       (fun (Cmds) ->  
-	   [Jobs,_,_] = element(4,Cmds),
+	   [Jobs,_,_,_] = element(4,Cmds),
 	   Jobs
        end, BasicTestCase),
   ?LOG("~n~nWill generate code for test case:~n~p~n~n",[SimpleTestCase]),
@@ -246,9 +246,10 @@ output_sequence(Items,State) ->
                 CallRepReturn =
                   case shr_utils:find(fun ({Job,_,_}) -> Job#job.pid==Call#job.pid end, 
                             Returns) of
-                    {_,ReturnValue,_} ->
+                    {_,ReturnValue,Checker} ->
+                      io:format("Checker is ~p~n",[Checker]),
                       if
-                        ReturnValue=/=void ->
+                        ReturnValue=/=undefined ->
                           "Call.returns("++CallRep++","++
                             marshall_term(ReturnValue,State)++")";
                         true ->

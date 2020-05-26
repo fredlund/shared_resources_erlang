@@ -20,7 +20,7 @@ $(SPECBEAMS): $(SPECSOURCES)
 	$(COMPILER) -pa ebin $(EFLAGS) -o ebin $(SPECSOURCES)
 
 ebin/%.beam: %.erl $(HEADERS) $(SPECBEAMS)
-	$(COMPILER) -I ~/gits/shared_resources_erlang/src -pa ~/gits/shared_resources_erlang/ebin -pa ebin $(EFLAGS) -o ebin $<
+	$(COMPILER) -I ../../src -pa ../../ebin -pa ebin $(EFLAGS) -o ebin $<
 
 dialyzer: ebin main
 	dialyzer ebin/*beam examples/*/ebin
@@ -30,7 +30,6 @@ docs:
 
 clean:
 	rm -f ebin/*.beam 	
-	(cd examples; make clean)
 
 
 

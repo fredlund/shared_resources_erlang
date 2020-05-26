@@ -9,7 +9,7 @@
 -export([is_deterministic/1]).
 -export([resource_call/1]).
 
-%%-define(debug,true).
+-define(debug,true).
 -include("debug.hrl").
 
 -include("tester.hrl").
@@ -282,12 +282,12 @@ compute_transitions(#onestate{incoming=Incoming,waiting=Waiting}=IndState,
 		   case
 		     job_is_executable(QueueJob,IndState,
 				       DataModule,WaitingModule)
-		     andalso job_returns_correct_value(Job,IndState,
-						       DataModule) of
+		     andalso job_returns_correct_value(Job,IndState,DataModule) of
 		     true ->
 		       NextStates = 
 			 job_next_states
-			   (QueueJob,Job#job.result,
+			   (QueueJob,
+                            Job#job.result,
 			    IndState,
 			    DataModule,
 			    WaitingModule),
@@ -459,14 +459,25 @@ job_returns(Job,IndState,DataModule) ->
      [Job#job.call,Result]),
   Result.
   
-job_returns_correct_value(Job,IndState,DataModule) ->
-  Result =
-    DataModule:return
-      (IndState#onestate.sdata,resource_call(Job#job.call),Job#job.result,Job#job.symbolicResult),
+job_returns_correct_value(Job,#onestate{retmap=PreRetMap,sdata=Data},DataModule) ->
+  #job{call=Call,result=Result,symbolicResult=SymbolicResult} = Job,
+  PreReturnResult = DataModule:return(Data,resource_call(Call),Result,SymbolicResult),
+  ReturnResult =
+    case shr_symb:is_symbolic(PreReturnResult) of
+      true ->
+        RetMap=[{Job#job.symbolicResult,Job#job.result}|PreRetMap],
+        SubstitutedResult = shr_symb:subst(RetMap,PreReturnResult),
+        ?LOG
+          ("Result ~p~nwith map ~p~nis ~p~n",
+           [PreReturnResult,RetMap,SubstitutedResult]),
+        shr_symb:eval(SubstitutedResult);
+      false ->
+        PreReturnResult
+    end,
   ?LOG
-    ("Job ~p returns correct value ~p? ~p~n",
-     [Job#job.call,Job#job.result,Result]),
-  Result.
+    ("Job ~p returns correct value ~p?~n  ~p~n",
+     [Call,Result,ReturnResult]),
+  ReturnResult.
 
 job_cpre_is_true(Job,IndState,DataModule) ->
   DataModule:cpre(resource_call(Job#job.call),IndState#onestate.sdata).
@@ -520,7 +531,8 @@ job_next_states(Job,Result,IndState,DataModule,WaitingModule) ->
 	   {
 	   swait=NewWaitState,
 	   sdata=NewDataState,
-	   waiting=delete_job(Job,IndState#onestate.waiting)
+	   waiting=delete_job(Job,IndState#onestate.waiting),
+           retmap=[{Job#job.symbolicResult,Result}|IndState#onestate.retmap]
 	  }
      end, NewDataStates).
 

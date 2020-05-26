@@ -5,6 +5,8 @@
 -export([initial_state/2,module/1]).
 -export([nondeterministic/1]).
 -export([setup_shr/0]).
+-export([find/2]).
+
 
 %%-define(debug,true).
 -include("debug.hrl").

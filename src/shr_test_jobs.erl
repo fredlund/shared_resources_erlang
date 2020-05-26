@@ -230,7 +230,11 @@ do_cmds_args(State) ->
 	    State#state.test_corr_state),
 	 begin
 	   ?LOG("Commands are ~p~n",[Commands]),
-	   [lists:map(fun command_parser/1,Commands),WaitTime,NoEnvWait,State#state.symVarsCounter]
+	   [
+            lists:map(fun command_parser/1,Commands),
+            WaitTime,
+            NoEnvWait,
+            State#state.symVarsCounter]
 	 end)
   catch _:Reason ->
       io:format
@@ -408,7 +412,7 @@ do_cmds_next(State,Result={NewJobs,FinishedJobs},[Commands|_]) ->
       test_gen_state=NewTestGenState
       ,test_corr_state=NewTestCorrState
       ,test_observers_states=NewTestObserversStates
-      ,symVarsCounter=symVarsCounter+length(NewJobs)
+      ,symVarsCounter=State#state.symVarsCounter+length(NewJobs)
      }
   catch _:Reason ->
       io:format
