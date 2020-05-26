@@ -244,7 +244,7 @@ output_sequence(Items,State) ->
                   orelse
                   (lists:keyfind(Call#job.pid,#job.pid,FailedPres)=/=false),
                 CallRepReturn =
-                  case find(fun ({Job,_,_}) -> Job#job.pid==Call#job.pid end, 
+                  case shr_utils:find(fun ({Job,_,_}) -> Job#job.pid==Call#job.pid end, 
                             Returns) of
                     {_,ReturnValue,_} ->
                       if
@@ -326,7 +326,7 @@ unblocks(Calls,Returns,State) ->
   NeedPairs = 
     lists:any
       (fun (Call) ->
-           case find(fun ({Job,_,_}) -> Job#job.pid==Call#job.pid end, 
+           case shr_utils:find(fun ({Job,_,_}) -> Job#job.pid==Call#job.pid end, 
                      Returns) of
              {_,ReturnValue,_} -> true;
              _ -> false
@@ -338,7 +338,7 @@ unblocks(Calls,Returns,State) ->
       lists:foldl
         (fun (UnblockedCall,Acc) ->
              RightElement =
-               case find(fun ({Job,_,_}) -> Job#job.pid==UnblockedCall#job.pid end, 
+               case shr_utils:find(fun ({Job,_,_}) -> Job#job.pid==UnblockedCall#job.pid end, 
                          Returns) of
                  {_,ReturnValue,_} when ReturnValue=/=void -> 
                    io_lib:format("Return.returns(true,~s)",
@@ -417,16 +417,6 @@ marshall_term(Term,State) ->
       (State#state.marshaller)(Term);
     true ->
       Term
-  end.
-
-find(F,[]) ->
-  false;
-find(F,[Element|Rest]) ->
-  case F(Element) of
-    true ->
-      Element;
-    false ->
-      find(F,Rest)
   end.
   
 

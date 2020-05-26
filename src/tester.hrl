@@ -4,6 +4,7 @@
 	  ,call
 	  ,result
 	  ,waitinfo
+          ,symbolicResult
 	  ,info
 	}).
 

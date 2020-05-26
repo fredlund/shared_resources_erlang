@@ -462,7 +462,7 @@ job_returns(Job,IndState,DataModule) ->
 job_returns_correct_value(Job,IndState,DataModule) ->
   Result =
     DataModule:return
-      (IndState#onestate.sdata,resource_call(Job#job.call),Job#job.result),
+      (IndState#onestate.sdata,resource_call(Job#job.call),Job#job.result,Job#job.symbolicResult),
   ?LOG
     ("Job ~p returns correct value ~p? ~p~n",
      [Job#job.call,Job#job.result,Result]),
@@ -502,7 +502,8 @@ job_next_states(Job,Result,IndState,DataModule,WaitingModule) ->
 	  DataModule:post
 	  (resource_call(Job#job.call),
 	   Result,
-	   IndState#onestate.sdata) of
+	   IndState#onestate.sdata,
+           Job#job.symbolicResult) of
 	  {'$shr_nondeterministic',States} -> States;
 	  State -> [State]
 	end

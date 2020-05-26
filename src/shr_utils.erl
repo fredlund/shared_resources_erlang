@@ -116,5 +116,14 @@ setup_shr() ->
       [Return,
        whereis(shr_register)]).
 
+find(F,[]) ->
+  false;
+find(F,[Element|Rest]) ->
+  case F(Element) of
+    true ->
+      Element;
+    false ->
+      find(F,Rest)
+  end.
   
 

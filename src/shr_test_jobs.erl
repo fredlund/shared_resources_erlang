@@ -10,7 +10,7 @@
 -export([api_spec/0,initial_state/0]).
 -export([init_state/1]).
 -export([start_pre/1,start_args/1,start/2,start_post/3,start_next/3]).
--export([do_cmds_pre/1,do_cmds_args/1,do_cmds_pre/2,do_cmds/3,do_cmds_post/3,do_cmds_next/3]).
+-export([do_cmds_pre/1,do_cmds_args/1,do_cmds_pre/2,do_cmds/4,do_cmds_post/3,do_cmds_next/3]).
 -export([print_jobs/2]).
 -export([job_exited/1]).
 
@@ -51,7 +51,8 @@
 	  ,start_fun
 	  ,stop_fun
 	  ,jobs_alive
-	  ,counter
+          ,counter
+	  ,symVarsCounter=0
 	}).
 
 -record(observer,{name,module,state}).
@@ -229,7 +230,7 @@ do_cmds_args(State) ->
 	    State#state.test_corr_state),
 	 begin
 	   ?LOG("Commands are ~p~n",[Commands]),
-	   [lists:map(fun command_parser/1,Commands),WaitTime,NoEnvWait]
+	   [lists:map(fun command_parser/1,Commands),WaitTime,NoEnvWait,State#state.symVarsCounter]
 	 end)
   catch _:Reason ->
       io:format
@@ -260,21 +261,21 @@ do_cmds_pre(State,[Commands|_]) ->
       error(bad_state_machine)
   end.
 
-do_cmds(Commands,WaitTime,NoEnvWait) ->
+do_cmds(Commands,WaitTime,NoEnvWait,Counter) ->
   ?TIMEDLOG("run_commands(~p)~n",[Commands]),
   try
     ?TIMEDLOG("new round: cmds = ~p~n",[Commands]),
     ParentPid =
       self(),
-    Counter =
+    SymVarsCounter =
       shr_utils:get({?MODULE,counter}),
     NewJobs =
       lists:map
-	(fun (Command) ->
+	(fun ({Cnt,Command}) ->
 	     {F,Args} = Command#command.call,
 	     Info = Command#command.options,
 	     Call = {Command#command.port,F,Args},
-	     PreJob = #job{call=Call,info=Info},
+	     PreJob = #job{call=Call,info=Info,symbolicResult={var,Cnt+SymVarsCounter}},
 	     try shr_supervisor:add_childfun
 		   (fun () ->
 			try shr_calls:call(Command#command.port,{F,Args}) of
@@ -302,7 +303,7 @@ do_cmds(Commands,WaitTime,NoEnvWait) ->
 			       ParentPid!{PreJob#job{pid=self(),result=Result},Counter}
 			   end)}
 	     end
-	 end, Commands),
+	 end, lists:zip(lists:seq(0,length(Commands)-1),Commands)),
     if
       NewJobs==[] ->
 	{[],[]};
@@ -407,6 +408,7 @@ do_cmds_next(State,Result={NewJobs,FinishedJobs},[Commands|_]) ->
       test_gen_state=NewTestGenState
       ,test_corr_state=NewTestCorrState
       ,test_observers_states=NewTestObserversStates
+      ,symVarsCounter=symVarsCounter+length(NewJobs)
      }
   catch _:Reason ->
       io:format
