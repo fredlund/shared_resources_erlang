@@ -2,7 +2,7 @@
 
 %% A single step semantics for a resource (until a state is stable)
 
-%%-define(debug,true).
+-define(debug,true).
 -include("debug.hrl").
 
 -include("tester.hrl").
@@ -106,7 +106,8 @@ step(Commands,State,Info,OldCounter) ->
 	     {
 	       pid=Counter,
 	       call={Type,F,Args},
-	       info=Command#command.options
+	       info=Command#command.options,
+               symbolicResult={var,Counter}
 	     },
 	   {[Job|Acc], Counter+1}
        end, {[], OldCounter}, Commands),
@@ -217,11 +218,11 @@ do_step(Transition,Info) ->
   CallNewTransitions =
     lists:flatmap
       (fun (Call) ->
-           SymVar = {var,Transition#transition.symVarCounter},
 	   NewTransition =
 	     Transition#transition
-	     {unblocked=[Call|Transition#transition.unblocked],
-              symVarCounter=Transition#transition.symVarCounter},
+	     {unblocked=[Call|Transition#transition.unblocked]},
+           SymVar = 
+             Call#job.symbolicResult,
 	   NewDataStatesAndReturns =
              begin
                ReturnValues = 
@@ -253,6 +254,7 @@ do_step(Transition,Info) ->
                           false -> undefined
                         end,
                       Returns = {Call,ReturnValue,ReturnCheck},
+                      io:format("Returns=~p~n",[Returns]),
                       try DataModule:post(shr_call(Call),ReturnValue,State#state.state,SymVar) of
                           {'$shr_nondeterministic',NewStates} -> 
                           lists:map(fun (NS) -> {NS,Returns} end, NewStates);

@@ -8,7 +8,7 @@
 
 %% carretera:test_users_nopar(["180424+180425"]).
 
-%% carretera:tests_to_junit("carretera_test_suite_1590_509067_485663.suite").
+%% carretera:tests_to_junit("carretera_test_suite_1590_591755_889241.suite").
 
 
 cars() ->
