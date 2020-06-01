@@ -8,12 +8,12 @@
 
 cars() ->
   [
-   {car_gnr_fsm,["volvo",1,{weight,2000}]},
-   {car_gnr_fsm,["saab",1,{weight,2000}]},
-   {car_gnr_fsm,["vw",8,{weight,2000}]},
-   {car_gnr_fsm,["toyota",1,{weight,2000}]},
-   {car_gnr_fsm,["citroen",2,{weight,2000}]},
-   {car_gnr_fsm,["fiat",3,{weight,2000}]}
+   {car_gnr_fsm,["volvo",1]},
+   {car_gnr_fsm,["saab",1]},
+   {car_gnr_fsm,["vw",8]},
+   {car_gnr_fsm,["toyota",1]},
+   {car_gnr_fsm,["citroen",2]},
+   {car_gnr_fsm,["fiat",3]}
   ].
 
 sample() ->
@@ -187,9 +187,9 @@ stop_java() ->
 %% carretera:test_users_nopar_with_class('cc.carretera.CarreteraMonitor',["150291"]).
 
 test_users_nopar() ->
-  test_users_with_class('cc.carretera.CarreteraMonitor',[no_par]).
+  test_users_with_class('cc.carretera.CarreteraMonitor',[no_par,{more_commands,50}]).
 test_users_nopar(Users) ->
-  test_users_with_class('cc.carretera.CarreteraMonitor',[no_par],Users).
+  test_users_with_class('cc.carretera.CarreteraMonitor',[no_par,{more_commands,50}],Users).
 test_users_nopar_csp() ->
   test_users_with_class('cc.carretera.CarreteraCSP',[no_par]).
 test_users_par() ->
@@ -299,20 +299,28 @@ mtest(Class,Group,Dir,PreOptions) ->
                   true -> 4
                 end,
               ?FORALL(Distance,eqc_gen:choose(1,LimitDistance),
-                      shr_test_resource_implementation:prop_tri
-                        (
-                        {shr_gnr_fsms,cars() ++ [{tick_gnr_fsm,[]}]},
-                        start_controller
-                          (Class,
-                           [Dir++"/classes","/home/fred/gits/src/cc_2020/carreteraClasses"],
-                           [{distance,Distance},{carriles,Carriles}|PreOptions]),
-                        stop_java(),
-                        {carretera_shr,[{distance,Distance},{carriles,Carriles}]},
-                        shr_always,
-                        void,
-                        %%[{completion_time,200}|PreOptions]
-                         [{completion_time,350}|PreOptions]
-                       ))
+                      begin
+                        AllCars = cars(),
+                        ?FORALL(ChosenCars,
+                                ?SUCHTHAT(Cars,sublist(AllCars),Cars=/=[]),
+                                begin
+                                  NumCars = length(ChosenCars),
+                                  shr_test_resource_implementation:prop_tri
+                                    (
+                                    {shr_gnr_fsms,ChosenCars ++ [{tick_gnr_fsm,[{weight,NumCars+3}]}]},
+                                    start_controller
+                                      (Class,
+                                       [Dir++"/classes","/home/fred/gits/src/cc_2020/carreteraClasses"],
+                                       [{distance,Distance},{carriles,Carriles}|PreOptions]),
+                                    stop_java(),
+                                    {carretera_shr,[{distance,Distance},{carriles,Carriles}]},
+                                    shr_always,
+                                    void,
+                                    %%[{completion_time,200}|PreOptions]
+                                    [{completion_time,350}|PreOptions]
+                                   ) 
+                                end)
+                      end)
             end),
   Prop =
     case lists:member(no_par,PreOptions) of

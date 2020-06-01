@@ -547,11 +547,18 @@ check_prop(Prop,Options) ->
   Result.
 
 prop_res(Options) ->
+  MoreCommands = 
+    case proplists:get_value(more_commands,Options) of
+      N when is_integer(N), N>=1 ->
+        N;
+      _ ->
+        5
+    end,
   ?FORALL
      (Cmds,
       ?LET(SCmds,
 	   (more_commands
-	      (5,eqc_dynamic_cluster:dynamic_commands
+	      (MoreCommands,eqc_dynamic_cluster:dynamic_commands
 		   (?MODULE,init_state(Options)))),
 	   SCmds),
       ?CHECK_COMMANDS
