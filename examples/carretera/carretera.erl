@@ -194,6 +194,8 @@ test_users_nopar_csp() ->
   test_users_with_class('cc.carretera.CarreteraCSP',[no_par]).
 test_users_par() ->
   test_users_with_class('cc.carretera.CarreteraMonitor',[no_junit]).
+test_users_par(Users) ->
+  test_users_with_class('cc.carretera.CarreteraMonitor',[no_junit],Users).
 test_users_par_csp() ->
   test_users_with_class('cc.carretera.CarreteraCSP',[no_junit]).
 
@@ -308,8 +310,8 @@ mtest(Class,Group,Dir,PreOptions) ->
                         {carretera_shr,[{distance,Distance},{carriles,Carriles}]},
                         shr_always,
                         void,
-                        [{completion_time,200}|PreOptions]
-                        %% [{completion_time,350}|PreOptions]
+                        %%[{completion_time,200}|PreOptions]
+                         [{completion_time,350}|PreOptions]
                        ))
             end),
   Prop =
