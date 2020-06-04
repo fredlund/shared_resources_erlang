@@ -341,7 +341,7 @@ oracle(Call,Returns,FailedPres,State) ->
       ?LOG("Checker is ~p~n",[Checker]),
       case ReturnValue of
         _ when Checker=/=undefined ->
-          "Check.lambda(xyz -> "++shr_symb:output_sfun(Checker)++")";
+          "Check.lambda(xyz -> "++shr_symb:print(Checker)++")";
         {var,_} ->
           "";
         _ ->

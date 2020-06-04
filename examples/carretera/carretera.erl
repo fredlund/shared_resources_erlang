@@ -8,6 +8,7 @@
 
 %% carretera:tests_to_junit(carretera:test_users_nopar(["180424+180425"])).
 %% carretera:tests_to_junit(carretera:test_users_nopar(["160170+170130"])).
+%% carretera:tests_to_junit(carretera:test_users_nopar(["k0174"])).
 %% carretera:tests_to_junit(carretera:test_users_nopar()).
 
 cars() ->
@@ -311,7 +312,7 @@ mtest(Class,Group,Dir,PreOptions) ->
                                   NumCars = length(ChosenCars),
                                   shr_test_resource_implementation:prop_tri
                                     (
-                                    {shr_gnr_fsms,ChosenCars ++ [{tick_gnr_fsm,[{weight,NumCars+3}]}]},
+                                    {shr_gnr_fsms,ChosenCars ++ [{tick_gnr_fsm,[{weight,1}]}]},
                                     start_controller
                                       (Class,
                                        [Dir++"/classes","/home/fred/gits/src/cc_2020/carreteraClasses"],
@@ -321,7 +322,7 @@ mtest(Class,Group,Dir,PreOptions) ->
                                     shr_always,
                                     void,
                                     %%[{completion_time,200}|PreOptions]
-                                    [{completion_time,500}|PreOptions]
+                                    [{completion_time,300}|PreOptions]
                                    ) 
                                 end)
                       end)

@@ -265,13 +265,13 @@ do_cmds_pre(State,[Commands|_]) ->
       error(bad_state_machine)
   end.
 
-do_cmds(Commands,WaitTime,NoEnvWait,Counter) ->
+do_cmds(Commands,WaitTime,NoEnvWait,SymVarsCounter) ->
   ?TIMEDLOG("run_commands(~p)~n",[Commands]),
   try
     ?TIMEDLOG("new round: cmds = ~p~n",[Commands]),
     ParentPid =
       self(),
-    SymVarsCounter =
+    Counter =
       shr_utils:get({?MODULE,counter}),
     NewJobs =
       lists:map
@@ -282,8 +282,10 @@ do_cmds(Commands,WaitTime,NoEnvWait,Counter) ->
 	     PreJob = #job{call=Call,info=Info,symbolicResult={var,Cnt+SymVarsCounter}},
 	     try shr_supervisor:add_childfun
 		   (fun () ->
+                        ?TIMEDLOG("beginning to execute ~p~n",[PreJob]),
 			try shr_calls:call(Command#command.port,{F,Args}) of
 			    Result ->
+                            ?TIMEDLOG("finished executing ~p~n",[PreJob]),
 			    ParentPid!
 			      {PreJob#job{pid=self(),result=Result},Counter}
 			catch _Exception:Reason ->
@@ -464,6 +466,7 @@ wait_for_jobs(NewJobs,WaitTime,Counter,NoEnvWait) ->
   JobsAlive = shr_utils:get({?MODULE,jobs_alive}),
   TimeStamp = get_millisecs_timestamp(),
   UntilTime = TimeStamp + WaitTime,
+  ?TIMEDLOG("~p: waiting for ~p for ~p (=~p)~n",[TimeStamp,NewJobs,WaitTime,shr_utils:milliseconds_after()]),
   AllJobs = NewJobs++JobsAlive,
   case receive_completions(UntilTime,Counter,[],AllJobs,NoEnvWait) of
     {FinishedJobs,NewJobsAlive} when is_list(FinishedJobs) ->
@@ -486,13 +489,14 @@ receive_completions(UntilTime,Counter,Finished,JobsAlive,NoEnvWait) ->
 	  handle_exit(UntilTime,Pid,Reason,StackTrace,Counter,Finished,JobsAlive,NoEnvWait);
 	{exit,Pid,_Reason,_} ->
 	  io:format
-	    ("*** SHRT WARNING: exit for old job ~p received; consider increasing wait time.~n",[Pid]),
+	    ("*** ~p: SHRT WARNING: exit for old job~n~p~n received; consider increasing wait time.~n",[shr_utils:milliseconds_after(),Pid]),
 	  receive_completions(UntilTime,Counter,Finished,JobsAlive,NoEnvWait);
 	_ when is_record(Job,job), JobCounter==Counter ->
+          ?TIMEDLOG("got job ~p~n",[Job]),
 	  receive_completions(UntilTime,Counter,[Job|Finished],delete_job(Job,JobsAlive),NoEnvWait);
 	_ when is_record(Job,job) ->
 	  io:format
-	    ("*** SHRT WARNING: old job received; consider increasing wait time.~n"),
+	    ("*** ~p: SHRT WARNING: old job~n~p~n received; consider increasing wait time.~n",[shr_utils:milliseconds_after(),Job]),
 	  receive_completions(UntilTime,Counter,Finished,JobsAlive,NoEnvWait)
       end;
     X ->

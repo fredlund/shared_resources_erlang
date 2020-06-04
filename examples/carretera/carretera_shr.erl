@@ -7,6 +7,9 @@
 -export([initial_state/2,pre/2,cpre/2,post/4,return/4]).
 -export([print_state/1]).
 
+-export([carril/1]).
+
+
 -record(state,{segmentos=[],distance,carriles}).
 -record(segmento,{segmento,coches=[]}).
 -record(coche,{pos,coche=undefined,tks=undefined}).
@@ -59,7 +62,7 @@ post(Call,_Return,State,SymbolicReturn) ->
         avanzar_hasta_segmento(1,SymbolicReturn,CocheId,Velocidad,State);
       {avanzar,[CocheId,Velocidad]} ->
         Segmento = segmento_donde_esta_el_coche(CocheId,State),
-        avanzar_hasta_segmento(Segmento,SymbolicReturn,CocheId,Velocidad,
+        avanzar_hasta_segmento(Segmento+1,SymbolicReturn,CocheId,Velocidad,
                         liberar_hueco(CocheId,State));
       {salir,[CocheId]} ->
         liberar_hueco(CocheId,State);
@@ -112,7 +115,7 @@ coches_en_segmento(Segmento,State) ->
 
 segmento_donde_esta_el_coche(CocheId,State) ->
   case shr_utils:find(fun (Segment) -> 
-                          lists:exists
+                          lists:any
                             (fun (Coche) -> Coche#coche.coche==CocheId end, 
                              Segment#segmento.coches)
                       end, State#state.segmentos) of
@@ -182,17 +185,17 @@ tick(State) ->
 
 pos_carril(Pos) ->
   shr_symb:sfun
-    (fun ({_,Carril}) -> Carril end, 
+    ({?MODULE,carril},
      fun (Pos) -> Pos++".getCarril()" end,
      [Pos]).
+
+carril({_,Carril}) -> Carril.
 
 pos_segmento(Pos) ->
   shr_symb:sfun
     (fun ({Segmento,_}) -> Segmento end, 
      fun (Pos) -> Pos++".getSegmento()" end,
      [Pos]).
-
-
 
                          
         

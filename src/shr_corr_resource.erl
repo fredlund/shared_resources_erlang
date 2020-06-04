@@ -462,21 +462,19 @@ job_returns(Job,IndState,DataModule) ->
 job_returns_correct_value(Job,#onestate{retmap=PreRetMap,sdata=Data},DataModule) ->
   #job{call=Call,result=Result,symbolicResult=SymbolicResult} = Job,
   PreReturnResult = DataModule:return(Data,resource_call(Call),Result,SymbolicResult),
-  ReturnResult =
-    case shr_symb:is_symbolic(PreReturnResult) of
-      true ->
-        RetMap=[{Job#job.symbolicResult,Job#job.result}|PreRetMap],
-        SubstitutedResult = shr_symb:subst(RetMap,PreReturnResult),
-        ?LOG
-          ("Result ~p~nwith map ~p~nis ~p~n",
-           [PreReturnResult,RetMap,SubstitutedResult]),
-        shr_symb:eval(SubstitutedResult);
-      false ->
-        PreReturnResult
-    end,
+  RetMap=[{Job#job.symbolicResult,Job#job.result}|PreRetMap],
+  ReturnResult = shr_symb:eval(PreReturnResult,RetMap),
   ?LOG
     ("Job ~p returns correct value ~p?~n  ~p~n",
      [Call,Result,ReturnResult]),
+  if
+    not(ReturnResult) ->
+      ?LOG
+        ("PreReturnResult:~n~s~nMap:~n~p~n",
+         [shr_symb:print(PreReturnResult),RetMap]),
+      ok;
+    true -> ok
+  end,
   ReturnResult.
 
 job_cpre_is_true(Job,IndState,DataModule) ->
