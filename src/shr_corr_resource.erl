@@ -9,7 +9,7 @@
 -export([is_deterministic/1]).
 -export([resource_call/1]).
 
--define(debug,true).
+%%-define(debug,true).
 -include("debug.hrl").
 
 -include("tester.hrl").

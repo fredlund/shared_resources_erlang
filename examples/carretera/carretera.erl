@@ -6,19 +6,19 @@
 
 -compile(export_all).
 
-%% carretera:test_users_nopar(["180424+180425"]).
-
-%% carretera:tests_to_junit("carretera_test_suite_1590_591755_889241.suite").
-
+%% carretera:tests_to_junit(carretera:test_users_nopar(["180424+180425"])).
+%% carretera:tests_to_junit(carretera:test_users_nopar(["160170+170130"])).
+%% carretera:tests_to_junit(carretera:test_users_nopar()).
 
 cars() ->
   [
-   {car_gnr_fsm,["volvo",1,{weight,2000}]},
-   {car_gnr_fsm,["saab",1,{weight,2000}]},
-   {car_gnr_fsm,["vw",8,{weight,2000}]},
-   {car_gnr_fsm,["toyota",1,{weight,2000}]},
-   {car_gnr_fsm,["citroen",2,{weight,2000}]},
-   {car_gnr_fsm,["fiat",3,{weight,2000}]}
+   {car_gnr_fsm,["volvo",1]},
+   {car_gnr_fsm,["saab",1]},
+
+   {car_gnr_fsm,["vw",8]},
+   {car_gnr_fsm,["toyota",1]},
+   {car_gnr_fsm,["citroen",2]},
+   {car_gnr_fsm,["fiat",3]}
   ].
 
 sample() ->
@@ -270,7 +270,8 @@ test_users(Class,File,EntregaDir,PreOptions,Users) ->
     FailingTestCases when is_list(FailingTestCases) ->
       F = unique_filename(),
       ok = file:write_file(F,term_to_binary({failed,FailingTestCases})),
-      io:format("wrote failed test cases~n~p~nto ~s~n",[FailingTestCases,F])
+      io:format("wrote failed test cases~n~p~nto ~s~n",[FailingTestCases,F]),
+      F
   end.
 
 find_entregas(LFile,Target) ->
@@ -302,20 +303,28 @@ mtest(Class,Group,Dir,PreOptions) ->
                   true -> 4
                 end,
               ?FORALL(Distance,eqc_gen:choose(1,LimitDistance),
-                      shr_test_resource_implementation:prop_tri
-                        (
-                        {shr_gnr_fsms,cars() ++ [{tick_gnr_fsm,[]}]},
-                        start_controller
-                          (Class,
-                           [Dir++"/classes","/home/fred/gits/src/cc_2020/carreteraClasses"],
-                           [{distance,Distance},{carriles,Carriles}|PreOptions]),
-                        stop_java(),
-                        {carretera_shr,[{distance,Distance},{carriles,Carriles}]},
-                        shr_always,
-                        void,
-                        [{completion_time,200}|PreOptions]
-                        %% [{completion_time,350}|PreOptions]
-                       ))
+                      begin
+                        AllCars = cars(),
+                        ?FORALL(ChosenCars,
+                                ?SUCHTHAT(Cars,sublist(AllCars),Cars=/=[]),
+                                begin
+                                  NumCars = length(ChosenCars),
+                                  shr_test_resource_implementation:prop_tri
+                                    (
+                                    {shr_gnr_fsms,ChosenCars ++ [{tick_gnr_fsm,[{weight,NumCars+3}]}]},
+                                    start_controller
+                                      (Class,
+                                       [Dir++"/classes","/home/fred/gits/src/cc_2020/carreteraClasses"],
+                                       [{distance,Distance},{carriles,Carriles}|PreOptions]),
+                                    stop_java(),
+                                    {carretera_shr,[{distance,Distance},{carriles,Carriles}]},
+                                    shr_always,
+                                    void,
+                                    %%[{completion_time,200}|PreOptions]
+                                    [{completion_time,500}|PreOptions]
+                                   ) 
+                                end)
+                      end)
             end),
   Prop =
     case lists:member(no_par,PreOptions) of
@@ -522,13 +531,34 @@ tests_to_junit(FileName) ->
 tests_to_junit(TesterPrefix,TestPrefix,FileName) ->
   {ok,B} = file:read_file(FileName),
   {failed,TestCases} = binary_to_term(B),
+  ConfigDescFun = 
+    fun (TestCase) ->
+        {_,DataOptions} = shr_test_jobs:test_data_spec(TestCase),
+        Distance = proplists:get_value(distance,DataOptions),
+        Carriles = proplists:get_value(carriles,DataOptions),
+        io_lib:format
+          ("config(new Pos(~p,~p))",
+           [Distance,Carriles])
+    end,
+  ControllerArgFun = 
+    fun (TestCase) ->
+        {_,DataOptions} = shr_test_jobs:test_data_spec(TestCase),
+        Distance = proplists:get_value(distance,DataOptions),
+        Carriles = proplists:get_value(carriles,DataOptions),
+        io:format("DataOptions=~p~n",[DataOptions]),
+        io_lib:format
+          ("new Pos(~p,~p)",
+           [Distance,Carriles])
+    end,
   shr_test_cases_to_junit:gen_junit_tests
     (TesterPrefix,
      TestCases,
      TestPrefix,
      callrep(),
      fun order_test_cases/1,
-     fun marshaller/1).
+     fun marshaller/1,
+     ConfigDescFun,
+     ControllerArgFun).
 
 marshaller({X,Y}) ->
   io_lib:format("new Pos(~p,~p)",[X,Y]).

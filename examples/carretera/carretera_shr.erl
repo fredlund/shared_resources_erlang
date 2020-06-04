@@ -7,12 +7,11 @@
 -export([initial_state/2,pre/2,cpre/2,post/4,return/4]).
 -export([print_state/1]).
 
-
 -record(state,{segmentos=[],distance,carriles}).
 -record(segmento,{segmento,coches=[]}).
 -record(coche,{pos,coche=undefined,tks=undefined}).
 
--define(debug,true).
+%%-define(debug,true).
 -ifdef(debug).
 -define(LOG(X,Y),
 	io:format("{~p,~p}: ~s~n", [?MODULE,?LINE,io_lib:format(X,Y)])).
@@ -74,12 +73,14 @@ post(Call,_Return,State,SymbolicReturn) ->
 
 check_liberar_hueco_returned(Segmento,State,SymbolicResult) ->
   Coches = coches_en_segmento(Segmento,State),
+  Res = shr_symb:convert(SymbolicResult,"cc.carretera.Pos"),
   shr_symb:andp
     ([
-      shr_symb:eqp(Segmento,pos_segmento(SymbolicResult)),
-      shr_symb:leqp(0,pos_carril(SymbolicResult)),
-      shr_symb:leqp(pos_carril(SymbolicResult),State#state.carriles)
-      | lists:map(fun (Coche) -> shr_symb:notp(shr_symb:eqp(SymbolicResult,Coche#coche.pos)) end, Coches)
+      shr_symb:notp(shr_symb:refequalp(SymbolicResult,null)),
+      shr_symb:refequalp(Segmento,pos_segmento(Res)),
+      shr_symb:leqp(0,pos_carril(Res)),
+      shr_symb:leqp(pos_carril(Res),State#state.carriles)
+      | lists:map(fun (Coche) -> shr_symb:notp(shr_symb:equalp(SymbolicResult,Coche#coche.pos)) end, Coches)
      ]).
 
 return(State,Call,Result,SymbolicResult) ->
@@ -180,10 +181,16 @@ tick(State) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 pos_carril(Pos) ->
-  shr_symb:sfun(fun ({_,Carril}) -> Carril end, void, [Pos]).
+  shr_symb:sfun
+    (fun ({_,Carril}) -> Carril end, 
+     fun (Pos) -> Pos++".getCarril()" end,
+     [Pos]).
 
 pos_segmento(Pos) ->
-  shr_symb:sfun(fun ({Segmento,_}) -> Segmento end, void, [Pos]).
+  shr_symb:sfun
+    (fun ({Segmento,_}) -> Segmento end, 
+     fun (Pos) -> Pos++".getSegmento()" end,
+     [Pos]).
 
 
 

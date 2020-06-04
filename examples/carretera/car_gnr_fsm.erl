@@ -23,8 +23,8 @@ precondition(_,#state{distance=Distance,doing=Doing,pos=Pos,car=Car}=State,_Glob
     case {Doing,Op} of
       {outside,entrar} -> true;
       {circulando,circulando} -> true;
-      {avanzar,avanzar} when Pos<Distance-1 -> true;
-      {avanzar,salir} -> true;
+      {avanzar,avanzar} when Pos<Distance -> true;
+      {avanzar,salir} when Pos==Distance -> true;
       {exited,stopped} -> true;
       _ -> false
     end.
@@ -33,8 +33,8 @@ command(_Id,#state{distance=Distance,doing=Doing,pos=Pos,car=Car,velocidad=Veloc
   case State#state.doing of
     outside -> {controller,entrar,[Car,Velocidad]};
     circulando -> {controller,circulando,[Car]};
-    avanzar when Pos<Distance-1 -> {controller,avanzar,[Car,Velocidad]};
-    avanzar -> {controller,salir,[Car]};
+    avanzar when Pos<Distance -> {controller,avanzar,[Car,Velocidad]};
+    avanzar when Pos==Distance -> {controller,salir,[Car]};
     exited -> stopped
   end.
 
@@ -42,7 +42,7 @@ next_state(MachineId,#state{pos=Pos}=State,GlobalState,_,Call) ->
   NewLocalState =
     case Call of
       {_,entrar,_} ->
-        State#state{doing=circulando,pos=0};
+        State#state{doing=circulando,pos=1};
       {_,circulando,_} ->
         State#state{doing=avanzar};
       {_,avanzar,_} ->

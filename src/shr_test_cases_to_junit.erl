@@ -4,13 +4,15 @@
 
 -include("tester.hrl").
 
--define(debug,true).
+%%-define(debug,true).
 -include("debug.hrl").
 
--export([gen_junit_tests/6]).
+-export([gen_junit_tests/8]).
+-export([symbVar/1]).
 
 
-gen_junit_tests(ClassName,TestCases,Prefix,CallRep,Orderer,Marshaller) ->
+
+gen_junit_tests(ClassName,TestCases,Prefix,CallRep,Orderer,Marshaller,ConfigDescFun,ControllerArgFun) ->
   FileName = ClassName++".java",
   {ok,File} = file:open(FileName,[write]),
   State =
@@ -22,18 +24,8 @@ gen_junit_tests(ClassName,TestCases,Prefix,CallRep,Orderer,Marshaller) ->
       indent=indent_len(1),
       marshaller=Marshaller
     },
-  copy_file(shr_priv_dir()++"/junit_prologue.txt",State),
-  io:format
-    (State#state.file,
-     "public abstract class ~s {~n"++
-    "~spublic abstract Object startController();~n~n",
-     [State#state.classname,indent(State)]),
-  io:format
-    (State#state.file,
-     "~sprivate Class precondFailedExc;\n",
-     [indent(State)]),
   OrderedTestCases = Orderer(TestCases),
-  gen_junit_tests(OrderedTestCases,State).
+  gen_junit_tests(OrderedTestCases,ConfigDescFun,ControllerArgFun,State).
 
 shr_dir() ->
   filename:dirname(code:which(?MODULE)).
@@ -41,10 +33,9 @@ shr_dir() ->
 shr_priv_dir() ->
   shr_dir()++"/../priv".
   
-gen_junit_tests([],State) ->
-  copy_file(shr_priv_dir()++"/junit_epilogue.txt",State),
+gen_junit_tests([],_ConfigDescFun,_ControllerArgFun,State) ->
   ok = file:close(State#state.file);
-gen_junit_tests([TC|Rest],State) ->
+gen_junit_tests([TC|Rest],ConfigDescFun,ControllerArgFun,State) ->
   TestCase = TC#test_case.test_case,
   BasicTestCase = shr_test_jobs:basic_test_case(TestCase),
   SimpleTestCase =
@@ -61,12 +52,12 @@ gen_junit_tests([TC|Rest],State) ->
   {Info,InitialState} = 
     shr_step_resource:initial_state(DataSpec,WaitingSpec,GenModule,GenState,[]),
   try shr_step_resource:repeat_step(SimpleTestCase,InitialState,Info) of
-      StateSpace -> output_test_case(StateSpace,State)
+      StateSpace -> output_test_case(TestCase,StateSpace,ConfigDescFun,ControllerArgFun,State)
   catch throw:not_deterministic ->
       io:format("*** Warning: test case is not deterministic.~n"),
       shr_test_jobs:print_test_case(TC)
   end,
-  gen_junit_tests(Rest,State#state{counter=State#state.counter+1}).
+  gen_junit_tests(Rest,ConfigDescFun,ControllerArgFun,State#state{counter=State#state.counter+1}).
 
 
 statesUnblocks({branching,{_,StatesUnblocks,_,_}}) ->
@@ -75,27 +66,30 @@ statesUnblocks({branching,{_,StatesUnblocks,_,_}}) ->
 remaining_commands({branching,{_,_,_,Cmds}}) ->
   Cmds.
 
-output_test_case(StateSpace,State) ->
+output_test_case(TestCase,StateSpace,ConfigDescFun,ControllerArgFun,State) ->
   Name = io_lib:format("test_~s_~p",[State#state.prefix,State#state.counter]),
   I1 = indent_len(1),
   I2 = indent_len(2),
   io:format
     (State#state.file,
      indent(I1,"@Test")++
-       indent(I1,"public void ~s() {")++
-       indent(I2,"new UnitTest")++
-       indent(I2,"(")++
-       indent(I2+1,"\"~s\",")++
-       indent(I2+1,"configurationDescription(),")++
-       indent(I2+1,"startController(),"),
-     [Name,Name]),
+       indent(I1,"@DisplayName(\""++Name++"\")")++
+       indent(I1,"public void ~s(TestInfo testInfo) {")++
+       indent(I2,"UnitTest t =")++
+       indent(I2+2,"new UnitTest")++
+       indent(I2+2,"(")++
+       indent(I2+3,"testInfo.getDisplayName(),")++
+       indent(I2+3,ConfigDescFun(TestCase)++",")++
+       indent(I2+3,"startController("++ControllerArgFun(TestCase)++"),"),
+     [Name]),
   io:format
     (State#state.file,
      "~s",
-     [output_state_space(StateSpace,State#state{indent=I2+1})]),
+     [output_state_space(StateSpace,State#state{indent=I2+3})]),
   io:format
     (State#state.file,
-     indent(I2,").run();")++
+     indent(I2+2,");")++
+       indent(I2,"Assertions.assertTimeoutPreemptively(Duration.ofSeconds(30), () -> { t.run(); });")++
        nl(I1,"}"),
      []).
 
@@ -114,7 +108,8 @@ extract_sequence({State,Transitions}) ->
   {branching_point,[],Transition#transition.calls,Transitions}.
 
 output_state_space(StateSpace,State) ->
-  case extract_sequence(StateSpace) of
+  ExtSequence = extract_sequence(StateSpace),
+  case ExtSequence of
     {sequence,Sequence,FinalState} ->
       output_sequence_final
 	(Sequence,nil,State);
@@ -205,18 +200,17 @@ nl(N,S) when is_integer(N), N>=0, is_list(S) ->
   "\n"++indent(N)++S++"\n".
 
 indent_len(N) ->
-  N*4.
+  N*2.
 
 output_sequence_final(Sequence,Final,State) ->
   I = State#state.indent,
   if
     Sequence=/=[] ->
       io_lib:format
-	(indent(I,"UnitTest.compose")++
-	   indent(I,"(UnitTest.sequence")++
-	   indent(I+1,"(")++
-	   output_sequence(Sequence,State#state{indent=I+2})++
-	   indent(I+1,"),")++
+	(indent(I,"Util.sequenceEndsWith")++
+	   indent(I,"(new TestCall[] {")++
+	   output_sequence(Sequence,Final,State#state{indent=I+2})++
+	   indent(I+1,"},")++
 	   "~s"++
 	   indent(I,")"),
 	 [output_final(Final,State#state{indent=I+1})]);
@@ -224,7 +218,7 @@ output_sequence_final(Sequence,Final,State) ->
       output_final(Final,State#state{indent=I})
   end.
 
-output_sequence(Items,State) ->
+output_sequence(Items,Final,State) ->
   combine
     (lists:map
        (fun (Item) ->
@@ -244,25 +238,12 @@ output_sequence(Items,State) ->
                   orelse
                   (lists:keyfind(Call#job.pid,#job.pid,FailedPres)=/=false),
                 CallRepReturn =
-                  case shr_utils:find(fun ({Job,_,_}) -> Job#job.pid==Call#job.pid end, 
-                            Returns) of
-                    {_,ReturnValue,Checker} ->
-                      io:format("Checker is ~p~n",[Checker]),
-                      if
-                        ReturnValue=/=undefined ->
-                          "Call.returns("++CallRep++","++
-                            marshall_term(ReturnValue,State)++")";
-                        true ->
-                          CallRep
-                      end;
-                    false ->
-                      case lists:keyfind(Call#job.pid,#job.pid,FailedPres) of
-                        false ->
-                          CallRep;
-                        _ ->
-                          "Call.raisesException("++CallRep++",precondFailedExc)"
-                      end
-                  end,
+                  CallRep
+                  ++(case oracle(Call,Returns,FailedPres,State) of
+                       "" -> "";
+                       Other -> ".o("++Other++")"
+                     end)
+                  ++".n(\""++symbVar(Call#job.pid)++"\")",
 		Unblocks_non_locally =
 		  lists:keydelete(Call#job.pid,#job.pid,Unblocked),
 		Unblocks =
@@ -276,8 +257,8 @@ output_sequence(Items,State) ->
 		       [CallRepReturn,pre(",",Unblocks)]);
 		  true ->
 		    io_lib:format
-		      (indent(I,"TestCall.blocks(\"~s\",~s~s)"),
-		       [symbVar(Call#job.pid),CallRepReturn,pre(",",Unblocks)])
+		      (indent(I,"TestCall.blocks(~s~s)"),
+		       [CallRepReturn,pre(",",Unblocks)])
 		end;
 	      [_|_] ->
 		io_lib:format
@@ -338,17 +319,13 @@ unblocks(Calls,Returns,State) ->
     NeedPairs ->
       lists:foldl
         (fun (UnblockedCall,Acc) ->
-             RightElement =
-               case shr_utils:find(fun ({Job,_,_}) -> Job#job.pid==UnblockedCall#job.pid end, 
-                         Returns) of
-                 {_,ReturnValue,_} when ReturnValue=/=void -> 
-                   io_lib:format("Return.returns(true,~s)",
-				 [marshall_term(ReturnValue,State)]);
-                 _ -> 
-                   "null"
+             RightElement = 
+               case oracle(UnblockedCall,Returns,[],State) of
+                 "" -> "Check.returns()";
+                 Other -> Other
                end,
              UnblocksComma = if Acc=="" -> ""; true -> "," end,
-             "new Pair<String,Return>(\""++symbVar(UnblockedCall#job.pid)++"\","++RightElement++")"++UnblocksComma++Acc
+             "new Pair<String,Oracle>(\""++symbVar(UnblockedCall#job.pid)++"\","++RightElement++")"++UnblocksComma++Acc
          end, "", Calls);
     true ->
       lists:foldl
@@ -356,6 +333,27 @@ unblocks(Calls,Returns,State) ->
              UnblocksComma = if Acc=="" -> ""; true -> "," end,
              "\""++symbVar(UnblockedCall#job.pid)++"\""++UnblocksComma++Acc
          end, "", Calls)
+  end.
+
+oracle(Call,Returns,FailedPres,State) ->
+  case shr_utils:find(fun ({Job,_,_}) -> Job#job.pid==Call#job.pid end, Returns) of
+    {_,ReturnValue,Checker} ->
+      ?LOG("Checker is ~p~n",[Checker]),
+      case ReturnValue of
+        _ when Checker=/=undefined ->
+          "Check.lambda(xyz -> "++shr_symb:output_sfun(Checker)++")";
+        {var,_} ->
+          "";
+        _ ->
+          "Check.returns("++marshall_term(ReturnValue,State)++")"
+      end;
+    false ->
+      case lists:keyfind(Call#job.pid,#job.pid,FailedPres) of
+        false ->
+          "";
+        _ ->
+          "Check.raisesException(precondFailedExc)"
+      end
   end.
 
 output_final(FinalState,State) ->

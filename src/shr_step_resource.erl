@@ -2,7 +2,7 @@
 
 %% A single step semantics for a resource (until a state is stable)
 
--define(debug,true).
+%%-define(debug,true).
 -include("debug.hrl").
 
 -include("tester.hrl").
@@ -233,19 +233,19 @@ do_step(Transition,Info) ->
                        Other -> [Other]
                      end;
                    false ->
-                     [undefined]
+                     [SymVar]
                  end,
                lists:flatmap
                  (fun (ReturnValue) ->
-                      io:format("ReturnValue is ~p of ~p~n",[ReturnValue,shr_call(Call)]),
+                      ?LOG("ReturnValue is ~p of ~p~n",[ReturnValue,shr_call(Call)]),
                       ReturnCheck =
-                        case (ReturnValue==undefined) orelse
+                        case (ReturnValue==SymVar) orelse
                              shr_symb:is_symbolic(ReturnValue) of
                           true ->
                             Check = 
                               try DataModule:return(State#state.state,shr_call(Call),undefined,SymVar) of
                                   Ch ->
-                                  io:format("Ch is ~p~n",[Ch]),
+                                  ?LOG("Ch is ~p~n",[Ch]),
                                   case shr_symb:is_symbolic(Ch) of
                                     true -> Ch;
                                     false -> undefined
@@ -254,7 +254,7 @@ do_step(Transition,Info) ->
                           false -> undefined
                         end,
                       Returns = {Call,ReturnValue,ReturnCheck},
-                      io:format("Returns=~p~n",[Returns]),
+                      ?LOG("Returns=~p~n",[Returns]),
                       try DataModule:post(shr_call(Call),ReturnValue,State#state.state,SymVar) of
                           {'$shr_nondeterministic',NewStates} -> 
                           lists:map(fun (NS) -> {NS,Returns} end, NewStates);

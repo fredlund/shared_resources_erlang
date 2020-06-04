@@ -91,32 +91,87 @@ subexpr_eval(T) ->
       T
   end.
                    
+output_sfun(S) ->
+  case S of 
+    {'$sfun',_,OutputFun,Args} ->
+      SFUnArgs = lists:map(fun (A) -> output_sfun_or_value(A) end, Args),
+      case OutputFun of
+        _ when is_function(OutputFun) ->
+          apply(OutputFun,SFUnArgs);
+        {M,F} ->
+          apply(M,F,SFUnArgs);
+        _ ->
+          io:format("~n*** Error: not a function ~p~n",[S]),
+          error(bad)
+      end
+  end.
                        
+output_sfun_or_value(T) ->
+  case is_sfun(T) of
+    true ->
+      output_sfun(T);
+    false ->
+      case T of
+        null -> 
+          "null";
+        {var,N} when is_integer(N) ->
+          "Call.v(\""++shr_test_cases_to_junit:symbVar(N)++"\")";
+        _ -> 
+          io_lib:format("~p",[T])
+      end
+  end.
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-eqp(T1,T2) ->
-  sfun(fun (E1,E2) -> E1==E2 end,void,[T1,T2]).
+convert(T,Type) ->
+  sfun(fun (T) -> T end,
+       fun (T) -> "(("++Type++") "++T++")" end,
+       [T]).
+           
+equalp(T1,T2) ->
+  sfun(fun (E1,E2) -> E1==E2 end,
+       fun (E1,E2) -> "("++E1++").equals("++E2++")" end,
+       [T1,T2]).
+
+refequalp(T1,T2) ->
+  sfun(fun (E1,E2) -> E1==E2 end,
+       fun (E1,E2) -> "(("++E1++") == ("++E2++"))" end,
+       [T1,T2]).
 
 andp(T1,T2) ->
-  sfun(fun (E1,E2) -> E1 and E2 end,void,[T1,T2]).
+  sfun(fun (E1,E2) -> E1 and E2 end,
+       fun (E1,E2) -> "("++E1++") && ("++E2++")" end,
+       [T1,T2]).
   
 orp(T1,T2) ->
-  sfun(fun (E1,E2) -> E1 or E2 end,void,[T1,T2]).
+  sfun(fun (E1,E2) -> E1 or E2 end,
+       fun (E1,E2) -> "("++E1++") || ("++E2++")" end,
+       [T1,T2]).
 
 leqp(T1,T2) ->
-  sfun(fun (E1,E2) -> E1=<E2 end,void,[T1,T2]).
+  sfun(fun (E1,E2) -> E1=<E2 end,
+       fun (E1,E2) -> "("++E1++") <= ("++E2++")" end,
+       [T1,T2]).
 
 ltp(T1,T2) ->
-  sfun(fun (E1,E2) -> E1<E2 end,void,[T1,T2]).
+  sfun(fun (E1,E2) -> E1<E2 end,
+       fun (E1,E2) -> "("++E1++") < ("++E2++")" end,
+       [T1,T2]).
 
 geqp(T1,T2) ->
-  sfun(fun (E1,E2) -> E1>=E2 end,void,[T1,T2]).
+  sfun(fun (E1,E2) -> E1>=E2 end,
+       fun (E1,E2) -> "("++E1++") => ("++E2++")" end,
+       [T1,T2]).
 
 gtp(T1,T2) ->
-  sfun(fun (E1,E2) -> E1>E2 end,void,[T1,T2]).
+  sfun(fun (E1,E2) -> E1>E2 end,
+       fun (E1,E2) -> "("++E1++") > ("++E2++")" end,
+       [T1,T2]).
 
 notp(T) ->
-  sfun(fun (E) -> not(E) end,void,[T]).
+  sfun(fun (E) -> not(E) end,
+       fun (E) -> "!("++E++")" end,
+       [T]).
 
 andp([]) ->
   true;
