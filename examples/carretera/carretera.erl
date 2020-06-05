@@ -239,7 +239,7 @@ test_users_csp(PreOptions) ->
 
 test_users(Class,File,EntregaDir,PreOptions,Users) ->
   put(failing_tests,[]),
-  {ok,EntregaInfo} = read_entrega_info("/home/fred/cc_2020_mon_1/prac1.csv"),
+  {ok,EntregaInfo} = read_entrega_info(EntregaDir++"prac1.csv"),
   Entregas = find_entregas(File,EntregaDir),
   TesteableEntregas =
     lists:filter
