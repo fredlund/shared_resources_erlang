@@ -11,6 +11,7 @@
 %% carretera:tests_to_junit(carretera:test_users_nopar(["k0174"])).
 %% carretera:tests_to_junit(carretera:test_users_nopar()).
 %% carretera:tests_to_junit("carretera_test_suite_1591_302644_974558.suite").
+%% carretera:tests_to_junit(carretera:test_users_nopar_csp()).
 
 
 cars() ->
@@ -226,7 +227,7 @@ test_users_with_class(Class,PreOptions,Users) ->
   EntregaDir =
     if 
       Class=='cc.carretera.CarreteraMonitor' -> "/home/fred/cc_2020_mon_1";
-      true -> "/home/fred/cc_2020_csp_mon_1"
+      true -> "/home/fred/cc_2020_csp_1"
     end,
   test_users(Class,File,EntregaDir,PreOptions,Users).
 
