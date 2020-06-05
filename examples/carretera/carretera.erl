@@ -235,11 +235,11 @@ test_users_mon(PreOptions) ->
   test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/cc_2020_mon_1",PreOptions,all).
 %%  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/gits/src/cc_2020/buggy_carretera",PreOptions).
 test_users_csp(PreOptions) ->
-  test_users('cc.carretera.CarreteraCSP',"CarreteraCSP.java","/home/fred/cc_2020_csp_jul_reduced",PreOptions,all).
+  test_users('cc.carretera.CarreteraCSP',"CarreteraCSP.java","/home/fred/cc_2020_csp_1",PreOptions,all).
 
 test_users(Class,File,EntregaDir,PreOptions,Users) ->
   put(failing_tests,[]),
-  {ok,EntregaInfo} = read_entrega_info(EntregaDir++"prac1.csv"),
+  {ok,EntregaInfo} = read_entrega_info(EntregaDir++"/prac1.csv"),
   Entregas = find_entregas(File,EntregaDir),
   TesteableEntregas =
     lists:filter
@@ -691,14 +691,21 @@ print_args([Arg|Rest]) ->
   io_lib:format("~p,~s",[Arg,print_args(Rest)]).
 
 read_entrega_info(CSVFileName) ->
-  {ok,File} = file:open(CSVFileName,[read]),
-  try
-    ecsv:process_csv_file_with
-      (File,
-       fun process_entrega_info/2,
-       [],
-       #ecsv_opts{delimiter=$,})
-  after file:close(File)
+  case file:open(CSVFileName,[read]) of
+    {ok,File} ->
+      try
+        ecsv:process_csv_file_with
+          (File,
+           fun process_entrega_info/2,
+           [],
+           #ecsv_opts{delimiter=$,})
+      after file:close(File)
+      end;
+    {error,_} ->
+      io:format
+        ("~n*** ERROR: could not open csv file ~s~n",
+         [CSVFileName]),
+      error(bad)
   end.
 
 process_entrega_info({eof},Acc) ->
