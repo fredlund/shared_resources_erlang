@@ -7,12 +7,12 @@
 %%-define(debug,true).
 -include("debug.hrl").
 
--export([gen_junit_tests/8]).
+-export([gen_junit_tests/9]).
 -export([symbVar/1]).
 
 
 
-gen_junit_tests(ClassName,TestCases,Prefix,CallRep,Orderer,Marshaller,ConfigDescFun,ControllerArgFun) ->
+gen_junit_tests(ClassName,TestCases,Prefix,CallRep,Orderer,Marshaller,ConfigDescFun,ControllerArgFun,CheckerClassConstructorFun) ->
   FileName = ClassName++".java",
   {ok,File} = file:open(FileName,[write]),
   State =
@@ -25,7 +25,7 @@ gen_junit_tests(ClassName,TestCases,Prefix,CallRep,Orderer,Marshaller,ConfigDesc
       marshaller=Marshaller
     },
   OrderedTestCases = Orderer(TestCases),
-  gen_junit_tests(OrderedTestCases,ConfigDescFun,ControllerArgFun,State).
+  gen_junit_tests(OrderedTestCases,ConfigDescFun,ControllerArgFun,CheckerClassConstructorFun,State).
 
 shr_dir() ->
   filename:dirname(code:which(?MODULE)).
@@ -33,9 +33,9 @@ shr_dir() ->
 shr_priv_dir() ->
   shr_dir()++"/../priv".
   
-gen_junit_tests([],_ConfigDescFun,_ControllerArgFun,State) ->
+gen_junit_tests([],_ConfigDescFun,_ControllerArgFun,CheckerClassConstructorFun,State) ->
   ok = file:close(State#state.file);
-gen_junit_tests([TC|Rest],ConfigDescFun,ControllerArgFun,State) ->
+gen_junit_tests([TC|Rest],ConfigDescFun,ControllerArgFun,CheckerClassConstructorFun,State) ->
   TestCase = TC#test_case.test_case,
   BasicTestCase = shr_test_jobs:basic_test_case(TestCase),
   SimpleTestCase =
@@ -52,12 +52,12 @@ gen_junit_tests([TC|Rest],ConfigDescFun,ControllerArgFun,State) ->
   {Info,InitialState} = 
     shr_step_resource:initial_state(DataSpec,WaitingSpec,GenModule,GenState,[]),
   try shr_step_resource:repeat_step(SimpleTestCase,InitialState,Info) of
-      StateSpace -> output_test_case(TestCase,StateSpace,ConfigDescFun,ControllerArgFun,State)
+      StateSpace -> output_test_case(TestCase,StateSpace,ConfigDescFun,ControllerArgFun,CheckerClassConstructorFun,State)
   catch throw:not_deterministic ->
       io:format("*** Warning: test case is not deterministic.~n"),
       shr_test_jobs:print_test_case(TC)
   end,
-  gen_junit_tests(Rest,ConfigDescFun,ControllerArgFun,State#state{counter=State#state.counter+1}).
+  gen_junit_tests(Rest,ConfigDescFun,ControllerArgFun,CheckerClassConstructorFun,State#state{counter=State#state.counter+1}).
 
 
 statesUnblocks({branching,{_,StatesUnblocks,_,_}}) ->
@@ -66,15 +66,24 @@ statesUnblocks({branching,{_,StatesUnblocks,_,_}}) ->
 remaining_commands({branching,{_,_,_,Cmds}}) ->
   Cmds.
 
-output_test_case(TestCase,StateSpace,ConfigDescFun,ControllerArgFun,State) ->
+output_test_case(TestCase,StateSpace,ConfigDescFun,ControllerArgFun,CheckerClassConstructorFun,State) ->
   Name = io_lib:format("test_~s_~p",[State#state.prefix,State#state.counter]),
   I1 = indent_len(1),
   I2 = indent_len(2),
+  CheckerStr =
+    if
+      CheckerClassConstructorFun=/=undefined ->
+        "UnitTest.installChecker(new "++CheckerClassConstructorFun(TestCase)++");";
+      true ->
+        ""
+    end,
   io:format
     (State#state.file,
      indent(I1,"@Test")++
        indent(I1,"@DisplayName(\""++Name++"\")")++
        indent(I1,"public void ~s(TestInfo testInfo) {")++
+       indent(I2,CheckerStr)++
+       indent(I2,"")++
        indent(I2,"UnitTest t =")++
        indent(I2+2,"new UnitTest")++
        indent(I2+2,"(")++
@@ -317,6 +326,7 @@ unblocks(Calls,Returns,State) ->
   ?LOG("needPairs=~p~n",[NeedPairs]),
   if
     NeedPairs ->
+      "Arrays.asList("++
       lists:foldl
         (fun (UnblockedCall,Acc) ->
              RightElement = 
@@ -326,7 +336,7 @@ unblocks(Calls,Returns,State) ->
                end,
              UnblocksComma = if Acc=="" -> ""; true -> "," end,
              "new Pair<String,Oracle>(\""++symbVar(UnblockedCall#job.pid)++"\","++RightElement++")"++UnblocksComma++Acc
-         end, "", Calls);
+         end, "", Calls)++")";
     true ->
       lists:foldl
         (fun (UnblockedCall,Acc) ->
@@ -341,7 +351,7 @@ oracle(Call,Returns,FailedPres,State) ->
       ?LOG("Checker is ~p~n",[Checker]),
       case ReturnValue of
         _ when Checker=/=undefined ->
-          "Check.lambda(xyz -> "++shr_symb:print(Checker)++")";
+          "Check.lambda(xyz -> "++shr_symb:printSeqExpr(Checker)++")";
         {var,_} ->
           "";
         _ ->

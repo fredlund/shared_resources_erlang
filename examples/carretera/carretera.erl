@@ -10,6 +10,8 @@
 %% carretera:tests_to_junit(carretera:test_users_nopar(["160170+170130"])).
 %% carretera:tests_to_junit(carretera:test_users_nopar(["k0174"])).
 %% carretera:tests_to_junit(carretera:test_users_nopar()).
+%% carretera:tests_to_junit("carretera_test_suite_1591_302644_974558.suite").
+
 
 cars() ->
   [
@@ -551,6 +553,15 @@ tests_to_junit(TesterPrefix,TestPrefix,FileName) ->
           ("new Pos(~p,~p)",
            [Distance,Carriles])
     end,
+  CheckerClassConstructorFun =
+    fun (TestCase) ->
+        {_,DataOptions} = shr_test_jobs:test_data_spec(TestCase),
+        Distance = proplists:get_value(distance,DataOptions),
+        Carriles = proplists:get_value(carriles,DataOptions),
+        io_lib:format
+          ("CarreteraTestChecker(new Pos(~p,~p))",
+           [Distance,Carriles])
+    end,
   shr_test_cases_to_junit:gen_junit_tests
     (TesterPrefix,
      TestCases,
@@ -559,7 +570,8 @@ tests_to_junit(TesterPrefix,TestPrefix,FileName) ->
      fun order_test_cases/1,
      fun marshaller/1,
      ConfigDescFun,
-     ControllerArgFun).
+     ControllerArgFun,
+     CheckerClassConstructorFun).
 
 marshaller({X,Y}) ->
   io_lib:format("new Pos(~p,~p)",[X,Y]).
@@ -599,7 +611,7 @@ skip_identical_testcases([TC={TestCase,SimplifiedTestCase}|Rest],TCs) ->
 	       lists:sort(fun sort_calls/2, Calls)
 	   end, SimplifiedTestCase),
       case my_member(fun ({_,OtherTC}) ->
-			 inst_check:inst_check(SortedCallsTestCase,OtherTC)
+			 shr_inst_check:inst_check(SortedCallsTestCase,OtherTC)
 		     end, TCs) of
 	true ->
 	  skip_identical_testcases(Rest,TCs);
@@ -655,11 +667,11 @@ sort_testcases(T1,T2) ->
   end.
 
 sort_calls({F1,_},{F2,_}) -> op_value(F1) - op_value(F2).
-op_value(crearGrupo) -> 0;
-op_value(anadirMiembro) -> 1;
-op_value(salirGrupo) -> 2;
-op_value(mandarMensaje) -> 3;
-op_value(leer) -> 3.
+op_value(entrar) -> 0;
+op_value(avanzar) -> 1;
+op_value(salir) -> 2;
+op_value(circulando) -> 3;
+op_value(tick) -> 3.
 
 map_name(CallName) ->
   case atom_to_list(CallName) of

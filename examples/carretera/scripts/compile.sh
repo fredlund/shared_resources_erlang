@@ -15,7 +15,9 @@ CLASSPATH=$LIBDIR/../classes:$LIBDIR/aedlib-2.8.0.jar:$LIBDIR/jcsp.jar:$LIBDIR/c
 
 for dir in $EntregaDirs/*/
 do
+    echo
+    echo "Will compile $dir"
     cd $dir
-    javac -d classes -cp $CLASSPATH *java
+    javac -d classes -cp $CLASSPATH *java || javac -d classes -encoding windows-1252 -cp $CLASSPATH *java
     cd -
 done

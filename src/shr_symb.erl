@@ -84,111 +84,121 @@ eval1(T,Map) ->
       T
   end.
                    
+printSeqExpr(T) ->
+  print1
+    (T,
+     fun ({var,N}) -> "Call.v(\""++shr_test_cases_to_junit:symbVar(N)++"\")" end).
+
 print(T) ->
+  print1(T,fun (X) -> io_lib:format("~p",[X]) end).
+               
+print1(T,VarPrinter) ->
   case T of
     {'$apply',_,OutputFun,Args} ->
-      PrintedArgs = lists:map(fun print/1,Args),
+      MyPrintFun = fun (X) -> print1(X,VarPrinter) end,
       case OutputFun of
         _ when is_function(OutputFun) ->
-          apply(OutputFun,PrintedArgs);
+          apply(OutputFun,[MyPrintFun|Args]);
         {M,F} ->
-          apply(M,F,PrintedArgs);
+          apply(M,F,[MyPrintFun|Args]);
         _ ->
           io:format("~n*** Error: not a function ~p~n",[T]),
           error(bad)
       end;
+    {var,N} when is_integer(N) ->
+      VarPrinter(T);
     _ when is_tuple(T) ->
-      "{" ++ print_comma_list(tuple_to_list(T)) ++ "}";
+      "{" ++ print_comma_list(tuple_to_list(T),VarPrinter) ++ "}";
     [Hd|Tl] ->
-      "[" ++ print(Hd) ++ "|" ++ print(Tl) ++ "]";
+      "[" ++ print1(Hd,VarPrinter) ++ "|" ++ print1(Tl,VarPrinter) ++ "]";
     _ when is_map(T) ->
-      "#{" ++ print_keyvalue_list(maps:to_list(T)) ++ "}";
+      "#{" ++ print_keyvalue_list(maps:to_list(T),VarPrinter) ++ "}";
     _ ->
       io_lib:format("~p",[T])
   end.
 
-print_comma_list([]) ->
+print_comma_list([],_) ->
   "";
-print_comma_list([T]) ->
-  print(T);
-print_comma_list([T|Rest]) ->
-  print(T)++","++print_comma_list(Rest).
+print_comma_list([T],VarPrinter) ->
+  print1(T,VarPrinter);
+print_comma_list([T|Rest],VarPrinter) ->
+  print1(T,VarPrinter)++","++print_comma_list(Rest,VarPrinter).
 
-print_keyvalue_list([]) ->
+print_keyvalue_list([],_) ->
   "";
-print_keyvalue_list([{Key,Value}]) ->
-  print(Key) ++ "=>" ++ print(Value);
-print_keyvalue_list([{Key,Value}|Rest]) ->
-  print(Key) ++ "=>" ++ print(Value) ++ "," ++ print_keyvalue_list(Rest).
+print_keyvalue_list([{Key,Value}],VarPrinter) ->
+  print1(Key,VarPrinter) ++ "=>" ++ print1(Value,VarPrinter);
+print_keyvalue_list([{Key,Value}|Rest],VarPrinter) ->
+  print1(Key,VarPrinter) ++ "=>" ++ print1(Value,VarPrinter) ++ "," ++ print_keyvalue_list(Rest,VarPrinter).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 convert(T,Type) ->
   sfun({?MODULE,jconv},
-       fun (T) -> "(("++Type++") "++T++")" end,
+       fun (P,T) -> "(("++Type++") "++P(T)++")" end,
        [T]).
            
 jconv(T) -> T.
 
 equalp(T1,T2) ->
   sfun({?MODULE,jequal},
-       fun (E1,E2) -> "("++E1++").equals("++E2++")" end,
+       fun (P,E1,E2) -> "("++P(E1)++").equals("++P(E2)++")" end,
        [T1,T2]).
 
 jequal(E1,E2) -> E1==E2.
 
 refequalp(T1,T2) ->
   sfun({?MODULE,jrefequalp},
-       fun (E1,E2) -> "(("++E1++") == ("++E2++"))" end,
+       fun (P,E1,E2) -> "(("++P(E1)++") == ("++P(E2)++"))" end,
        [T1,T2]).
 
 jrefequalp(E1,E2) -> E1==E2.
 
 andp(T1,T2) ->
   sfun({?MODULE,jandp},
-       fun (E1,E2) -> "("++E1++") && ("++E2++")" end,
+       fun (P,E1,E2) -> "("++P(E1)++") && ("++P(E2)++")" end,
        [T1,T2]).
   
 jandp(E1,E2) -> E1 and E2.
 
 orp(T1,T2) ->
   sfun({?MODULE,jorp},
-       fun (E1,E2) -> "("++E1++") || ("++E2++")" end,
+       fun (P,E1,E2) -> "("++P(E1)++") || ("++P(E2)++")" end,
        [T1,T2]).
 
 jorp(E1,E2) -> E1 and E2.
 
 leqp(T1,T2) ->
   sfun({?MODULE,jleqp},
-       fun (E1,E2) -> "("++E1++") <= ("++E2++")" end,
+       fun (P,E1,E2) -> "("++P(E1)++") <= ("++P(E2)++")" end,
        [T1,T2]).
 
 jleqp(E1,E2) -> E1=<E2.
 
 ltp(T1,T2) ->
   sfun({?MODULE,jltp},
-       fun (E1,E2) -> "("++E1++") < ("++E2++")" end,
+       fun (P,E1,E2) -> "("++P(E1)++") < ("++P(E2)++")" end,
        [T1,T2]).
 
 jltp(E1,E2) -> E1<E2.
 
 geqp(T1,T2) ->
   sfun({?MODULE,jgeqp},
-       fun (E1,E2) -> "("++E1++") => ("++E2++")" end,
+       fun (P,E1,E2) -> "("++P(E1)++") => ("++P(E2)++")" end,
        [T1,T2]).
 
 jgeqp(E1,E2) -> E1>=E2.
 
 gtp(T1,T2) ->
   sfun({?MODULE,jgtp},
-       fun (E1,E2) -> "("++E1++") > ("++E2++")" end,
+       fun (P,E1,E2) -> "("++P(E1)++") > ("++P(E2)++")" end,
        [T1,T2]).
 
 jgtp(E1,E2) -> E1>E2.
 
 notp(T) ->
   sfun({?MODULE,jnotp},
-       fun (E) -> "!("++E++")" end,
+       fun (P,E) -> "!("++P(E)++")" end,
        [T]).
 
 jnotp(E) -> not(E).

@@ -7,7 +7,7 @@
 -export([initial_state/2,pre/2,cpre/2,post/4,return/4]).
 -export([print_state/1]).
 
--export([carril/1]).
+-export([carril/1,new_pos/1]).
 
 
 -record(state,{segmentos=[],distance,carriles}).
@@ -74,16 +74,15 @@ post(Call,_Return,State,SymbolicReturn) ->
   ?LOG("post(~p,~p,~p)~n=> ~p~n",[Call,_Return,State,Result]),
   Result.
 
-check_liberar_hueco_returned(Segmento,State,SymbolicResult) ->
+check_liberar_hueco_returned(Segmento,State,SymbRes) ->
   Coches = coches_en_segmento(Segmento,State),
-  Res = shr_symb:convert(SymbolicResult,"cc.carretera.Pos"),
   shr_symb:andp
     ([
-      shr_symb:notp(shr_symb:refequalp(SymbolicResult,null)),
-      shr_symb:refequalp(Segmento,pos_segmento(Res)),
-      shr_symb:leqp(0,pos_carril(Res)),
-      shr_symb:leqp(pos_carril(Res),State#state.carriles)
-      | lists:map(fun (Coche) -> shr_symb:notp(shr_symb:equalp(SymbolicResult,Coche#coche.pos)) end, Coches)
+      shr_symb:notp(shr_symb:refequalp(SymbRes,null)),
+      shr_symb:refequalp(Segmento,pos_segmento(SymbRes)),
+      shr_symb:leqp(0,pos_carril(SymbRes)),
+      shr_symb:leqp(pos_carril(SymbRes),State#state.carriles)
+      | lists:map(fun (Coche) -> shr_symb:notp(shr_symb:equalp(SymbRes,make_pos(Coche#coche.pos))) end, Coches)
      ]).
 
 return(State,Call,Result,SymbolicResult) ->
@@ -183,10 +182,31 @@ tick(State) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+make_pos(Pos) ->
+  shr_symb:sfun
+    ({?MODULE,newPos},
+     fun (Printer,P) -> 
+         case P of
+           {Segmento,Carril} ->
+             io_lib:format
+               ("new Pos(~s,~s)",
+                [Printer(Segmento),Printer(Carril)]);
+           _ ->
+             io:format
+               ("Strange format: ~w~n",
+                [P]),
+             error(bad)
+         end
+     end,
+     [Pos]).
+
+new_pos(Pos) ->
+  Pos.
+
 pos_carril(Pos) ->
   shr_symb:sfun
     ({?MODULE,carril},
-     fun (Pos) -> Pos++".getCarril()" end,
+     fun (P,Pos) -> P(convert_to_pos(Pos))++".getCarril()" end,
      [Pos]).
 
 carril({_,Carril}) -> Carril.
@@ -194,10 +214,12 @@ carril({_,Carril}) -> Carril.
 pos_segmento(Pos) ->
   shr_symb:sfun
     (fun ({Segmento,_}) -> Segmento end, 
-     fun (Pos) -> Pos++".getSegmento()" end,
+     fun (P,Pos) -> P(convert_to_pos(Pos))++".getSegmento()" end,
      [Pos]).
 
-                         
+convert_to_pos(SymbVar={var,_}) ->                         
+  shr_symb:convert(SymbVar,"cc.carretera.Pos").
+
         
 
 
