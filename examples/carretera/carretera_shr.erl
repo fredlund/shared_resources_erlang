@@ -184,7 +184,7 @@ tick(State) ->
 
 make_pos(Pos) ->
   shr_symb:sfun
-    ({?MODULE,newPos},
+    ({?MODULE,new_pos},
      fun (Printer,P) -> 
          case P of
            {Segmento,Carril} ->
