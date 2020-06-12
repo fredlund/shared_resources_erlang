@@ -6,6 +6,21 @@ then
 	exit 1
 fi
 
+CMD=`basename $0`
+PRG=$0
+
+while [ -L "${PRG}" ]; do
+    ls=`ls -ld "${PRG}"`
+    link=`expr "$ls" : '.*-> \(.*\)$'`
+    if expr "${link}" : '\/' > /dev/null; then
+        PRG="${link}"
+    else
+        PRG="`dirname ${PRG}`/${link}"
+    fi
+done
+
+SCRIPTHOME=`dirname "${PRG}"`/..
+
 EntregaDirs=$1
 shift
 
@@ -15,9 +30,5 @@ CLASSPATH=$LIBDIR/../classes:$LIBDIR/aedlib-2.8.0.jar:$LIBDIR/jcsp.jar:$LIBDIR/c
 
 for dir in $EntregaDirs/*/
 do
-    echo
-    echo "Will compile $dir"
-    cd $dir
-    javac -d classes -cp $CLASSPATH *java || javac -d classes -encoding windows-1252 -cp $CLASSPATH *java
-    cd -
+    bash $SCRIPTHOME/compileSolution "$dir"
 done

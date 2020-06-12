@@ -12,6 +12,7 @@
 %% carretera:tests_to_junit(carretera:test_users_nopar()).
 %% carretera:tests_to_junit("carretera_test_suite_1591_302644_974558.suite").
 %% carretera:tests_to_junit(carretera:test_users_nopar_csp()).
+%% carretera:tests_to_junit(carretera:test_users_with_class('cc.carretera.CarreteraCSP',[],["180248+180385","180194+180217","180084+180132","180050+180410"])).
 
 
 cars() ->
