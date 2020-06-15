@@ -30,5 +30,5 @@ CLASSPATH=$LIBDIR/../classes:$LIBDIR/aedlib-2.8.0.jar:$LIBDIR/jcsp.jar:$LIBDIR/c
 
 for dir in $EntregaDirs/*/
 do
-    bash $SCRIPTHOME/compileSolution.sh "$dir"
+    bash $SCRIPTHOME/scripts/compileSolution.sh "$dir"
 done
