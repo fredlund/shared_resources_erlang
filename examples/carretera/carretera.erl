@@ -259,10 +259,22 @@ test_users(Class,File,EntregaDir,PreOptions,Users) ->
              Users==all -> 
                case lists:keyfind(Name,1,EntregaInfo) of
                  false ->
-                   io:format("*** WARNING: cannot find group ~s~n",[Name]),
-                   true;
-                 Tuple ->
-                   element(2,Tuple)=/="0"
+                   case string:split(Name,"+") of
+                     [Part1,Part2] ->
+                       NewName = Part2++"+"++Part1,
+                       case lists:keyfind(NewName,1,EntregaInfo) of
+                         false ->
+                           io:format("*** WARNING: cannot find group ~s~n",[Name]),
+                           true;
+                         Tuple0 ->
+                           io:format("*** INFO: compensated deliverit bug: ~s => ~s~n",[Name,NewName]),
+                           element(2,Tuple0)=/="0"
+                       end;
+                     _ -> 
+                       io:format("*** WARNING: cannot find group ~s~n",[Name]),
+                       true
+                   end;
+                 Tuple -> element(2,Tuple)=/="0"
                end
            end
        end, Entregas),
