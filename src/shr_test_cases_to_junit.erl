@@ -302,15 +302,14 @@ make_calls(Calls,State) ->
 	 (fun (Call) ->
 	      CallRep = (State#state.callrep)(Call),
 	      io_lib:format
-		(indent(I+1,"Call.returns(\"~s\",~s)"),
-		 [symbVar(Call#job.pid),CallRep])
+		(indent(I+1,"~s.n(\"~s\")"),
+		 [CallRep,symbVar(Call#job.pid)])
 	  end, Calls),
        ","),
   io_lib:format
-    (indent(I,"Call.parallel")++
-       indent(I,"(")++
+    (indent(I,"new Call[] {")++
        "~s"++
-       indent(I,")"),
+       indent(I,"}"),
      [CallsString]).
 
 unblocks(Calls,Returns,State) ->

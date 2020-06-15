@@ -13,6 +13,10 @@
 %% carretera:tests_to_junit("carretera_test_suite_1591_302644_974558.suite").
 %% carretera:tests_to_junit(carretera:test_users_nopar_csp()).
 %% carretera:tests_to_junit(carretera:test_users_with_class('cc.carretera.CarreteraCSP',[],["180248+180385","180194+180217","180084+180132","180050+180410"])).
+%% carretera:tests_to_junit(carretera:test_users_nopar(["180424+180425"])).
+%% carretera:tests_to_junit(carretera:test_users_nopar_csp(["18055"])).
+%% carretera:tests_to_junit("carretera_test_suite_1591_973325_487496.suite").
+
 
 
 cars() ->
@@ -202,10 +206,14 @@ test_users_nopar(Users) ->
   test_users_with_class('cc.carretera.CarreteraMonitor',[no_par],Users).
 test_users_nopar_csp() ->
   test_users_with_class('cc.carretera.CarreteraCSP',[no_par]).
+test_users_nopar_csp(Users) ->
+  test_users_with_class('cc.carretera.CarreteraCSP',[no_par],Users).
 test_users_par() ->
   test_users_with_class('cc.carretera.CarreteraMonitor',[no_junit]).
 test_users_par_csp() ->
   test_users_with_class('cc.carretera.CarreteraCSP',[no_junit]).
+test_users_par_csp(Users) ->
+  test_users_with_class('cc.carretera.CarreteraCSP',[no_junit],Users).
 
 test_users_nopar_with_class(Class,Users) ->
   test_users_with_class(Class,[no_par],Users).
@@ -300,12 +308,13 @@ mtest(Class,Group,Dir,PreOptions) ->
     ("~n~n~nTesting group ~p with implementation in ~p~n~n",
      [Group,Dir]),
   PreProp =
-    ?FORALL(Carriles,eqc_gen:choose(1,3),
+%%    ?FORALL(Carriles,eqc_gen:choose(1,4),
+    ?FORALL(Carriles,eqc_gen:choose(1,2),
             begin
               LimitDistance = 
                 if
                   Carriles==3 -> 1;
-                  true -> 4
+                  true -> 5
                 end,
               ?FORALL(Distance,eqc_gen:choose(1,LimitDistance),
                       begin
