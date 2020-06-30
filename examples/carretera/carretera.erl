@@ -23,7 +23,6 @@ cars() ->
   [
    {car_gnr_fsm,["volvo",1]},
    {car_gnr_fsm,["saab",1]},
-
    {car_gnr_fsm,["vw",8]},
    {car_gnr_fsm,["toyota",1]},
    {car_gnr_fsm,["citroen",2]},
@@ -201,15 +200,17 @@ stop_java() ->
 %% carretera:test_users_nopar_with_class('cc.carretera.CarreteraMonitor',["150291"]).
 
 test_users_nopar() ->
-  test_users_with_class('cc.carretera.CarreteraMonitor',[no_par]).
+  test_users_with_class('cc.carretera.CarreteraMonitor',[no_par,{more_commands,50}]).
 test_users_nopar(Users) ->
-  test_users_with_class('cc.carretera.CarreteraMonitor',[no_par],Users).
+  test_users_with_class('cc.carretera.CarreteraMonitor',[no_par,{more_commands,50}],Users).
 test_users_nopar_csp() ->
   test_users_with_class('cc.carretera.CarreteraCSP',[no_par]).
 test_users_nopar_csp(Users) ->
   test_users_with_class('cc.carretera.CarreteraCSP',[no_par],Users).
 test_users_par() ->
   test_users_with_class('cc.carretera.CarreteraMonitor',[no_junit]).
+test_users_par(Users) ->
+  test_users_with_class('cc.carretera.CarreteraMonitor',[no_junit],Users).
 test_users_par_csp() ->
   test_users_with_class('cc.carretera.CarreteraCSP',[no_junit]).
 test_users_par_csp(Users) ->
@@ -242,6 +243,7 @@ test_users_with_class(Class,PreOptions,Users) ->
 
 test_users_mon(PreOptions) ->
   test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/cc_2020_mon_2",PreOptions,all).
+
 %%  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/gits/src/cc_2020/buggy_carretera",PreOptions).
 test_users_csp(PreOptions) ->
   test_users('cc.carretera.CarreteraCSP',"CarreteraCSP.java","/home/fred/cc_2020_csp_2",PreOptions,all).
@@ -735,6 +737,7 @@ process_entrega_info({eof},Acc) ->
 process_entrega_info({newline,["Group"|_]},Acc) ->
   Acc;
 process_entrega_info({newline,L},Acc) when is_list(L) ->
+  %%io:format("got ~s~n",[L]),
   [Group,Mark,Notes,Date] = L,
   [{Group,Mark,Notes,Date}|Acc];
 process_entrega_info({newline,Line}, _Changes) ->

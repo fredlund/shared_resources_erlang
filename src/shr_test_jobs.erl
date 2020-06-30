@@ -557,6 +557,13 @@ check_prop(Prop,Options) ->
   Result.
 
 prop_res(Options) ->
+  MoreCommands = 
+    case proplists:get_value(more_commands,Options) of
+      N when is_integer(N), N>=1 ->
+        N;
+      _ ->
+        5
+    end,
   ?FORALL
      (Cmds,
       ?LET(SCmds,
