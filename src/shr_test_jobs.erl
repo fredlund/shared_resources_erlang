@@ -10,7 +10,7 @@
 -export([api_spec/0,initial_state/0]).
 -export([init_state/1]).
 -export([start_pre/1,start_args/1,start/2,start_post/3,start_next/3]).
--export([do_cmds_pre/1,do_cmds_args/1,do_cmds_pre/2,do_cmds/3,do_cmds_post/3,do_cmds_next/3]).
+-export([do_cmds_pre/1,do_cmds_args/1,do_cmds_pre/2,do_cmds/4,do_cmds_post/3,do_cmds_next/3]).
 -export([print_jobs/2]).
 -export([job_exited/1]).
 
@@ -51,7 +51,8 @@
 	  ,start_fun
 	  ,stop_fun
 	  ,jobs_alive
-	  ,counter
+          ,counter
+	  ,symVarsCounter=0
 	}).
 
 -record(observer,{name,module,state}).
@@ -229,7 +230,11 @@ do_cmds_args(State) ->
 	    State#state.test_corr_state),
 	 begin
 	   ?LOG("Commands are ~p~n",[Commands]),
-	   [lists:map(fun command_parser/1,Commands),WaitTime,NoEnvWait]
+	   [
+            lists:map(fun command_parser/1,Commands),
+            WaitTime,
+            NoEnvWait,
+            State#state.symVarsCounter]
 	 end)
   catch _:Reason ->
       io:format
@@ -260,7 +265,7 @@ do_cmds_pre(State,[Commands|_]) ->
       error(bad_state_machine)
   end.
 
-do_cmds(Commands,WaitTime,NoEnvWait) ->
+do_cmds(Commands,WaitTime,NoEnvWait,SymVarsCounter) ->
   ?TIMEDLOG("run_commands(~p)~n",[Commands]),
   try
     ?TIMEDLOG("new round: cmds = ~p~n",[Commands]),
@@ -270,15 +275,17 @@ do_cmds(Commands,WaitTime,NoEnvWait) ->
       shr_utils:get({?MODULE,counter}),
     NewJobs =
       lists:map
-	(fun (Command) ->
+	(fun ({Cnt,Command}) ->
 	     {F,Args} = Command#command.call,
 	     Info = Command#command.options,
 	     Call = {Command#command.port,F,Args},
-	     PreJob = #job{call=Call,info=Info},
+	     PreJob = #job{call=Call,info=Info,symbolicResult={var,Cnt+SymVarsCounter}},
 	     try shr_supervisor:add_childfun
 		   (fun () ->
+                        ?TIMEDLOG("beginning to execute ~p~n",[PreJob]),
 			try shr_calls:call(Command#command.port,{F,Args}) of
 			    Result ->
+                            ?TIMEDLOG("finished executing ~p~n",[PreJob]),
 			    ParentPid!
 			      {PreJob#job{pid=self(),result=Result},Counter}
 			catch _Exception:Reason ->
@@ -302,7 +309,7 @@ do_cmds(Commands,WaitTime,NoEnvWait) ->
 			       ParentPid!{PreJob#job{pid=self(),result=Result},Counter}
 			   end)}
 	     end
-	 end, Commands),
+	 end, lists:zip(lists:seq(0,length(Commands)-1),Commands)),
     if
       NewJobs==[] ->
 	{[],[]};
@@ -407,6 +414,7 @@ do_cmds_next(State,Result={NewJobs,FinishedJobs},[Commands|_]) ->
       test_gen_state=NewTestGenState
       ,test_corr_state=NewTestCorrState
       ,test_observers_states=NewTestObserversStates
+      ,symVarsCounter=State#state.symVarsCounter+length(NewJobs)
      }
   catch _:Reason ->
       io:format
@@ -458,6 +466,7 @@ wait_for_jobs(NewJobs,WaitTime,Counter,NoEnvWait) ->
   JobsAlive = shr_utils:get({?MODULE,jobs_alive}),
   TimeStamp = get_millisecs_timestamp(),
   UntilTime = TimeStamp + WaitTime,
+  ?TIMEDLOG("~p: waiting for ~p for ~p (=~p)~n",[TimeStamp,NewJobs,WaitTime,shr_utils:milliseconds_after()]),
   AllJobs = NewJobs++JobsAlive,
   case receive_completions(UntilTime,Counter,[],AllJobs,NoEnvWait) of
     {FinishedJobs,NewJobsAlive} when is_list(FinishedJobs) ->
@@ -480,13 +489,14 @@ receive_completions(UntilTime,Counter,Finished,JobsAlive,NoEnvWait) ->
 	  handle_exit(UntilTime,Pid,Reason,StackTrace,Counter,Finished,JobsAlive,NoEnvWait);
 	{exit,Pid,_Reason,_} ->
 	  io:format
-	    ("*** SHRT WARNING: exit for old job ~p received; consider increasing wait time.~n",[Pid]),
+	    ("*** ~p: SHRT WARNING: exit for old job~n~p~n received; consider increasing wait time.~n",[shr_utils:milliseconds_after(),Pid]),
 	  receive_completions(UntilTime,Counter,Finished,JobsAlive,NoEnvWait);
 	_ when is_record(Job,job), JobCounter==Counter ->
+          ?TIMEDLOG("got job ~p~n",[Job]),
 	  receive_completions(UntilTime,Counter,[Job|Finished],delete_job(Job,JobsAlive),NoEnvWait);
 	_ when is_record(Job,job) ->
 	  io:format
-	    ("*** SHRT WARNING: old job received; consider increasing wait time.~n"),
+	    ("*** ~p: SHRT WARNING: old job~n~p~n received; consider increasing wait time.~n",[shr_utils:milliseconds_after(),Job]),
 	  receive_completions(UntilTime,Counter,Finished,JobsAlive,NoEnvWait)
       end;
     X ->
@@ -558,7 +568,7 @@ prop_res(Options) ->
      (Cmds,
       ?LET(SCmds,
 	   (more_commands
-	      (MoreCommands,eqc_dynamic_cluster:dynamic_commands
+	      (100,eqc_dynamic_cluster:dynamic_commands
 		   (?MODULE,init_state(Options)))),
 	   SCmds),
       ?CHECK_COMMANDS

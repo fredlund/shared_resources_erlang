@@ -6,6 +6,19 @@
 
 -compile(export_all).
 
+%% carretera:tests_to_junit(carretera:test_users_nopar(["180424+180425"])).
+%% carretera:tests_to_junit(carretera:test_users_nopar(["160170+170130"])).
+%% carretera:tests_to_junit(carretera:test_users_nopar(["k0174"])).
+%% carretera:tests_to_junit(carretera:test_users_nopar()).
+%% carretera:tests_to_junit("carretera_test_suite_1591_302644_974558.suite").
+%% carretera:tests_to_junit(carretera:test_users_nopar_csp()).
+%% carretera:tests_to_junit(carretera:test_users_with_class('cc.carretera.CarreteraCSP',[],["180248+180385","180194+180217","180084+180132","180050+180410"])).
+%% carretera:tests_to_junit(carretera:test_users_nopar(["180424+180425"])).
+%% carretera:tests_to_junit(carretera:test_users_nopar_csp(["18055"])).
+%% carretera:tests_to_junit("carretera_test_suite_1591_973325_487496.suite").
+
+
+
 cars() ->
   [
    {car_gnr_fsm,["volvo",1]},
@@ -192,12 +205,16 @@ test_users_nopar(Users) ->
   test_users_with_class('cc.carretera.CarreteraMonitor',[no_par,{more_commands,50}],Users).
 test_users_nopar_csp() ->
   test_users_with_class('cc.carretera.CarreteraCSP',[no_par]).
+test_users_nopar_csp(Users) ->
+  test_users_with_class('cc.carretera.CarreteraCSP',[no_par],Users).
 test_users_par() ->
   test_users_with_class('cc.carretera.CarreteraMonitor',[no_junit]).
 test_users_par(Users) ->
   test_users_with_class('cc.carretera.CarreteraMonitor',[no_junit],Users).
 test_users_par_csp() ->
   test_users_with_class('cc.carretera.CarreteraCSP',[no_junit]).
+test_users_par_csp(Users) ->
+  test_users_with_class('cc.carretera.CarreteraCSP',[no_junit],Users).
 
 test_users_nopar_with_class(Class,Users) ->
   test_users_with_class(Class,[no_par],Users).
@@ -219,20 +236,21 @@ test_users_with_class(Class,PreOptions,Users) ->
     end,
   EntregaDir =
     if 
-      Class=='cc.carretera.CarreteraMonitor' -> "/home/fred/cc_2020_mon_1";
-      true -> "/home/fred/cc_2020_csp_mon_1"
+      Class=='cc.carretera.CarreteraMonitor' -> "/home/fred/cc_2020_mon_2";
+      true -> "/home/fred/cc_2020_csp_2"
     end,
   test_users(Class,File,EntregaDir,PreOptions,Users).
 
 test_users_mon(PreOptions) ->
-  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/cc_2020_mon_1",PreOptions,all).
+  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/cc_2020_mon_2",PreOptions,all).
+
 %%  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/gits/src/cc_2020/buggy_carretera",PreOptions).
 test_users_csp(PreOptions) ->
-  test_users('cc.carretera.CarreteraCSP',"CarreteraCSP.java","/home/fred/cc_2020_csp_jul_reduced",PreOptions,all).
+  test_users('cc.carretera.CarreteraCSP',"CarreteraCSP.java","/home/fred/cc_2020_csp_2",PreOptions,all).
 
 test_users(Class,File,EntregaDir,PreOptions,Users) ->
   put(failing_tests,[]),
-  {ok,EntregaInfo} = read_entrega_info("/home/fred/cc_2020_mon_1/prac1.csv"),
+  {ok,EntregaInfo} = read_entrega_info(EntregaDir++"/prac1.csv"),
   Entregas = find_entregas(File,EntregaDir),
   TesteableEntregas =
     lists:filter
@@ -243,10 +261,22 @@ test_users(Class,File,EntregaDir,PreOptions,Users) ->
              Users==all -> 
                case lists:keyfind(Name,1,EntregaInfo) of
                  false ->
-                   io:format("*** WARNING: cannot find group ~s~n",[Name]),
-                   true;
-                 Tuple ->
-                   element(2,Tuple)=/="0"
+                   case string:split(Name,"+") of
+                     [Part1,Part2] ->
+                       NewName = Part2++"+"++Part1,
+                       case lists:keyfind(NewName,1,EntregaInfo) of
+                         false ->
+                           io:format("*** WARNING: cannot find group ~s~n",[Name]),
+                           true;
+                         Tuple0 ->
+                           io:format("*** INFO: compensated deliverit bug: ~s => ~s~n",[Name,NewName]),
+                           element(2,Tuple0)=/="0"
+                       end;
+                     _ -> 
+                       io:format("*** WARNING: cannot find group ~s~n",[Name]),
+                       true
+                   end;
+                 Tuple -> element(2,Tuple)=/="0"
                end
            end
        end, Entregas),
@@ -267,7 +297,8 @@ test_users(Class,File,EntregaDir,PreOptions,Users) ->
     FailingTestCases when is_list(FailingTestCases) ->
       F = unique_filename(),
       ok = file:write_file(F,term_to_binary({failed,FailingTestCases})),
-      io:format("wrote failed test cases to ~s~n",[F])
+      io:format("wrote failed test cases~n~p~nto ~s~n",[FailingTestCases,F]),
+      F
   end.
 
 find_entregas(LFile,Target) ->
@@ -291,12 +322,13 @@ mtest(Class,Group,Dir,PreOptions) ->
     ("~n~n~nTesting group ~p with implementation in ~p~n~n",
      [Group,Dir]),
   PreProp =
-    ?FORALL(Carriles,eqc_gen:choose(1,3),
+%%    ?FORALL(Carriles,eqc_gen:choose(1,4),
+    ?FORALL(Carriles,eqc_gen:choose(1,2),
             begin
               LimitDistance = 
                 if
                   Carriles==3 -> 1;
-                  true -> 4
+                  true -> 5
                 end,
               ?FORALL(Distance,eqc_gen:choose(1,LimitDistance),
                       begin
@@ -307,7 +339,7 @@ mtest(Class,Group,Dir,PreOptions) ->
                                   NumCars = length(ChosenCars),
                                   shr_test_resource_implementation:prop_tri
                                     (
-                                    {shr_gnr_fsms,ChosenCars ++ [{tick_gnr_fsm,[{weight,NumCars+3}]}]},
+                                    {shr_gnr_fsms,ChosenCars ++ [{tick_gnr_fsm,[{weight,1}]}]},
                                     start_controller
                                       (Class,
                                        [Dir++"/classes","/home/fred/gits/src/cc_2020/carreteraClasses"],
@@ -317,7 +349,7 @@ mtest(Class,Group,Dir,PreOptions) ->
                                     shr_always,
                                     void,
                                     %%[{completion_time,200}|PreOptions]
-                                    [{completion_time,350}|PreOptions]
+                                    [{completion_time,300}|PreOptions]
                                    ) 
                                 end)
                       end)
@@ -404,7 +436,7 @@ is_runnable(TC) ->
   SimpleTestCase =
     lists:map 
       (fun (Cmds) ->  
-	   [Jobs,_,_] = element(4,Cmds),
+	   [Jobs,_,_,_] = element(4,Cmds),
 	   Jobs
        end, BasicTestCase),
   GenModule = shr_test_jobs:gen_module(TestCase),
@@ -527,13 +559,44 @@ tests_to_junit(FileName) ->
 tests_to_junit(TesterPrefix,TestPrefix,FileName) ->
   {ok,B} = file:read_file(FileName),
   {failed,TestCases} = binary_to_term(B),
+  ConfigDescFun = 
+    fun (TestCase) ->
+        {_,DataOptions} = shr_test_jobs:test_data_spec(TestCase),
+        Distance = proplists:get_value(distance,DataOptions),
+        Carriles = proplists:get_value(carriles,DataOptions),
+        io_lib:format
+          ("config(new Pos(~p,~p))",
+           [Distance,Carriles])
+    end,
+  ControllerArgFun = 
+    fun (TestCase) ->
+        {_,DataOptions} = shr_test_jobs:test_data_spec(TestCase),
+        Distance = proplists:get_value(distance,DataOptions),
+        Carriles = proplists:get_value(carriles,DataOptions),
+        io:format("DataOptions=~p~n",[DataOptions]),
+        io_lib:format
+          ("new Pos(~p,~p)",
+           [Distance,Carriles])
+    end,
+  CheckerClassConstructorFun =
+    fun (TestCase) ->
+        {_,DataOptions} = shr_test_jobs:test_data_spec(TestCase),
+        Distance = proplists:get_value(distance,DataOptions),
+        Carriles = proplists:get_value(carriles,DataOptions),
+        io_lib:format
+          ("CarreteraTestChecker(new Pos(~p,~p))",
+           [Distance,Carriles])
+    end,
   shr_test_cases_to_junit:gen_junit_tests
     (TesterPrefix,
      TestCases,
      TestPrefix,
      callrep(),
      fun order_test_cases/1,
-     fun marshaller/1).
+     fun marshaller/1,
+     ConfigDescFun,
+     ControllerArgFun,
+     CheckerClassConstructorFun).
 
 marshaller({X,Y}) ->
   io_lib:format("new Pos(~p,~p)",[X,Y]).
@@ -549,7 +612,7 @@ order_test_cases(TestCases) ->
 	       BasicTestCase = shr_test_jobs:basic_test_case(TestCase),
 	       lists:map 
 		 (fun (Cmds) ->
-		      [Jobs,_,_] = element(4,Cmds),
+		      [Jobs,_,_,_] = element(4,Cmds),
 		      lists:map
 			(fun (Command) -> Command#command.call end,
 			 Jobs)
@@ -573,7 +636,7 @@ skip_identical_testcases([TC={TestCase,SimplifiedTestCase}|Rest],TCs) ->
 	       lists:sort(fun sort_calls/2, Calls)
 	   end, SimplifiedTestCase),
       case my_member(fun ({_,OtherTC}) ->
-			 inst_check:inst_check(SortedCallsTestCase,OtherTC)
+			 shr_inst_check:inst_check(SortedCallsTestCase,OtherTC)
 		     end, TCs) of
 	true ->
 	  skip_identical_testcases(Rest,TCs);
@@ -629,11 +692,11 @@ sort_testcases(T1,T2) ->
   end.
 
 sort_calls({F1,_},{F2,_}) -> op_value(F1) - op_value(F2).
-op_value(crearGrupo) -> 0;
-op_value(anadirMiembro) -> 1;
-op_value(salirGrupo) -> 2;
-op_value(mandarMensaje) -> 3;
-op_value(leer) -> 3.
+op_value(entrar) -> 0;
+op_value(avanzar) -> 1;
+op_value(salir) -> 2;
+op_value(circulando) -> 3;
+op_value(tick) -> 3.
 
 map_name(CallName) ->
   case atom_to_list(CallName) of
@@ -652,14 +715,21 @@ print_args([Arg|Rest]) ->
   io_lib:format("~p,~s",[Arg,print_args(Rest)]).
 
 read_entrega_info(CSVFileName) ->
-  {ok,File} = file:open(CSVFileName,[read]),
-  try
-    ecsv:process_csv_file_with
-      (File,
-       fun process_entrega_info/2,
-       [],
-       #ecsv_opts{delimiter=$,})
-  after file:close(File)
+  case file:open(CSVFileName,[read]) of
+    {ok,File} ->
+      try
+        ecsv:process_csv_file_with
+          (File,
+           fun process_entrega_info/2,
+           [],
+           #ecsv_opts{delimiter=$,})
+      after file:close(File)
+      end;
+    {error,_} ->
+      io:format
+        ("~n*** ERROR: could not open csv file ~s~n",
+         [CSVFileName]),
+      error(bad)
   end.
 
 process_entrega_info({eof},Acc) ->

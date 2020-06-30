@@ -4,6 +4,7 @@
 	  ,call
 	  ,result
 	  ,waitinfo
+          ,symbolicResult
 	  ,info
 	}).
 
@@ -24,5 +25,5 @@
           returns,                   %% return values (and return check) for
                                      %% unblocked calls
           failed_pres,               %% calls whose precondition fails
-          endstate                   %% next state
+          endstate                   %% next state,
         }).

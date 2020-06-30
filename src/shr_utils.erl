@@ -5,6 +5,8 @@
 -export([initial_state/2,module/1]).
 -export([nondeterministic/1]).
 -export([setup_shr/0]).
+-export([find/2]).
+
 
 %%-define(debug,true).
 -include("debug.hrl").
@@ -116,5 +118,14 @@ setup_shr() ->
       [Return,
        whereis(shr_register)]).
 
+find(F,[]) ->
+  false;
+find(F,[Element|Rest]) ->
+  case F(Element) of
+    true ->
+      Element;
+    false ->
+      find(F,Rest)
+  end.
   
 

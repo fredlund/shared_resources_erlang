@@ -106,7 +106,8 @@ step(Commands,State,Info,OldCounter) ->
 	     {
 	       pid=Counter,
 	       call={Type,F,Args},
-	       info=Command#command.options
+	       info=Command#command.options,
+               symbolicResult={var,Counter}
 	     },
 	   {[Job|Acc], Counter+1}
        end, {[], OldCounter}, Commands),
@@ -220,24 +221,41 @@ do_step(Transition,Info) ->
 	   NewTransition =
 	     Transition#transition
 	     {unblocked=[Call|Transition#transition.unblocked]},
+           SymVar = 
+             Call#job.symbolicResult,
 	   NewDataStatesAndReturns =
              begin
                ReturnValues = 
-                 case DataModule:return_value(shr_call(Call),State#state.state) of
-                   {'$shr_nondeterministic',RValues} -> RValues;
-                   Other -> [Other]
+                 case lists:member({return_value,2},DataModule:module_info(exports)) of
+                   true ->
+                     case DataModule:return_value(shr_call(Call),State#state.state) of
+                       {'$shr_nondeterministic',RValues} -> RValues;
+                       Other -> [Other]
+                     end;
+                   false ->
+                     [SymVar]
                  end,
                lists:flatmap
                  (fun (ReturnValue) ->
+                      ?LOG("ReturnValue is ~p of ~p~n",[ReturnValue,shr_call(Call)]),
                       ReturnCheck =
-                        if
-                          ReturnValue =/= undefined ->
-                            void;
+                        case (ReturnValue==SymVar) orelse
+                             shr_symb:is_symbolic(ReturnValue) of
                           true ->
-                            {check,shr_call(Call),State#state.state}
+                            Check = 
+                              try DataModule:return(State#state.state,shr_call(Call),undefined,SymVar) of
+                                  Ch ->
+                                  ?LOG("Ch is ~p~n",[Ch]),
+                                  case shr_symb:is_symbolic(Ch) of
+                                    true -> Ch;
+                                    false -> undefined
+                                  end
+                              catch _:_ -> undefined end;
+                          false -> undefined
                         end,
                       Returns = {Call,ReturnValue,ReturnCheck},
-                      try DataModule:post(shr_call(Call),ReturnValue,State#state.state) of
+                      ?LOG("Returns=~p~n",[Returns]),
+                      try DataModule:post(shr_call(Call),ReturnValue,State#state.state,SymVar) of
                           {'$shr_nondeterministic',NewStates} -> 
                           lists:map(fun (NS) -> {NS,Returns} end, NewStates);
                           NewDataState -> 
