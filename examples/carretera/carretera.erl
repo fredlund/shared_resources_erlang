@@ -236,17 +236,17 @@ test_users_with_class(Class,PreOptions,Users) ->
     end,
   EntregaDir =
     if 
-      Class=='cc.carretera.CarreteraMonitor' -> "/home/fred/cc_2020_mon_2";
-      true -> "/home/fred/cc_2020_csp_2"
+      Class=='cc.carretera.CarreteraMonitor' -> "/home/fred/cc_2020_mon_3";
+      true -> "/home/fred/cc_2020_csp_3"
     end,
   test_users(Class,File,EntregaDir,PreOptions,Users).
 
 test_users_mon(PreOptions) ->
-  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/cc_2020_mon_2",PreOptions,all).
+  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/cc_2020_mon_3",PreOptions,all).
 
 %%  test_users('cc.carretera.CarreteraMonitor',"CarreteraMonitor.java","/home/fred/gits/src/cc_2020/buggy_carretera",PreOptions).
 test_users_csp(PreOptions) ->
-  test_users('cc.carretera.CarreteraCSP',"CarreteraCSP.java","/home/fred/cc_2020_csp_2",PreOptions,all).
+  test_users('cc.carretera.CarreteraCSP',"CarreteraCSP.java","/home/fred/cc_2020_csp_3",PreOptions,all).
 
 test_users(Class,File,EntregaDir,PreOptions,Users) ->
   put(failing_tests,[]),
