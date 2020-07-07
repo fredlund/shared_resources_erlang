@@ -201,6 +201,8 @@ stop_java() ->
 
 test_users_nopar() ->
   test_users_with_class('cc.carretera.CarreteraMonitor',[no_par,{more_commands,50}]).
+test_users_nopar_startFrom(User) ->
+  test_users_with_class('cc.carretera.CarreteraMonitor',[{start_from,User},no_par,{more_commands,50}]).
 test_users_nopar(Users) ->
   test_users_with_class('cc.carretera.CarreteraMonitor',[no_par,{more_commands,50}],Users).
 test_users_nopar_csp() ->
@@ -252,34 +254,53 @@ test_users(Class,File,EntregaDir,PreOptions,Users) ->
   put(failing_tests,[]),
   {ok,EntregaInfo} = read_entrega_info(EntregaDir++"/prac1.csv"),
   Entregas = find_entregas(File,EntregaDir),
-  TesteableEntregas =
-    lists:filter
-      (fun (Entrega={Name,_}) ->
+  {TesteableEntregas,_} =
+    lists:foldl
+      (fun (Entrega={Name,_},{Acc,Started}) ->
+           StartUser = 
+             proplists:get_value(start_from,PreOptions,false) == Name,
+           HasStarted =
+             Started orelse ((Users==all) andalso StartUser),
+           DoFilter =
+             if
+               Users=/=all -> 
+                 lists:member(Name,Users);
+               Users==all, not(HasStarted) -> 
+                 false;
+               Users==all, HasStarted -> 
+                 case lists:keyfind(Name,1,EntregaInfo) of
+                   false ->
+                     case string:split(Name,"+") of
+                       [Part1,Part2] ->
+                         NewName = Part2++"+"++Part1,
+                         case lists:keyfind(NewName,1,EntregaInfo) of
+                           false ->
+                             io:format("*** WARNING: cannot find group ~s~n",[Name]),
+                             true;
+                           Tuple0 ->
+                             io:format
+                               ("*** INFO: compensated deliverit bug: ~s => ~s~n",
+                                [Name,NewName]),
+                             element(2,Tuple0)=/="0"
+                         end;
+                       _ -> 
+                         io:format("*** WARNING: cannot find group ~s~n",[Name]),
+                         true
+                     end;
+                   Tuple -> element(2,Tuple)=/="0"
+                 end
+             end,
            if
-             Users=/=all -> 
-               lists:member(Name,Users);
-             Users==all -> 
-               case lists:keyfind(Name,1,EntregaInfo) of
-                 false ->
-                   case string:split(Name,"+") of
-                     [Part1,Part2] ->
-                       NewName = Part2++"+"++Part1,
-                       case lists:keyfind(NewName,1,EntregaInfo) of
-                         false ->
-                           io:format("*** WARNING: cannot find group ~s~n",[Name]),
-                           true;
-                         Tuple0 ->
-                           io:format("*** INFO: compensated deliverit bug: ~s => ~s~n",[Name,NewName]),
-                           element(2,Tuple0)=/="0"
-                       end;
-                     _ -> 
-                       io:format("*** WARNING: cannot find group ~s~n",[Name]),
-                       true
-                   end;
-                 Tuple -> element(2,Tuple)=/="0"
-               end
+             DoFilter -> {[Entrega|Acc],HasStarted};
+             true -> {Acc,HasStarted}
            end
-       end, Entregas),
+       end, 
+       {[],
+        case proplists:get_value(start_from,PreOptions,false) of
+          false -> true;
+          _ -> false
+        end},
+       Entregas),
   LenTesteableEntregas = length(TesteableEntregas),
   if
     Users==all ->
