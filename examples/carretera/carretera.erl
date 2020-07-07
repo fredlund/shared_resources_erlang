@@ -250,6 +250,51 @@ test_users_mon(PreOptions) ->
 test_users_csp(PreOptions) ->
   test_users('cc.carretera.CarreteraCSP',"CarreteraCSP.java","/home/fred/cc_2020_csp_3",PreOptions,all).
 
+
+% carretera:prepare_for_moss("CarreteraMonitor.java","/home/fred","cc_2020_mon_3","cc_2020_mon_2","tmp").
+prepare_for_moss(File,Prefix,NewEntregaDir,OldEntregaDir,TargetDir) ->
+  NewDir = Prefix++"/"++NewEntregaDir,
+  OldDir = Prefix++"/"++OldEntregaDir,
+  NewEntregas = find_entregas(File,NewDir),
+  OldEntregas = find_entregas(File,OldDir),
+  NewSet = 
+    lists:map(fun ({Name,_}) -> {make_name_element(Name),Name} end, NewEntregas),
+  OldSet =
+    lists:map(fun ({Name,_}) -> {make_name_element(Name),Name} end, OldEntregas),
+  RemOldSet = 
+    lists:foldl
+      (fun (NewGroup,OS) -> remove_matching(NewGroup,OS) end,
+       OldSet,NewSet),
+  lists:foreach
+    (fun ({_,NewGroup}) -> 
+         TmpDir = TargetDir++"/"++NewEntregaDir++"_"++NewGroup,
+         io:format
+           ("mkdir ~s; cp ~s/~s/~s ~s~n",
+            [TmpDir,NewDir,NewGroup,File,TmpDir])
+     end, 
+     NewSet),
+  lists:foreach
+    (fun ({_,OldGroup}) -> 
+         TmpDir = TargetDir++"/"++OldEntregaDir++"_"++OldGroup,
+         io:format
+           ("mkdir ~s; cp ~s/~s/~s ~s~n",
+            [TmpDir,OldDir,OldGroup,File,TmpDir])
+     end, 
+     RemOldSet).
+
+make_name_element(Name) ->
+  case string:split(Name,"+") of
+    [Part1,Part2] ->
+      if
+        Part1 =< Part2 -> {Part1,Part2};
+        true -> {Part2,Part1}
+      end;
+    _ -> {Name,Name}
+  end.
+
+remove_matching({{N1,N2},_},Set) ->
+  lists:filter(fun ({{O1,O2},_}) -> (N1=/=O1) and (N1=/=O2) and (N2=/=O1) and (N2=/=O2) end, Set).
+
 test_users(Class,File,EntregaDir,PreOptions,Users) ->
   put(failing_tests,[]),
   {ok,EntregaInfo} = read_entrega_info(EntregaDir++"/prac1.csv"),
