@@ -251,7 +251,8 @@ test_users_csp(PreOptions) ->
   test_users('cc.carretera.CarreteraCSP',"CarreteraCSP.java","/home/fred/cc_2020_csp_3",PreOptions,all).
 
 
-% carretera:prepare_for_moss("CarreteraMonitor.java","/home/fred","cc_2020_mon_3","cc_2020_mon_2","tmp").
+% carretera:prepare_for_moss("CarreteraMonitor.java","/home/fred","cc_2020_mon_3","cc_2020_mon_2","tmp_mon").
+% carretera:prepare_for_moss("CarreteraCSP.java","/home/fred","cc_2020_csp_3","cc_2020_csp_2","tmp_csp").
 prepare_for_moss(File,Prefix,NewEntregaDir,OldEntregaDir,TargetDir) ->
   NewDir = Prefix++"/"++NewEntregaDir,
   OldDir = Prefix++"/"++OldEntregaDir,
