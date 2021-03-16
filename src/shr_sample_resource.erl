@@ -45,6 +45,7 @@ do_run(N,State) when is_integer(N), N>0 ->
     [] ->
       [];
     [PreCall] ->
+      ?LOG("precall is ~p~n",[PreCall]),
       Command = shr_test_jobs:command_parser(PreCall),
       {F,Args} = Command#command.call,
       {Pid,State1} = new_pid(State),
@@ -65,12 +66,17 @@ do_run(N,State) when is_integer(N), N>0 ->
                (ResultState#state.state)#onestate.waiting),
           NewTestGenState =
             (State#state.test_gen_module):next_state
-              (State#state.test_gen_state,
+              (ResultState#state.test_gen_state,
                {[Job],FinishedJobs},
                [PreCall],NewCorrState),
           [Call|do_run(N-1,ResultState#state{test_gen_state=NewTestGenState})];
         false ->
-          [Call|do_run(N-1,State)]
+          NewTestGenState =
+            (State#state.test_gen_module):next_state
+              (State1#state.test_gen_state,
+               {[Job],[Job]},
+               [PreCall],CorrState),
+          [Call|do_run(N-1,State1#state{test_gen_state=NewTestGenState})]
       end
   end.
 
