@@ -153,7 +153,7 @@ cpre(Call,State) ->
 -spec post(call(),any(),#state{}) -> #state{}.
 post(Call,Result,State) ->
     NewDataStates
-    = apply(State#state.state_module,post,[Call,Result,State#state.state]),
+    = apply(State#state.state_module,post,[Call,Result,State#state.state,void]),
   ?TIMEDLOG
      ("~p: post(~s,~p) -> ~p~n",
       [self(),print_call(Call),Result,NewDataStates]),
