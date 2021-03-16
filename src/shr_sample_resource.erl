@@ -50,21 +50,28 @@ do_run(N,State) when is_integer(N), N>0 ->
       {Pid,State1} = new_pid(State),
       Call = {Command#command.port,F,Args},
       Job = #job{pid=Pid,call=Call,info=Command#command.options},
-      OneState = 
-        shr_corr_resource:job_new_waiting
-          (Job,State#state.state,State#state.waiting_module),
-      ResultState = repeat_until_stable(State1#state{state=OneState}),
-      ?LOG("Execute ~p: result state:~n  ~p~n",[PreCall,ResultState]),
-      FinishedJobs = 
-        job_minus
-          (OneState#onestate.waiting,
-           (ResultState#state.state)#onestate.waiting),
-      NewTestGenState =
-	(State#state.test_gen_module):next_state
-	  (State#state.test_gen_state,
-	   {[Job],FinishedJobs},
-	   [PreCall],void),
-      [Call|do_run(N-1,ResultState#state{test_gen_state=NewTestGenState})]
+      case shr_corr_resource:job_pre_is_true(Job,State#state.state,State#state.data_module) of
+        true ->
+          OneState = 
+            shr_corr_resource:job_new_waiting
+              (Job,State#state.state,State#state.waiting_module),
+          ?LOG("will execute ~p until stable~n",[State1]),
+          ResultState = repeat_until_stable(State1#state{state=OneState}),
+          NewCorrState = #corr_res_state{states=[ResultState#state.state]},
+          ?LOG("Execute ~p: result state:~n  ~p~n",[PreCall,ResultState]),
+          FinishedJobs = 
+            job_minus
+              (OneState#onestate.waiting,
+               (ResultState#state.state)#onestate.waiting),
+          NewTestGenState =
+            (State#state.test_gen_module):next_state
+              (State#state.test_gen_state,
+               {[Job],FinishedJobs},
+               [PreCall],NewCorrState),
+          [Call|do_run(N-1,ResultState#state{test_gen_state=NewTestGenState})];
+        false ->
+          [Call|do_run(N-1,State)]
+      end
   end.
 
 new_pid(State) ->
