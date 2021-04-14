@@ -5,7 +5,7 @@
 -export([initial_state/2,postcondition/4,next_state/4]).
 
 %% private exports
--export([job_new_waiting/3, executable_jobs/4, job_next_states/5]).
+-export([job_new_waiting/3, executable_jobs/4, job_next_states/5, job_pre_is_true/3]).
 -export([is_deterministic/1]).
 -export([resource_call/1]).
 
