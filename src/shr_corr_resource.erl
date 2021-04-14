@@ -168,7 +168,7 @@ finish_jobs(_,[],FinishedStates,_,_,_) ->
   ?LOG
      ("Finishing (no StatesJobs remain)... FinishedStates=~n  ~p~n~n",
       [FinishedStates]),
-  {ok,lists:usort(FinishedStates)};
+  {ok,sort_states(FinishedStates)};
 finish_jobs(State,StatesAndJobs,FinishedStates,OrigState,FinishedJobs,TS) ->
   ?LOG("finish_jobs: StatesJobs:~n  ~p~nFinishedStates=~n  ~p~n~n",
        [StatesAndJobs,FinishedStates]),
@@ -199,13 +199,24 @@ finish_jobs(State,StatesAndJobs,FinishedStates,OrigState,FinishedJobs,TS) ->
       false;
 
     true ->
+          lists:foreach(fun (State) -> normalize_state(State) end,NewFinishedStates),
       finish_jobs
 	(State,
 	 merge_jobs_and_states(NewStatesAndJobs),
-	 lists:usort(NewFinishedStates),
+	 sort_states(NewFinishedStates),
 	 OrigState,FinishedJobs,TS)
   end.
 
+sort_states(States) when is_list(States) ->
+    lists:usort(lists:map(fun normalize_state/1,States));
+sort_states(States) ->
+    io:format
+      ("~n*** Error: sorting strange states:~n~p~n",[States]),
+    error(bad).
+
+normalize_state(State) ->
+    #onestate{retmap=Map} = State,
+    State#onestate{retmap=lists:usort(Map)}.
 
 compute_transitions(#onestate{incoming=Incoming,waiting=Waiting}=IndState,
 		    FJobs,State) ->
@@ -280,8 +291,8 @@ compute_transitions(#onestate{incoming=Incoming,waiting=Waiting}=IndState,
 		   %% has the waiting info while the completed job has
 		   %% the correct result
 		   case
-		     job_is_executable(QueueJob,IndState,
-				       DataModule,WaitingModule)
+		     (job_is_executable(QueueJob,IndState,DataModule,WaitingModule)
+                      orelse (not(job_pre_is_true(Job,IndState,DataModule))))
 		     andalso job_returns_correct_value(Job,IndState,DataModule) of
 		     true ->
 		       NextStates = 
@@ -444,7 +455,11 @@ delete_job(Job,JobList) ->
   lists:filter(fun (ListJob) -> not(job_eq(ListJob,Job)) end, JobList).
 
 merge_jobs_and_states(JobsAndStates) ->
-  lists:usort(JobsAndStates).
+  lists:usort
+    (lists:map
+       (fun ({State,Jobs}) ->
+                {normalize_state(State),Jobs}
+        end, JobsAndStates)).
 
 job_is_executable(Job,IndState,DataModule,WaitingModule) ->
   job_cpre_is_true(Job,IndState,DataModule)

@@ -7,7 +7,7 @@
 -export([print_run/1]).
 
 %% Allow to redefine it via options
--define(COMPLETION_TIME,50).
+-define(COMPLETION_TIME,300).
 
 -include("tester.hrl").
 
