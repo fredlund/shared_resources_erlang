@@ -291,8 +291,10 @@ compute_transitions(#onestate{incoming=Incoming,waiting=Waiting}=IndState,
 		   %% has the waiting info while the completed job has
 		   %% the correct result
 		   case
-		     (job_is_executable(QueueJob,IndState,DataModule,WaitingModule)
-                      orelse (not(job_pre_is_true(Job,IndState,DataModule))))
+                     %% A job can be executed if its pre is invalid (it will raise an exception)
+                     %% or if its cpre is true.
+		     ((not(job_pre_is_true(Job,IndState,DataModule)))
+                      orelse job_is_executable(QueueJob,IndState,DataModule,WaitingModule))
 		     andalso job_returns_correct_value(Job,IndState,DataModule) of
 		     true ->
 		       NextStates = 

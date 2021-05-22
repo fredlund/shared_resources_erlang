@@ -162,9 +162,13 @@ step(Commands,State,Info,OldCounter) ->
 	(fun (NewTransition) ->
 	     Result = {EnabledJobCalls,NewTransition#transition.unblocked},
 	     NState = NewTransition#transition.endstate,
+             Cmds = 
+                     lists:map
+                     (fun (Job) -> Job#job.call end,
+                      NewTransition#transition.calls),
 	     NewGenState =
 	       (gen_module(Info)):next_state
-		 (NState#state.genstate,Result,void,void),
+		 (NState#state.genstate,Result,Cmds,void),
 	     NewNState = NState#state{genstate=NewGenState},
 	     NewTransition#transition{endstate=NewNState}
 	 end, NewTransitions)
