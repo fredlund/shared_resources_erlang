@@ -96,6 +96,8 @@ check_unblocks_are_unique([Transition|Rest],UnblockSet) ->
   end.
 
 step(Commands,State,Info,OldCounter) ->
+  ?LOG("step(~p) in ~p~n",[Commands,State]),
+
   {JobCalls,_NewCounter} =
     lists:foldl
       (fun (Command, {Acc,Counter}) ->
@@ -118,11 +120,15 @@ step(Commands,State,Info,OldCounter) ->
 	   (data_module(Info)):pre(shr_call(JobCall),State#state.state) 
        end, JobCalls),
 
+  if EnabledJobCalls=/=[] -> ?LOG("enabled: ~p~n",[EnabledJobCalls]); true -> ok end,
+
   FailedPres =
     lists:filter
       (fun (JobCall) -> 
 	   not((data_module(Info)):pre(shr_call(JobCall),State#state.state))
        end, JobCalls),
+
+  if FailedPres=/=[] -> ?LOG("failed: ~p~n",[FailedPres]); true -> ok end,
 
   IsExecutable =
     lists:all
@@ -194,31 +200,37 @@ step(Transitions,Info) ->
   end.
 
 do_step(Transition,Info) ->
+  ?LOG("do_step(~p)~nwith state ~p~n",[Transition#transition.calls,Transition#transition.endstate]),
   State = Transition#transition.endstate,
   WaitingModule = waiting_module(Info),
   DataModule = data_module(Info),
   AcceptNewTransitions =
     lists:map
-      (fun (WaitingCall) ->
+      (fun (WaitingCallJob) ->
 	   {WaitInfo,NewWaitState} =
 	     WaitingModule:new_waiting
-	       (WaitingCall,
+	       (shr_call(WaitingCallJob),
 		State#state.waitstate,
 		State#state.state),
+           ?LOG
+              ("~p: call ~p with waitstate ~p returned new waitinfo~n ~p and waitstate ~p~n",
+               [WaitingModule,shr_call(WaitingCallJob),State#state.waitstate,WaitInfo,NewWaitState]),
 	   NewState =
 	     State#state
 	     {
-	       waiting = lists:delete(WaitingCall,State#state.waiting),
-	       calls = [WaitingCall#job{waitinfo=WaitInfo}|State#state.calls],
+	       waiting = lists:delete(WaitingCallJob,State#state.waiting),
+	       calls = [WaitingCallJob#job{waitinfo=WaitInfo}|State#state.calls],
 	       waitstate = NewWaitState
 	     },
 	   Transition#transition{endstate=NewState}
        end, State#state.waiting),
+  ?LOG("accepted:~n~p~n",[AcceptNewTransitions]),
   EnabledCalls =
     lists:filter
       (fun (Job) ->
 	   DataModule:cpre(shr_call(Job),State#state.state)
        end, State#state.calls),
+  ?LOG("Enabled: ~p~n",[EnabledCalls]),
   CallNewTransitions =
     lists:flatmap
       (fun (Call) ->
@@ -259,6 +271,7 @@ do_step(Transition,Info) ->
                         end,
                       Returns = {Call,ReturnValue,ReturnCheck},
                       ?LOG("Returns=~p~n",[Returns]),
+                      ?LOG("call post(~p)~nin ~p~n",[Call,State#state.state]),
                       try DataModule:post(shr_call(Call),ReturnValue,State#state.state,SymVar) of
                           {'$shr_nondeterministic',NewStates} -> 
                           lists:map(fun (NS) -> {NS,Returns} end, NewStates);
@@ -274,6 +287,7 @@ do_step(Transition,Info) ->
              end,
 	   lists:map
 	     (fun ({NewDataState,NewReturn}) ->
+                  ?LOG("post_waiting(~p) info=~p state=~p~n",[Call,Call#job.waitinfo,State#state.waitstate]),
 		  NewWaitState = 
 		    WaitingModule:post_waiting
 		      (shr_call(Call),Call#job.waitinfo,
