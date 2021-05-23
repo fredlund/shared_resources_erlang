@@ -80,25 +80,33 @@ output_test_case(TestCase,StateSpace,ConfigDescFun,ControllerArgFun,CheckerClass
   io:format
     (State#state.file,
      indent(I1,"@Test")++
-       indent(I1,"@DisplayName(\""++Name++"\")")++
-       indent(I1,"public void ~s(TestInfo testInfo) {")++
-       indent(I2,CheckerStr)++
-       indent(I2,"")++
-       indent(I2,"UnitTest t =")++
-       indent(I2+2,"new UnitTest")++
-       indent(I2+2,"(")++
-       indent(I2+3,"testInfo.getDisplayName(),")++
-       indent(I2+3,ConfigDescFun(TestCase)++",")++
-       indent(I2+3,"startController("++ControllerArgFun(TestCase)++"),"),
+         indent(I1,"@DisplayName(\""++Name++"\")")++
+         indent(I1,"public void ~s(TestInfo testInfo) {")++
+         indent(I2,CheckerStr)++
+         indent(I2,"")++
+         indent(I2,"UnitTest t =")++
+         indent(I2+2,"UnitTest.test")++
+         indent(I2+2,"(")++
+         indent(I2+3,"testInfo.getDisplayName(),"),
      [Name]),
   io:format
     (State#state.file,
-     "~s",
-     [output_state_space(StateSpace,State#state{indent=I2+3})]),
+     indent(I2+3,"new Prefix")++
+         indent(I2+3,"(")++
+         indent(I2+4,"TestCall.unblocks("++ControllerArgFun(TestCase)++"),"),
+     []),
+    io:format
+      (State#state.file,
+       "~s"++indent(I2+3,")"),
+       [output_state_space(StateSpace,State#state{indent=I2+4})]),
   io:format
     (State#state.file,
-     indent(I2+2,");")++
-       indent(I2,"Assertions.assertTimeoutPreemptively(Duration.ofSeconds(30), () -> { t.run(); });")++
+     indent(I2+2,")")++
+     if 
+         ConfigDescFun == void -> ""; 
+         true -> ".setConfigurationDescription("++ConfigDescFun(TestCase)++")" 
+     end++";"++
+     indent(I2,"Assertions.assertTimeoutPreemptively(Duration.ofSeconds(30), () -> { t.run(); });")++
        nl(I1,"}"),
      []).
 
@@ -217,10 +225,8 @@ output_sequence_final(Sequence,Final,State) ->
     Sequence=/=[] ->
       io_lib:format
 	(indent(I,"Util.sequenceEndsWith")++
-	   indent(I,"(new TestCall[] {")++
-	   output_sequence(Sequence,Final,State#state{indent=I+2})++
-	   indent(I+1,"},")++
-	   "~s"++
+	   indent(I,"(~s,")++
+	   output_sequence(Sequence,Final,State#state{indent=I+1})++
 	   indent(I,")"),
 	 [output_final(Final,State#state{indent=I+1})]);
     true ->
@@ -307,9 +313,9 @@ make_calls(Calls,State) ->
 	  end, Calls),
        ","),
   io_lib:format
-    (indent(I,"new Call[] {")++
+    (indent(I,"Arrays.asList(")++
        "~s"++
-       indent(I,"}"),
+       indent(I,")"),
      [CallsString]).
 
 unblocks(Calls,Returns,State) ->
@@ -334,7 +340,7 @@ unblocks(Calls,Returns,State) ->
                  Other -> Other
                end,
              UnblocksComma = if Acc=="" -> ""; true -> "," end,
-             "new Pair<String,Oracle>(\""++symbVar(UnblockedCall#job.pid)++"\","++RightElement++")"++UnblocksComma++Acc
+             "new Pair<>(\""++symbVar(UnblockedCall#job.pid)++"\","++RightElement++")"++UnblocksComma++Acc
          end, "", Calls)++")";
     true ->
       lists:foldl
@@ -361,7 +367,7 @@ oracle(Call,Returns,FailedPres,State) ->
         false ->
           "";
         _ ->
-          "Check.raisesException(precondFailedExc)"
+          "Check.raisesException(IllegalArgumentException.class)"
       end
   end.
 
