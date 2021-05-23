@@ -229,6 +229,11 @@ do_step(Transition,Info) ->
     lists:filter
       (fun (Job) ->
 	   DataModule:cpre(shr_call(Job),State#state.state)
+                   andalso WaitingModule:priority_enabled
+                             (shr_call(Job),
+                              Job#job.waitinfo,
+                              State#state.waitstate,
+                              State#state.state)
        end, State#state.calls),
   ?LOG("Enabled: ~p~n",[EnabledCalls]),
   CallNewTransitions =
