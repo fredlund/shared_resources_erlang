@@ -9,7 +9,45 @@ The reader ignores all messages that are too late.
 
     
 
+- Bug or problem:
 
 
+Testing group "180219+190236" with implementation in "/home/fred/Sync/prac2_obligatorio_sep/successful_entregas/180219+190236"
 
 
+*** org.jcsp.lang.ProcessManager: A process threw the following exception :
+java.lang.NullPointerException
+        at cc.banco.BancoCSP.run(BancoCSP.java:179)
+        at org.jcsp.lang.ProcessManager$1.run(Unknown Source)
+
+postcondition raises {case_clause,false}
+Stacktrace:
+[{banco_shr,saldo,2,[{file,"banco_shr.erl"},{line,40}]},
+ {banco_shr,cpre,2,[{file,"banco_shr.erl"},{line,70}]},
+ {shr_corr_resource,job_is_executable,4,
+                    [{file,"src/shr_corr_resource.erl"},{line,467}]},
+ {lists,'-filter/2-lc$^0/1-0-',2,[{file,"lists.erl"},{line,1286}]},
+ {shr_corr_resource,'-return_remaining_states/3-fun-0-',4,
+                    [{file,"src/shr_corr_resource.erl"},{line,397}]},
+ {lists,foldl,3,[{file,"lists.erl"},{line,1263}]},
+ {shr_corr_resource,return_remaining_states,3,
+                    [{file,"src/shr_corr_resource.erl"},{line,395}]},
+ {shr_corr_resource,postcondition,4,
+                    [{file,"src/shr_corr_resource.erl"},{line,79}]}]
+*** Model error: shr_test_jobs:do_cmds_post raised an exception badresource
+
+	public BancoCSP() {
+		
+		new ProcessManager(this).start();
+		
+		this.banco = new HashTableMap <String, Cuenta>();
+		
+		this.chIngresar = Channel.any2one();
+		this.chTransferir = Channel.any2one();
+		this.chDisponible = Channel.any2one();
+		this.chAlerta = Channel.any2one();
+		
+		this.contadorT = 0;
+  	}
+  
+	
