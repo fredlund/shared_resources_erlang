@@ -74,7 +74,7 @@ output_test_case(TestCase,StateSpace,ConfigDescFun,ControllerArgFun,State) ->
   io:format
     (State#state.file,
      indent(I1,"public void ~s() {")++
-     "~s~s"++indent(I1)++"}",
+     "~s~s"++indent(I1)++"}~n",
      [Name,indent(I2,Controller),output_state_space(StateSpace,State#state{indent=I2})]).
 
 extract_sequence({State,[]}) ->
@@ -276,20 +276,23 @@ combine_terminate([Item|Rest],Combinator) ->
 make_calls(Calls,State) ->
   I = State#state.indent,
   CallsString =
-    combine
+    combine_terminate
       (lists:map
 	 (fun (Call) ->
+              Decl = "Call<?> "++symbVar(Call#job.pid),
 	      CallRep = (State#state.callrep)(Call),
 	      io_lib:format
-		(indent(I+1,"~s.n(\"~s\")"),
-		 [CallRep,symbVar(Call#job.pid)])
+		(indent(I+1,"~s = ~s"),
+		 [Decl,CallRep])
 	  end, Calls),
+       ";"),
+  ExecString = 
+    combine
+      (lists:map
+	 (fun (Call) -> symbVar(Call#job.pid) end, Calls),
        ","),
-  io_lib:format
-    (indent(I,"Arrays.asList(")++
-       "~s"++
-       indent(I,")"),
-     [CallsString]).
+  io_lib:format("~s~n"++indent(I)++"Execute.exec(~s);~n",
+                [CallsString,ExecString]).
 
 unblocks(Calls,Returns,State) ->
   NeedPairs = 
@@ -362,18 +365,18 @@ output_final(FinalState,State) ->
 		  ?LOG("Alternative transition is~n~p~n",[Transition]),
                   Returns = Transition#transition.returns,
 		  AltUnblocks = Transition#transition.unblocked,
-		  indent(I+1,"Alternative.alternative(")++
+		  indent(I+1,"() -> { assertUnblocks(Arrays.asList(")++
 		    output_state_space(Continuation,State#state{indent=I+2})++
-		    ","++
 		    indent(I+2,unblocks(AltUnblocks,Returns,State))++
-		    ")"
+		    ")); }"
 	      end, Transitions),
 	   ","),
       io_lib:format
-	(indent(I,"Branches.branches")++
+	(indent(I,"~s")
+         ++indent(I,"int winner = checkAlternatives")++
 	   indent(I,"(")++
-	   "~s,~s"++
-	   indent(I,")"),
+	   "~s"++
+	   indent(I,");"),
 	 [CallsString,AlternativesString])
   end.
 
