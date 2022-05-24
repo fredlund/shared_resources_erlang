@@ -4,15 +4,15 @@
 
 -include("tester.hrl").
 
-%%-define(debug,true).
+-define(debug,true).
 -include("debug.hrl").
 
--export([gen_junit_tests/9]).
+-export([gen_junit_tests/8]).
 -export([symbVar/1]).
 
 
 
-gen_junit_tests(ClassName,TestCases,Prefix,CallRep,Orderer,Marshaller,ConfigDescFun,ControllerArgFun,CheckerClassConstructorFun) ->
+gen_junit_tests(ClassName,TestCases,Prefix,CallRep,Orderer,Marshaller,ConfigDescFun,ControllerArgFun) ->
   FileName = ClassName++".java",
   {ok,File} = file:open(FileName,[write]),
   State =
@@ -25,7 +25,7 @@ gen_junit_tests(ClassName,TestCases,Prefix,CallRep,Orderer,Marshaller,ConfigDesc
       marshaller=Marshaller
     },
   OrderedTestCases = Orderer(TestCases),
-  gen_junit_tests(OrderedTestCases,ConfigDescFun,ControllerArgFun,CheckerClassConstructorFun,State).
+  gen_junit_tests(OrderedTestCases,ConfigDescFun,ControllerArgFun,State).
 
 shr_dir() ->
   filename:dirname(code:which(?MODULE)).
@@ -33,9 +33,9 @@ shr_dir() ->
 shr_priv_dir() ->
   shr_dir()++"/../priv".
   
-gen_junit_tests([],_ConfigDescFun,_ControllerArgFun,CheckerClassConstructorFun,State) ->
+gen_junit_tests([],_ConfigDescFun,_ControllerArgFun,State) ->
   ok = file:close(State#state.file);
-gen_junit_tests([TC|Rest],ConfigDescFun,ControllerArgFun,CheckerClassConstructorFun,State) ->
+gen_junit_tests([TC|Rest],ConfigDescFun,ControllerArgFun,State) ->
   TestCase = TC#test_case.test_case,
   BasicTestCase = shr_test_jobs:basic_test_case(TestCase),
   SimpleTestCase =
@@ -52,12 +52,12 @@ gen_junit_tests([TC|Rest],ConfigDescFun,ControllerArgFun,CheckerClassConstructor
   {Info,InitialState} = 
     shr_step_resource:initial_state(DataSpec,WaitingSpec,GenModule,GenState,[]),
   try shr_step_resource:repeat_step(SimpleTestCase,InitialState,Info) of
-      StateSpace -> output_test_case(TestCase,StateSpace,ConfigDescFun,ControllerArgFun,CheckerClassConstructorFun,State)
+      StateSpace -> output_test_case(TestCase,StateSpace,ConfigDescFun,ControllerArgFun,State)
   catch throw:not_deterministic ->
       io:format("*** Warning: test case is not deterministic.~n"),
       shr_test_jobs:print_test_case(TC)
   end,
-  gen_junit_tests(Rest,ConfigDescFun,ControllerArgFun,CheckerClassConstructorFun,State#state{counter=State#state.counter+1}).
+  gen_junit_tests(Rest,ConfigDescFun,ControllerArgFun,State#state{counter=State#state.counter+1}).
 
 
 statesUnblocks({branching,{_,StatesUnblocks,_,_}}) ->
@@ -66,49 +66,16 @@ statesUnblocks({branching,{_,StatesUnblocks,_,_}}) ->
 remaining_commands({branching,{_,_,_,Cmds}}) ->
   Cmds.
 
-output_test_case(TestCase,StateSpace,ConfigDescFun,ControllerArgFun,CheckerClassConstructorFun,State) ->
+output_test_case(TestCase,StateSpace,ConfigDescFun,ControllerArgFun,State) ->
+  Controller = ControllerArgFun(TestCase),
   Name = io_lib:format("test_~s_~p",[State#state.prefix,State#state.counter]),
   I1 = indent_len(1),
   I2 = indent_len(2),
-  CheckerStr =
-    if
-      CheckerClassConstructorFun=/=undefined ->
-        "UnitTest.installChecker(new "++CheckerClassConstructorFun(TestCase)++");";
-      true ->
-        ""
-    end,
   io:format
     (State#state.file,
-     indent(I1,"@Test")++
-         indent(I1,"@DisplayName(\""++Name++"\")")++
-         indent(I1,"public void ~s(TestInfo testInfo) {")++
-         indent(I2,CheckerStr)++
-         indent(I2,"")++
-         indent(I2,"UnitTest t =")++
-         indent(I2+2,"UnitTest.test")++
-         indent(I2+2,"(")++
-         indent(I2+3,"testInfo.getDisplayName(),"),
-     [Name]),
-  io:format
-    (State#state.file,
-     indent(I2+3,"new Prefix")++
-         indent(I2+3,"(")++
-         indent(I2+4,"TestCall.unblocks("++ControllerArgFun(TestCase)++"),"),
-     []),
-    io:format
-      (State#state.file,
-       "~s"++indent(I2+3,")"),
-       [output_state_space(StateSpace,State#state{indent=I2+4})]),
-  io:format
-    (State#state.file,
-     indent(I2+2,")")++
-     if 
-         ConfigDescFun == void -> ""; 
-         true -> ".setConfigurationDescription("++ConfigDescFun(TestCase)++")" 
-     end++";"++
-     indent(I2,"Assertions.assertTimeoutPreemptively(Duration.ofSeconds(30), () -> { t.run(); });")++
-       nl(I1,"}"),
-     []).
+     indent(I1,"public void ~s() {")++
+     "~s~s"++indent(I1)++"}",
+     [Name,indent(I2,Controller),output_state_space(StateSpace,State#state{indent=I2})]).
 
 extract_sequence({State,[]}) ->
   {sequence,[],State};
@@ -224,17 +191,14 @@ output_sequence_final(Sequence,Final,State) ->
   if
     Sequence=/=[] ->
       io_lib:format
-	(indent(I,"Util.sequenceEndsWith")++
-	   indent(I,"(~s,")++
-	   output_sequence(Sequence,Final,State#state{indent=I+1})++
-	   indent(I,")"),
+	(output_sequence(Sequence,Final,State#state{indent=I+1})++"\n~s~n",
 	 [output_final(Final,State#state{indent=I+1})]);
     true ->
       output_final(Final,State#state{indent=I})
   end.
 
 output_sequence(Items,Final,State) ->
-  combine
+  combine_terminate
     (lists:map
        (fun (Item) ->
 	    I = State#state.indent,
@@ -252,13 +216,15 @@ output_sequence(Items,Final,State) ->
 		  (lists:keyfind(Call#job.pid,#job.pid,Unblocked)=/=false)
                   orelse
                   (lists:keyfind(Call#job.pid,#job.pid,FailedPres)=/=false),
-                CallRepReturn =
-                  CallRep
-                  ++(case oracle(Call,Returns,FailedPres,State) of
-                       "" -> "";
-                       Other -> ".o("++Other++")"
-                     end)
-                  ++".n(\""++symbVar(Call#job.pid)++"\")",
+                Decl =
+                  "Call<?> "++symbVar(Call#job.pid),
+                %% CallRepReturn =
+                %%   CallRep
+                %%   ++(case oracle(Call,Returns,FailedPres,State) of
+                %%        "" -> "";
+                %%        Other -> ".o("++Other++")"
+                %%      end)
+                %%   ++".n(\""++symbVar(Call#job.pid)++"\")",
 		Unblocks_non_locally =
 		  lists:keydelete(Call#job.pid,#job.pid,Unblocked),
 		Unblocks =
@@ -266,14 +232,14 @@ output_sequence(Items,Final,State) ->
 		if
 		  UnblocksCall ->
 		    ?LOG
-		      ("unblocked(~s)~ntransition=~p~n",[CallRepReturn,Item]),
+		      ("unblocked(~s)~ntransition=~p~n",[CallRep,Item]),
 		    io_lib:format
-		      (indent(I,"TestCall.unblocks(~s~s)"),
-		       [CallRepReturn,pre(",",Unblocks)]);
+		      (indent(I,"~s = ~s.assertReturns(~s)"),
+		       [Decl,CallRep,Unblocks]);
 		  true ->
 		    io_lib:format
-		      (indent(I,"TestCall.blocks(~s~s)"),
-		       [CallRepReturn,pre(",",Unblocks)])
+		      (indent(I,"~s = ~s.assertBlocks(~s)"),
+		       [Decl,CallRep,Unblocks])
 		end;
 	      [_|_] ->
 		io_lib:format
@@ -286,7 +252,7 @@ output_sequence(Items,Final,State) ->
 		    unblocks(Unblocked,Returns,State)])
 	    end
 	end, Items),
-     ",").
+     ";").
 
 pre(_,"") ->
   "";
@@ -299,6 +265,13 @@ combine([Item],_) ->
   Item;
 combine([Item|Rest],Combinator) ->
   Item++Combinator++combine(Rest,Combinator).
+
+combine_terminate([],_) ->
+  "";
+combine_terminate([Item],Combinator) ->
+  Item++Combinator;
+combine_terminate([Item|Rest],Combinator) ->
+  Item++Combinator++combine_terminate(Rest,Combinator).
 
 make_calls(Calls,State) ->
   I = State#state.indent,
@@ -324,8 +297,11 @@ unblocks(Calls,Returns,State) ->
       (fun (Call) ->
            case shr_utils:find(fun ({Job,_,_}) -> Job#job.pid==Call#job.pid end, 
                      Returns) of
-             {_,ReturnValue,_} -> true;
-             _ -> false
+             {_,ReturnValue,_} when ReturnValue=/=void -> 
+               ?LOG("ReturnValue=~p~n",[ReturnValue]),
+               true;
+             _ -> 
+               false
            end
        end, Calls),
   ?LOG("needPairs=~p~n",[NeedPairs]),
@@ -346,7 +322,7 @@ unblocks(Calls,Returns,State) ->
       lists:foldl
         (fun (UnblockedCall,Acc) ->
              UnblocksComma = if Acc=="" -> ""; true -> "," end,
-             "\""++symbVar(UnblockedCall#job.pid)++"\""++UnblocksComma++Acc
+             ""++symbVar(UnblockedCall#job.pid)++""++UnblocksComma++Acc
          end, "", Calls)
   end.
 
@@ -375,7 +351,7 @@ output_final(FinalState,State) ->
   I = State#state.indent,
   case FinalState of
     nil ->
-      indent(I,"new Nil()");
+      "";
     {BranchingCalls,Transitions} ->
       CallsString =
 	make_calls(BranchingCalls,State#state{indent=I+1}),
