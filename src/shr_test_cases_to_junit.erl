@@ -216,8 +216,13 @@ output_sequence(Items,Final,State) ->
 		  (lists:keyfind(Call#job.pid,#job.pid,Unblocked)=/=false)
                   orelse
                   (lists:keyfind(Call#job.pid,#job.pid,FailedPres)=/=false),
+                ReturnedValue = 
+                  find_return(Call#job.pid,Returns),
+                io:format("Job ~p returned ~p~n",[Call#job.pid,ReturnedValue]),
+                Var = 
+                  symbVar(Call#job.pid),
                 Decl =
-                  "Call<?> "++symbVar(Call#job.pid),
+                  "Call<?> "++Var,
                 %% CallRepReturn =
                 %%   CallRep
                 %%   ++(case oracle(Call,Returns,FailedPres,State) of
@@ -233,9 +238,16 @@ output_sequence(Items,Final,State) ->
 		  UnblocksCall ->
 		    ?LOG
 		      ("unblocked(~s)~ntransition=~p~n",[CallRep,Item]),
-		    io_lib:format
-		      (indent(I,"~s = ~s.assertReturns(~s)"),
-		       [Decl,CallRep,Unblocks]);
+		    AssertString = 
+                      io_lib:format
+                        (indent(I,"~s = ~s.assertReturns(~s)"),
+                         [Decl,CallRep,Unblocks]),
+                    case ReturnedValue of
+                      {ok,Value} when Value=/=void ->
+                        AssertString++";"++io_lib:format(indent(I,"assertEquals(~p,~s)"),[Value,Var]);
+                      _ ->
+                        AssertString
+                    end;
 		  true ->
 		    io_lib:format
 		      (indent(I,"~s = ~s.assertBlocks(~s)"),
@@ -253,6 +265,16 @@ output_sequence(Items,Final,State) ->
 	    end
 	end, Items),
      ";").
+
+find_return(JobId,[]) ->
+  false;
+find_return(JobId,[{Job,Value,_}|Rest]) ->
+  if
+    JobId == Job#job.pid ->
+      {ok,Value};
+    true -> 
+      find_return(JobId,Rest)
+  end.
 
 pre(_,"") ->
   "";
