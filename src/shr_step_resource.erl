@@ -174,7 +174,7 @@ step(Commands,State,Info,OldCounter) ->
                       NewTransition#transition.calls),
 	     NewGenState =
 	       (gen_module(Info)):next_state
-		 (NState#state.genstate,Result,Cmds,void),
+		 (NState#state.genstate,Result,Cmds,NState#state.state),
 	     NewNState = NState#state{genstate=NewGenState},
 	     NewTransition#transition{endstate=NewNState}
 	 end, NewTransitions)
