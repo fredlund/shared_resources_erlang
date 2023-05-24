@@ -206,12 +206,13 @@ output_sequence(Items,Final,State) ->
             FailedPres = Item#transition.failed_pres,
             Returns = Item#transition.returns,
 	    Unblocked = Item#transition.unblocked,
+            EndState = Item#transition.endstate,
 	    case Calls of
 	      [Call] ->
 		CallRep = (State#state.callrep)(Call),
                 ?LOG
-                  ("one call ~p~ncallrep=~s returns=~p~nfailed_pres=~p~nUnblocked=~p~n",
-                   [Call, CallRep, Returns, FailedPres, Unblocked]),
+                  ("one call ~p~ncallrep=~s returns=~p~nfailed_pres=~p~nUnblocked=~p~nendstate=~p~n",
+                   [Call, CallRep, Returns, FailedPres, Unblocked,EndState]),
 		UnblocksCall = 
 		  (lists:keyfind(Call#job.pid,#job.pid,Unblocked)=/=false)
                   orelse

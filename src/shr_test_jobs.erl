@@ -153,14 +153,14 @@ start(Options,StartFun) ->
 		   Self!{started,Result}
 	       end),
 	  wait_start(Pid,Ref)
-	catch Class:Reason ->
+	catch Class:Reason:StackTrace ->
 	    io:format
 	      ("*** SHRT ERROR: function ~p with options~n~p~n"++
 		 "raised an exception ~p:~p~n",
 	       [StartFun,Options,Class,Reason]),
 	    io:format
 	      ("stacktrace:~n~p~n",
-	       [erlang:get_stacktrace()]),
+	       [StackTrace]),
 	    error(bad_startfun)
 	end;
       true ->
@@ -236,14 +236,14 @@ do_cmds_args(State) ->
             NoEnvWait,
             State#state.symVarsCounter]
 	 end)
-  catch _:Reason ->
+  catch _:Reason:StackTrace ->
       io:format
 	("*** MODEL ERROR: ~p:do_cmds_args raised an exception ~p in state~n  ~p~n"
 	 ++"Such errors cannot be handled by the QuickCheck dynamic state machine...~n",
 	 [?MODULE,Reason,State]),
       io:format
 	("Stack trace:~n~p~n",
-	 [erlang:get_stacktrace()]),
+	 [StackTrace]),
       error(bad_state_machine)
   end.
 
@@ -253,7 +253,7 @@ do_cmds_pre(State,[Commands|_]) ->
     ensure_boolean
       ((State#state.test_gen_module):precondition
 	 (State#state.test_gen_state,raw(Commands),State#state.test_corr_state))
-  catch _:Reason ->
+  catch _:Reason:StackTrace ->
       io:format
 	("*** MODEL ERROR: ~p:do_cmds_pre raised an exception ~p in state~n  ~p~n"
 	 ++"with commands ~p~n"
@@ -261,7 +261,7 @@ do_cmds_pre(State,[Commands|_]) ->
 	 [?MODULE,Reason,State,Commands]),
       io:format
 	("Stack trace:~n~p~n",
-	 [erlang:get_stacktrace()]),
+	 [StackTrace]),
       error(bad_state_machine)
   end.
 
@@ -288,9 +288,7 @@ do_cmds(Commands,WaitTime,NoEnvWait,SymVarsCounter) ->
                             ?TIMEDLOG("finished executing ~p~n",[PreJob]),
 			    ParentPid!
 			      {PreJob#job{pid=self(),result=Result},Counter}
-			catch _Exception:Reason ->
-			    StackTrace =
-			      erlang:get_stacktrace(),
+			catch _Exception:Reason:StackTrace ->
 			    io:format("Job ~p exiting due to ~p~nStacktrace:~n~p~n",
 				      [self(),Reason,StackTrace]),
 			    Result = 
@@ -300,8 +298,7 @@ do_cmds(Commands,WaitTime,NoEnvWait,SymVarsCounter) ->
 			end
 		    end) of
 		 Pid -> PreJob#job{pid=Pid}
-	     catch _Exception2:Reason2 ->
-		 StackTrace = erlang:get_stacktrace(),
+	     catch _Exception2:Reason2:StackTrace ->
 		 PreJob#job
 		   {pid=spawn
 			  (fun () ->
@@ -318,13 +315,13 @@ do_cmds(Commands,WaitTime,NoEnvWait,SymVarsCounter) ->
 	?TIMEDLOG("NewJobs=~p~nFinishedJobs=~p~n",[NewJobs,FinishedJobs]),
 	{NewJobs,FinishedJobs}
     end
-  catch _ExceptionType:Reason ->
+  catch _ExceptionType:Reason:StackTrace ->
       io:format
 	("*** SHRT ERROR: ~p:do_cmds(~p) raised an exception ~p~n",
 	 [?MODULE,self(),Reason]),
       io:format
 	("Stacktrace:~n~p~n",
-	 [erlang:get_stacktrace()]),
+	 [StackTrace]),
       error(bad)
   end.
 
@@ -377,7 +374,7 @@ try
       end
   end of PostResult when is_boolean(PostResult) -> 
     shr_utils:put(failed,not(PostResult)), PostResult
-  catch _:Reason ->
+  catch _:Reason:StackTrace ->
       io:format
 	("*** Model error: ~p:do_cmds_post raised an exception ~p in state~n  ~p~n"
 	 ++"with commands ~p"
@@ -386,7 +383,7 @@ try
 	 [?MODULE,Reason,State,Commands,Result]),
       io:format
 	("Stack trace:~n~p~n",
-	 [erlang:get_stacktrace()]),
+	 [StackTrace]),
       error(bad_state_machine)
   end.
 
@@ -416,7 +413,7 @@ do_cmds_next(State,Result={NewJobs,FinishedJobs},[Commands|_]) ->
       ,test_observers_states=NewTestObserversStates
       ,symVarsCounter=State#state.symVarsCounter+length(NewJobs)
      }
-  catch _:Reason ->
+  catch _:Reason:StackTrace ->
       io:format
 	("*** MODEL ERROR: ~p:do_cmds_next raised an exception ~p in state~n  ~p~n"
 	 ++"with commands ~p"
@@ -425,7 +422,7 @@ do_cmds_next(State,Result={NewJobs,FinishedJobs},[Commands|_]) ->
 	 [?MODULE,Reason,State,Commands,Result]),
       io:format
 	("Stack trace:~n~p~n",
-	 [erlang:get_stacktrace()]),
+	 [StackTrace]),
       error(bad_state_machine)
   end.
 
@@ -642,11 +639,11 @@ print_testcase1(Cmds,H,State,Result) ->
     io:format("-----------------~n~n"),
     print_terminated_commands(CommandResultSequence,State),
     io:format("~n~n")
-  catch _:Exception ->
+  catch _:Exception:StackTrace ->
       io:format
 	("~n*** SHRT WARNING: print_counterexample raised an exception ~p~n"
 	 ++"Stacktrace:~n~p~n",
-	 [Exception,erlang:get_stacktrace()]),
+	 [Exception,StackTrace]),
       ok
   end.
 
@@ -699,7 +696,7 @@ ensure_boolean(Other) ->
   io:format("*** SHRT ERROR: ensure_boolean expects a boolean -- got ~p~n",[Other]),
   io:format
     ("Stacktrace:~n~p~n",
-     [try throw(trace) catch _:_ -> erlang:get_stacktrace(), Other end]).
+     [try throw(trace) catch _:_:StackTrace -> StackTrace, Other end]).
 
 print_terminated_commands([],_State) ->
   ok;
