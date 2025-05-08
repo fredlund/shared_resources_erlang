@@ -219,7 +219,9 @@ output_sequence(Items,Final,State) ->
                   (lists:keyfind(Call#job.pid,#job.pid,FailedPres)=/=false),
                 ReturnedValue = 
                   find_return(Call#job.pid,Returns),
-                io:format("Job ~p returned ~p~n",[Call#job.pid,ReturnedValue]),
+                ReturnCond =
+                  find_return_cond(Call#job.pid,Returns),
+                io:format("Job ~p returned ~p condition ~p~n",[Call#job.pid,ReturnedValue,ReturnCond]),
                 Var = 
                   symbVar(Call#job.pid),
                 Decl =
@@ -275,6 +277,16 @@ find_return(JobId,[{Job,Value,_}|Rest]) ->
       {ok,Value};
     true -> 
       find_return(JobId,Rest)
+  end.
+
+find_return_cond(JobId,[]) ->
+  false;
+find_return_cond(JobId,[{Job,_,Cond}|Rest]) ->
+  if
+    JobId == Job#job.pid ->
+      {ok,Cond};
+    true -> 
+      find_return_cond(JobId,Rest)
   end.
 
 pre(_,"") ->
