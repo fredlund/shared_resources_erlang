@@ -214,25 +214,25 @@ output_sequence(Items,Final,State) ->
                   ("one call ~p~ncallrep=~s returns=~p~nfailed_pres=~p~nUnblocked=~p~nendstate=~p~n",
                    [Call, CallRep, Returns, FailedPres, Unblocked,EndState]),
 		UnblocksCall = 
-		  (lists:keyfind(Call#job.pid,#job.pid,Unblocked)=/=false)
-                  orelse
-                  (lists:keyfind(Call#job.pid,#job.pid,FailedPres)=/=false),
-                ReturnedValue = 
-                  find_return(Call#job.pid,Returns),
-                ReturnCond =
-                  find_return_cond(Call#job.pid,Returns),
-                io:format("Job ~p returned ~p condition ~p~n",[Call#job.pid,ReturnedValue,ReturnCond]),
-                Var = 
-                  symbVar(Call#job.pid),
-                Decl =
-                  "Call<?> "++Var,
-                %% CallRepReturn =
-                %%   CallRep
-                %%   ++(case oracle(Call,Returns,FailedPres,State) of
-                %%        "" -> "";
-                %%        Other -> ".o("++Other++")"
-                %%      end)
-                %%   ++".n(\""++symbVar(Call#job.pid)++"\")",
+            (lists:keyfind(Call#job.pid,#job.pid,Unblocked)=/=false)
+            orelse
+              (lists:keyfind(Call#job.pid,#job.pid,FailedPres)=/=false),
+          ReturnedValue = 
+            find_return(Call#job.pid,Returns),
+          ReturnCond =
+            find_return_cond(Call#job.pid,Returns),
+          io:format("Job ~p returned ~p condition ~p~n",[Call#job.pid,ReturnedValue,ReturnCond]),
+          Var = 
+            symbVar(Call#job.pid),
+          Decl =
+            "Call<?> "++Var,
+          CallRepReturn =
+            CallRep
+            ++(case oracle(Call,Returns,FailedPres,State) of
+                 "" -> "";
+                 Other -> ".o("++Other++")"
+               end)
+            ++".n(\""++symbVar(Call#job.pid)++"\")",
 		Unblocks_non_locally =
 		  lists:keydelete(Call#job.pid,#job.pid,Unblocked),
 		Unblocks =
@@ -243,8 +243,8 @@ output_sequence(Items,Final,State) ->
 		      ("unblocked(~s)~ntransition=~p~n",[CallRep,Item]),
 		    AssertString = 
                       io_lib:format
-                        (indent(I,"~s = ~s.assertReturns(~s)"),
-                         [Decl,CallRep,Unblocks]),
+                        (indent(I,"~s = ~s.assertReturns(~s); ~s"),
+                         [Decl,CallRep,Unblocks,CallRepReturn]),
                     case ReturnedValue of
                       {ok,Value} when Value=/=void ->
                         AssertString++";"++io_lib:format(indent(I,"assertEquals(~p,~s)"),[Value,Var]);
