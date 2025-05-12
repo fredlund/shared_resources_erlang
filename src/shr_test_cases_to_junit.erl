@@ -75,6 +75,7 @@ output_test_case(TestCase,StateSpace,ConfigDescFun,ControllerArgFun,State) ->
   I2 = indent_len(2),
   io:format
     (State#state.file,
+     indent(I1,"@Test")++
      indent(I1,"public void ~s() {")++
      "~s~s"++indent(I1)++"}~n",
      [Name,indent(I2,Controller),output_state_space(StateSpace,State#state{indent=I2})]).
@@ -200,7 +201,7 @@ output_sequence_final(Sequence,Final,State) ->
   end.
 
 output_sequence(Items,Final,State) ->
-  combine_terminate
+  lists:append
     (lists:map
        (fun (Item) ->
             I = State#state.indent,
@@ -286,8 +287,7 @@ output_sequence(Items,Final,State) ->
                    [make_calls(Calls,State#state{indent=I+1}),
                     unblocks(Unblocked,Returns,State)])
             end
-        end, Items),
-     ";").
+        end, Items)).
 
 find_return(JobId,[]) ->
   false;

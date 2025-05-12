@@ -88,10 +88,9 @@ postcondition(State,_Args,Result,TS) ->
       false;
     true ->
       true
-  catch _:Reason ->
+  catch _:Reason:Stacktrace ->
       io:format("postcondition raises ~p~nStacktrace:~n~p~n",
-		[Reason,
-		 erlang:get_stacktrace()]),
+                [Reason,Stacktrace]),
       error(badresource)
   end
   end.
@@ -109,9 +108,9 @@ next_state(State,Result,_,TS) ->
 	  return_remaining_states(State,NewState#corr_res_state.states,TS),
 	NewState#corr_res_state{states=RemainingStates}
     end
-  catch _:_ ->
+  catch _:_:Stacktrace ->
       io:format("~n*** Warning: next raises exception~n"),
-      io:format("~p~n",[erlang:get_stacktrace()]),
+      io:format("~p~n",[Stacktrace]),
       error(badresource)
   end.
 
@@ -356,13 +355,13 @@ print_model_state(ModelState,ModelSpec) ->
   catch 
     _:undef ->
       io_lib:format("~w",[ModelState]);
-    Class:Reason -> 
+    Class:Reason:Stacktrace -> 
       io:format
 	("*** WARNING: printing model state ~p using ~p fails due to~n~p:~p~n",
 	 [ModelState,ModelSpec,Class,Reason]),
       io:format
 	("*** Stacktrace:~n~p~n",
-	 [erlang:get_stacktrace()]),
+	 [Stacktrace]),
       io_lib:format("~p",[ModelState]) 
   end.
 
@@ -371,13 +370,13 @@ print_schedule_state(ScheduleState,ScheduleSpec) ->
   catch 
     _:undef ->
       io_lib:format("~w",[ScheduleState]);
-    Class:Reason -> 
+    Class:Reason:Stacktrace -> 
       io:format
 	("*** WARNING: printing schedule state ~p using ~p fails due to~n~p:~p~n",
 	 [ScheduleState,ScheduleSpec,Class,Reason]),
       io:format
 	("*** Stacktrace:~n~p~n",
-	 [erlang:get_stacktrace()]),
+	 [Stacktrace]),
       io_lib:format("~p",[ScheduleState]) 
   end.
       

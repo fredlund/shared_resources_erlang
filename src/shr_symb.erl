@@ -53,10 +53,10 @@ check_term1(F,T) ->
 
 eval(T,Map) ->
   try eval1(T,Map)
-  catch Class:Reason ->
+  catch Class:Reason:Stacktrace ->
       io:format
         ("Could not evaluate term~n~p~nwith map~n~p~nStacktrace:~n~p~n",
-         [T,Map,erlang:get_stacktrace()]),
+         [T,Map,Stacktrace]),
       error(bad)
   end.
 
@@ -173,7 +173,8 @@ andp(TL) ->
        fun (P,EL) -> lists:foldl(fun (X,Y) -> P(X)++"\n"++Y end, "", EL) end,
        [TL]).
   
-jandp(EL) -> lists:all(EL).
+jandp(Terms) -> 
+  lists:all(fun (Id) -> Id end, Terms).
 
 leqp(T1,T2) ->
   sfun({?MODULE,jleqp},
