@@ -87,7 +87,7 @@ eval1(T,Map) ->
 printSeqExpr(T) ->
   print1
     (T,
-     fun ({var,N}) -> "Call.v(\""++shr_test_cases_to_junit:symbVar(N)++"\")" end).
+     fun ({var,N}) -> io_lib:format("~s.getReturnValue()",[shr_test_cases_to_junit:symbVar(N)]) end).
 
 print(T) ->
   print1(T,fun (X) -> io_lib:format("~p",[X]) end).
@@ -142,31 +142,38 @@ jconv(T) -> T.
 
 equalp(T1,T2) ->
   sfun({?MODULE,jequal},
-       fun (P,E1,E2) -> "("++P(E1)++").equals("++P(E2)++")" end,
+       fun (P,E1,E2) -> "assertEquals("++P(E1)++","++P(E2)++");" end,
        [T1,T2]).
 
 jequal(E1,E2) -> E1==E2.
 
+notequalp(T1,T2) ->
+  sfun({?MODULE,notjequal},
+       fun (P,E1,E2) -> "assertNotEquals("++P(E1)++","++P(E2)++");" end,
+       [T1,T2]).
+
+notjequal(E1,E2) -> E1=/=E2.
+
 refequalp(T1,T2) ->
   sfun({?MODULE,jrefequalp},
-       fun (P,E1,E2) -> "(("++P(E1)++") == ("++P(E2)++"))" end,
+       fun (P,E1,E2) -> "assertSame("++P(E1)++","++P(E2)++");" end,
        [T1,T2]).
 
 jrefequalp(E1,E2) -> E1==E2.
 
-andp(T1,T2) ->
+notrefequalp(T1,T2) ->
+  sfun({?MODULE,notjrefequalp},
+       fun (P,E1,E2) -> "assertNotSame("++P(E1)++","++P(E2)++");" end,
+       [T1,T2]).
+
+notjrefequalp(E1,E2) -> E1=/=E2.
+
+andp(TL) ->
   sfun({?MODULE,jandp},
-       fun (P,E1,E2) -> "("++P(E1)++") && ("++P(E2)++")" end,
-       [T1,T2]).
+       fun (P,EL) -> lists:foldl(fun (X,Y) -> P(X)++"\n"++Y end, "", EL) end,
+       [TL]).
   
-jandp(E1,E2) -> E1 and E2.
-
-orp(T1,T2) ->
-  sfun({?MODULE,jorp},
-       fun (P,E1,E2) -> "("++P(E1)++") || ("++P(E2)++")" end,
-       [T1,T2]).
-
-jorp(E1,E2) -> E1 and E2.
+jandp(EL) -> lists:all(EL).
 
 leqp(T1,T2) ->
   sfun({?MODULE,jleqp},
@@ -195,31 +202,6 @@ gtp(T1,T2) ->
        [T1,T2]).
 
 jgtp(E1,E2) -> E1>E2.
-
-notp(T) ->
-  sfun({?MODULE,jnotp},
-       fun (P,E) -> "!("++P(E)++")" end,
-       [T]).
-
-jnotp(E) -> not(E).
-
-andp([]) ->
-  true;
-andp([T]) ->
-  T;
-andp([T1,T2]) ->
-  andp(T1,T2);
-andp([T|Rest]) ->
-  andp(T,andp(Rest)).
-
-orp([]) ->
-  true;
-orp([T]) ->
-  T;
-orp([T1,T2]) ->
-  orp(T1,T2);
-orp([T|Rest]) ->
-  orp(T,orp(Rest)).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

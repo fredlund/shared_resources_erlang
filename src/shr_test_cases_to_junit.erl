@@ -1,6 +1,6 @@
 -module(shr_test_cases_to_junit).
 
--record(state,{file,prefix,counter,callrep,classname,indent,marshaller}).
+-record(state,{file,prefix,counter,callrep,classname,indent,marshaller,data_module}).
 
 -include("tester.hrl").
 
@@ -48,16 +48,18 @@ gen_junit_tests([TC|Rest],ConfigDescFun,ControllerArgFun,State) ->
   DataSpec = shr_test_jobs:test_data_spec(TestCase),
   WaitingSpec = shr_test_jobs:test_waiting_spec(TestCase),
   GenModule = shr_test_jobs:gen_module(TestCase),
+  DataModule = shr_utils:module(DataSpec),
   GenState = shr_test_jobs:initial_gen_state(TestCase),
   {Info,InitialState} = 
     shr_step_resource:initial_state(DataSpec,WaitingSpec,GenModule,GenState,[]),
+  NewState = State#state{data_module=DataModule},
   try shr_step_resource:repeat_step(SimpleTestCase,InitialState,Info) of
-      StateSpace -> output_test_case(TestCase,StateSpace,ConfigDescFun,ControllerArgFun,State)
+      StateSpace -> output_test_case(TestCase,StateSpace,ConfigDescFun,ControllerArgFun,NewState)
   catch throw:not_deterministic ->
       io:format("*** Warning: test case is not deterministic.~n"),
       shr_test_jobs:print_test_case(TC)
   end,
-  gen_junit_tests(Rest,ConfigDescFun,ControllerArgFun,State#state{counter=State#state.counter+1}).
+  gen_junit_tests(Rest,ConfigDescFun,ControllerArgFun,NewState#state{counter=State#state.counter+1}).
 
 
 statesUnblocks({branching,{_,StatesUnblocks,_,_}}) ->
@@ -201,72 +203,90 @@ output_sequence(Items,Final,State) ->
   combine_terminate
     (lists:map
        (fun (Item) ->
-	    I = State#state.indent,
-	    Calls = Item#transition.calls,
+            I = State#state.indent,
+            Calls = Item#transition.calls,
             FailedPres = Item#transition.failed_pres,
             Returns = Item#transition.returns,
-	    Unblocked = Item#transition.unblocked,
+            Unblocked = Item#transition.unblocked,
             EndState = Item#transition.endstate,
-	    case Calls of
-	      [Call] ->
-		CallRep = (State#state.callrep)(Call),
+            case Calls of
+              [Call] ->
+                CallRep = 
+                  (State#state.callrep)(Call),
                 ?LOG
-                  ("one call ~p~ncallrep=~s returns=~p~nfailed_pres=~p~nUnblocked=~p~nendstate=~p~n",
-                   [Call, CallRep, Returns, FailedPres, Unblocked,EndState]),
-		UnblocksCall = 
-            (lists:keyfind(Call#job.pid,#job.pid,Unblocked)=/=false)
-            orelse
-              (lists:keyfind(Call#job.pid,#job.pid,FailedPres)=/=false),
-          ReturnedValue = 
-            find_return(Call#job.pid,Returns),
-          ReturnCond =
-            find_return_cond(Call#job.pid,Returns),
-          io:format("Job ~p returned ~p condition ~p~n",[Call#job.pid,ReturnedValue,ReturnCond]),
-          Var = 
-            symbVar(Call#job.pid),
-          Decl =
-            "Call<?> "++Var,
-          CallRepReturn =
-            CallRep
-            ++(case oracle(Call,Returns,FailedPres,State) of
-                 "" -> "";
-                 Other -> ".o("++Other++")"
-               end)
-            ++".n(\""++symbVar(Call#job.pid)++"\")",
-		Unblocks_non_locally =
-		  lists:keydelete(Call#job.pid,#job.pid,Unblocked),
-		Unblocks =
-		  unblocks(Unblocks_non_locally,Returns,State),
-		if
-		  UnblocksCall ->
-		    ?LOG
-		      ("unblocked(~s)~ntransition=~p~n",[CallRep,Item]),
-		    AssertString = 
-                      io_lib:format
-                        (indent(I,"~s = ~s.assertReturns(~s); ~s"),
-                         [Decl,CallRep,Unblocks,CallRepReturn]),
-                    case ReturnedValue of
-                      {ok,Value} when Value=/=void ->
-                        AssertString++";"++io_lib:format(indent(I,"assertEquals(~p,~s)"),[Value,Var]);
-                      _ ->
-                        AssertString
-                    end;
-		  true ->
-		    io_lib:format
-		      (indent(I,"~s = ~s.assertBlocks(~s)"),
-		       [Decl,CallRep,Unblocks])
-		end;
-	      [_|_] ->
-		io_lib:format
-		  (indent(I,"TestCall.must")++
-		     indent(I,"(")++
-		     "~s,"++
-		     indent(I+1,"~s")++
-		     indent(I,")"),
-		   [make_calls(Calls,State#state{indent=I+1}),
-		    unblocks(Unblocked,Returns,State)])
-	    end
-	end, Items),
+                   ("one call ~p~ncallrep=~s failed_pres=~p~nUnblocked=~p~nendstate=~p~n",
+                    [Call, CallRep, FailedPres, Unblocked,EndState]),
+                UnblocksCall = 
+                  (lists:keyfind(Call#job.pid,#job.pid,Unblocked)=/=false)
+                  orelse
+                    (lists:keyfind(Call#job.pid,#job.pid,FailedPres)=/=false),
+                ReturnedValue = 
+                  find_return(Call#job.pid,Returns),
+                ReturnCond = 
+                  find_return_cond(Call#job.pid,Returns),
+                Var = 
+                  symbVar(Call#job.pid),
+                io:format("Call=~p~n",[Call#job.call]),
+                io:format("DataModule=~p~n",[State#state.data_module]),
+                Type =
+                  case Call#job.call of
+                    {_,Operation,_} ->
+                      try (State#state.data_module):return_type(Operation)
+                      catch _:_ -> "?"
+                      end;
+                    _ -> 
+                      "?"
+                  end,
+                Decl =
+                  "Call<"++Type++"> "++Var,
+                DeclAndCall = 
+                  Decl ++ " = " ++ CallRep,
+                Unblocks_non_locally =
+                  lists:keydelete(Call#job.pid,#job.pid,Unblocked),
+                Unblocks =
+                  unblocks(Unblocks_non_locally,Returns,State),
+                CallCode =
+                  if
+                    UnblocksCall ->
+                      ?LOG
+                         ("unblocked(~s)~ntransition=~p~n",[CallRep,Item]),
+                      case {ReturnedValue,ReturnCond} of
+                        {{ok,Value}, {ok,true}} when Value=/=void ->
+                          Unblocks = if Unblocks=="" -> ""; true -> ","++Unblocks end,
+                          io_lib:format(indent(I,"~s.assertReturnsValue(~p,~s);"),
+                                        [DeclAndCall,Value,Unblocks]);
+                        _ ->
+                          io_lib:format(indent(I,"~s.assertUnblocks(~s);"),[DeclAndCall,Unblocks])
+                      end;
+                    true ->
+                      io_lib:format(indent(I,"~s.assertBlocks(~s);"),[DeclAndCall,Unblocks])
+                  end,
+                ReturnCodes =
+                  lists:map
+                    (fun (Unblocked) ->
+                        ReturnedValue = 
+                          find_return(Call#job.pid,Returns),
+                        ReturnCond = 
+                          find_return_cond(Call#job.pid,Returns),
+                        case ReturnCond of
+                          {ok,Cond} when Cond=/=true ->
+                            shr_symb:printSeqExpr(Cond);
+                          _ ->
+                            ""
+                        end
+                    end, Unblocked),
+                CallCode++"\n"++ReturnCodes;
+              [_|_] ->
+                io_lib:format
+                  (indent(I,"TestCall.must")++
+                     indent(I,"(")++
+                     "~s,"++
+                     indent(I+1,"~s")++
+                     indent(I,")"),
+                   [make_calls(Calls,State#state{indent=I+1}),
+                    unblocks(Unblocked,Returns,State)])
+            end
+        end, Items),
      ";").
 
 find_return(JobId,[]) ->
@@ -349,7 +369,7 @@ unblocks(Calls,Returns,State) ->
       lists:foldl
         (fun (UnblockedCall,Acc) ->
              RightElement = 
-               case oracle(UnblockedCall,Returns,[],State) of
+               case callCond(UnblockedCall,Returns,[],State) of
                  "" -> "Check.returns()";
                  Other -> Other
                end,
@@ -364,7 +384,7 @@ unblocks(Calls,Returns,State) ->
          end, "", Calls)
   end.
 
-oracle(Call,Returns,FailedPres,State) ->
+callCond(Call,Returns,FailedPres,State) ->
   case shr_utils:find(fun ({Job,_,_}) -> Job#job.pid==Call#job.pid end, Returns) of
     {_,ReturnValue,Checker} ->
       ?LOG("Checker is ~p~n",[Checker]),
