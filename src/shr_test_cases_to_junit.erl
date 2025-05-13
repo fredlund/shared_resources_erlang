@@ -347,39 +347,11 @@ make_calls(Calls,State) ->
                 [CallsString,ExecString]).
 
 unblocks(Calls,Returns,State) ->
-  NeedPairs = 
-    lists:any
-      (fun (Call) ->
-           case shr_utils:find(fun ({Job,_,_}) -> Job#job.pid==Call#job.pid end, 
-                     Returns) of
-             {_,ReturnValue,_} when ReturnValue=/=void -> 
-               ?LOG("ReturnValue=~p~n",[ReturnValue]),
-               true;
-             _ -> 
-               false
-           end
-       end, Calls),
-  ?LOG("needPairs=~p~n",[NeedPairs]),
-  if
-    NeedPairs ->
-      "Arrays.asList("++
-      lists:foldl
-        (fun (UnblockedCall,Acc) ->
-             RightElement = 
-               case callCond(UnblockedCall,Returns,[],State) of
-                 "" -> "Check.returns()";
-                 Other -> Other
-               end,
-             UnblocksComma = if Acc=="" -> ""; true -> "," end,
-             "new Pair<>(\""++symbVar(UnblockedCall#job.pid)++"\","++RightElement++")"++UnblocksComma++Acc
-         end, "", Calls)++")";
-    true ->
-      lists:foldl
-        (fun (UnblockedCall,Acc) ->
-             UnblocksComma = if Acc=="" -> ""; true -> "," end,
-             ""++symbVar(UnblockedCall#job.pid)++""++UnblocksComma++Acc
-         end, "", Calls)
-  end.
+  lists:foldl
+    (fun (UnblockedCall,Acc) ->
+         UnblocksComma = if Acc=="" -> ""; true -> "," end,
+         ""++symbVar(UnblockedCall#job.pid)++""++UnblocksComma++Acc
+     end, "", Calls).
 
 callCond(Call,Returns,FailedPres,State) ->
   case shr_utils:find(fun ({Job,_,_}) -> Job#job.pid==Call#job.pid end, Returns) of
