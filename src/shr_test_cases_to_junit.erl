@@ -273,7 +273,7 @@ output_sequence(Items,Final,State) ->
                              ""
                          end
                      end, Unblocked),
-                CallCode++ReturnCodes;
+                CallCode++if ReturnCodes =/= ""-> "\n"++ReturnCodes; true -> "" end;
               [_|_] ->
                 io_lib:format
                   (indent(I,"TestCall.must")++

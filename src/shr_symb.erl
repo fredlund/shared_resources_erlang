@@ -170,7 +170,9 @@ notjrefequalp(E1,E2) -> E1=/=E2.
 
 andp(TL) ->
   sfun({?MODULE,jandp},
-       fun (P,EL) -> lists:foldl(fun (X,Y) -> P(X)++"\n"++Y end, "", EL) end,
+       fun (P,EL) -> lists:foldr(fun (X,Y) -> 
+                                     if Y=/="" -> P(X)++"\n"++Y; true -> P(X) end
+                                 end, "", EL) end,
        [TL]).
   
 jandp(Terms) -> 
