@@ -267,7 +267,7 @@ output_sequence(Items,Final,State) ->
                          case {ReturnedValue,ReturnCond} of
                            {{ok,Value}, {ok,undefined}} when Value=/=void, not(IsVarReturn) ->
                              io_lib:format(indent(I,"~s.assertReturnsValue(~p);"),[Var,Value]);
-                           {ok,Cond} when Cond=/=true, Cond=/=undefined ->
+                           {_, {ok,Cond}} when Cond=/=true, Cond=/=undefined ->
                              shr_symb:printSeqExpr(Cond);
                            _ ->
                              ""
