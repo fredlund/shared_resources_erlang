@@ -251,14 +251,7 @@ output_sequence(Items,Final,State) ->
                     UnblocksCall ->
                       ?LOG
                          ("unblocked(~s)~ntransition=~p~n",[CallRep,Item]),
-                      case {ReturnedValue,ReturnCond} of
-                        {{ok,Value}, {ok,true}} when Value=/=void ->
-                          Unblocks = if Unblocks=="" -> ""; true -> ","++Unblocks end,
-                          io_lib:format(indent(I,"~s.assertReturnsValue(~p,~s);"),
-                                        [DeclAndCall,Value,Unblocks]);
-                        _ ->
-                          io_lib:format(indent(I,"~s.assertUnblocks(~s);"),[DeclAndCall,Unblocks])
-                      end;
+                      io_lib:format(indent(I,"~s.assertUnblocks(~s);"),[DeclAndCall,Unblocks]);
                     true ->
                       io_lib:format(indent(I,"~s.assertBlocks(~s);"),[DeclAndCall,Unblocks])
                   end,
@@ -269,14 +262,18 @@ output_sequence(Items,Final,State) ->
                           find_return(Call#job.pid,Returns),
                         ReturnCond = 
                           find_return_cond(Call#job.pid,Returns),
-                        case ReturnCond of
-                          {ok,Cond} when Cond=/=true ->
-                            shr_symb:printSeqExpr(Cond);
-                          _ ->
-                            ""
-                        end
-                    end, Unblocked),
-                CallCode++"\n"++ReturnCodes;
+                         IsVarReturn = 
+                           case ReturnedValue of {ok,{var,_}} -> true; _ -> false end,
+                         case {ReturnedValue,ReturnCond} of
+                           {{ok,Value}, {ok,undefined}} when Value=/=void, not(IsVarReturn) ->
+                             io_lib:format(indent(I,"~s.assertReturnsValue(~p);"),[Var,Value]);
+                           {ok,Cond} when Cond=/=true, Cond=/=undefined ->
+                             shr_symb:printSeqExpr(Cond);
+                           _ ->
+                             ""
+                         end
+                     end, Unblocked),
+                CallCode++ReturnCodes;
               [_|_] ->
                 io_lib:format
                   (indent(I,"TestCall.must")++
