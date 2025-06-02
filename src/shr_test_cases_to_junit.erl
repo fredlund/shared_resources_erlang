@@ -227,8 +227,8 @@ output_sequence(Items,Final,State) ->
                   find_return_cond(Call#job.pid,Returns),
                 Var = 
                   symbVar(Call#job.pid),
-                io:format("Call=~p~n",[Call#job.call]),
-                io:format("DataModule=~p~n",[State#state.data_module]),
+                ?LOG("Call=~p~n",[Call#job.call]),
+                ?LOG("DataModule=~p~n",[State#state.data_module]),
                 Type =
                   case Call#job.call of
                     {_,Operation,_} ->
@@ -256,23 +256,27 @@ output_sequence(Items,Final,State) ->
                       io_lib:format(indent(I,"~s.assertBlocks(~s);"),[DeclAndCall,Unblocks])
                   end,
                 ReturnCodes =
-                  lists:map
-                    (fun (Unblocked) ->
-                        ReturnedValue = 
+                  lists:foldl
+                    (fun (Call,Acc) -> 
+                         NVar = 
+                           symbVar(Call#job.pid),
+                        NReturnedValue = 
                           find_return(Call#job.pid,Returns),
-                        ReturnCond = 
+                        NReturnCond = 
                           find_return_cond(Call#job.pid,Returns),
-                         IsVarReturn = 
-                           case ReturnedValue of {ok,{var,_}} -> true; _ -> false end,
-                         case {ReturnedValue,ReturnCond} of
-                           {{ok,Value}, {ok,undefined}} when Value=/=void, not(IsVarReturn) ->
-                             io_lib:format(indent(I,"~s.assertReturnsValue(~p);"),[Var,Value]);
-                           {_, {ok,Cond}} when Cond=/=true, Cond=/=undefined ->
-                             shr_symb:printSeqExpr(Cond);
-                           _ ->
-                             ""
-                         end
-                     end, Unblocked),
+                         NIsVarReturn = 
+                           case NReturnedValue of {ok,{var,_}} -> true; _ -> false end,
+                         String =
+                           case {NReturnedValue,NReturnCond} of
+                             {{ok,NValue}, {ok,undefined}} when NValue=/=void, not(NIsVarReturn) ->
+                               io_lib:format(indent(I,"~s.assertReturnsValue(~p);"),[NVar,NValue]);
+                             {_, {ok,NCond}} when NCond=/=true, NCond=/=undefined ->
+                               shr_symb:printSeqExpr(NCond);
+                             _ ->
+                               ""
+                           end,
+                         if Acc =/= "" -> Acc++"\n"++String; true -> String end
+                     end, "", Unblocked),
                 CallCode++if ReturnCodes =/= ""-> "\n"++ReturnCodes; true -> "" end;
               [_|_] ->
                 io_lib:format
