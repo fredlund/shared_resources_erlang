@@ -201,94 +201,95 @@ output_sequence_final(Sequence,Final,State) ->
   end.
 
 output_sequence(Items,Final,State) ->
-  lists:append
-    (lists:map
-       (fun (Item) ->
-            I = State#state.indent,
-            Calls = Item#transition.calls,
-            FailedPres = Item#transition.failed_pres,
-            Returns = Item#transition.returns,
-            Unblocked = Item#transition.unblocked,
-            EndState = Item#transition.endstate,
-            case Calls of
-              [Call] ->
-                CallRep = 
-                  (State#state.callrep)(Call),
-                ?LOG
-                   ("one call ~p~ncallrep=~s failed_pres=~p~nUnblocked=~p~nendstate=~p~n",
-                    [Call, CallRep, FailedPres, Unblocked,EndState]),
-                UnblocksCall = 
-                  (lists:keyfind(Call#job.pid,#job.pid,Unblocked)=/=false)
-                  orelse
-                    (lists:keyfind(Call#job.pid,#job.pid,FailedPres)=/=false),
-                ReturnedValue = 
-                  find_return(Call#job.pid,Returns),
-                ReturnCond = 
-                  find_return_cond(Call#job.pid,Returns),
-                Var = 
-                  symbVar(Call#job.pid),
-                ?LOG("Call=~p~n",[Call#job.call]),
-                ?LOG("DataModule=~p~n",[State#state.data_module]),
-                Type =
-                  case Call#job.call of
-                    {_,Operation,_} ->
-                      try (State#state.data_module):return_type(Operation)
-                      catch _:_ -> "?"
-                      end;
-                    _ -> 
-                      "?"
-                  end,
-                Decl =
-                  "Call<"++Type++"> "++Var,
-                DeclAndCall = 
-                  Decl ++ " = " ++ CallRep,
-                Unblocks_non_locally =
-                  lists:keydelete(Call#job.pid,#job.pid,Unblocked),
-                Unblocks =
-                  unblocks(Unblocks_non_locally,Returns,State),
-                CallCode =
-                  if
-                    UnblocksCall ->
-                      ?LOG
-                         ("unblocked(~s)~ntransition=~p~n",[CallRep,Item]),
-                      io_lib:format(indent(I,"~s.assertUnblocks(~s);"),[DeclAndCall,Unblocks]);
-                    true ->
-                      io_lib:format(indent(I,"~s.assertBlocks(~s);"),[DeclAndCall,Unblocks])
-                  end,
-                ReturnCodes =
-                  lists:foldl
-                    (fun (Call,Acc) -> 
-                         NVar = 
-                           symbVar(Call#job.pid),
-                        NReturnedValue = 
-                          find_return(Call#job.pid,Returns),
-                        NReturnCond = 
-                          find_return_cond(Call#job.pid,Returns),
-                         NIsVarReturn = 
-                           case NReturnedValue of {ok,{var,_}} -> true; _ -> false end,
-                         String =
-                           case {NReturnedValue,NReturnCond} of
-                             {{ok,NValue}, {ok,undefined}} when NValue=/=void, not(NIsVarReturn) ->
-                               io_lib:format(indent(I,"~s.assertReturnsValue(~p);"),[NVar,NValue]);
-                             {_, {ok,NCond}} when NCond=/=true, NCond=/=undefined ->
-                               shr_symb:printSeqExpr(NCond);
-                             _ ->
-                               ""
-                           end,
-                         if Acc =/= "" -> Acc++"\n"++String; true -> String end
-                     end, "", Unblocked),
-                CallCode++if ReturnCodes =/= ""-> "\n"++ReturnCodes; true -> "" end;
-              [_|_] ->
-                io_lib:format
-                  (indent(I,"TestCall.must")++
-                     indent(I,"(")++
-                     "~s,"++
-                     indent(I+1,"~s")++
-                     indent(I,")"),
-                   [make_calls(Calls,State#state{indent=I+1}),
-                    unblocks(Unblocked,Returns,State)])
-            end
-        end, Items)).
+  lists:append(lists:map
+                 (fun (Item) ->
+                      output_transition(State,Item)
+                  end, Items)).
+
+output_transition(State,Transition) ->
+  I = State#state.indent,
+  Calls = Transition#transition.calls,
+  FailedPres = Transition#transition.failed_pres,
+  Unblocked = Transition#transition.unblocked,
+  EndState = Transition#transition.endstate,
+  case Calls of
+    [Call] ->
+      CallRep = 
+        (State#state.callrep)(Call),
+      ?LOG
+         ("one call ~p~ncallrep=~s failed_pres=~p~nUnblocked=~p~nendstate=~p~n",
+          [Call, CallRep, FailedPres, Unblocked,EndState]),
+      UnblocksCall = 
+        (lists:keyfind(Call#job.pid,#job.pid,Unblocked)=/=false)
+        orelse
+          (lists:keyfind(Call#job.pid,#job.pid,FailedPres)=/=false),
+      Var = 
+        symbVar(Call#job.pid),
+      ?LOG("Call=~p~n",[Call#job.call]),
+      ?LOG("DataModule=~p~n",[State#state.data_module]),
+      Type =
+        case Call#job.call of
+          {_,Operation,_} ->
+            try (State#state.data_module):return_type(Operation)
+            catch _:_ -> "?"
+            end;
+          _ -> 
+            "?"
+        end,
+      Decl =
+        "Call<"++Type++"> "++Var,
+      DeclAndCall = 
+        Decl ++ " = " ++ CallRep,
+      Unblocks_non_locally =
+        lists:keydelete(Call#job.pid,#job.pid,Unblocked),
+      Unblocks =
+        unblocks(Unblocks_non_locally),
+      CallCode =
+        if
+          UnblocksCall ->
+            ?LOG
+               ("unblocked(~s)~ntransition=~p~n",[CallRep,Transition]),
+            io_lib:format(indent(I,"~s.assertUnblocks(~s);"),[DeclAndCall,Unblocks]);
+          true ->
+            io_lib:format(indent(I,"~s.assertBlocks(~s);"),[DeclAndCall,Unblocks])
+        end,
+      ReturnCodes = output_call_returns(I,Transition),
+      CallCode++if ReturnCodes =/= ""-> "\n"++ReturnCodes; true -> "" end;
+    [_|_] ->
+      io_lib:format
+        (indent(I,"TestCall.must")++
+           indent(I,"(")++
+           "~s,"++
+           indent(I+1,"~s")++
+           indent(I,")"),
+         [make_calls(Calls,State#state{indent=I+1}),
+          unblocks(Unblocked)])
+  end.
+
+output_call_returns(I,Transition) ->
+  Returns = Transition#transition.returns,
+  Unblocked = Transition#transition.unblocked,
+  lists:foldl
+    (fun (Call,Acc) -> 
+         NVar = 
+           symbVar(Call#job.pid),
+         NReturnedValue = 
+           find_return(Call#job.pid,Returns),
+         NReturnCond = 
+           find_return_cond(Call#job.pid,Returns),
+         NIsVarReturn = 
+           case NReturnedValue of {ok,{var,_}} -> true; _ -> false end,
+         String =
+           case {NReturnedValue,NReturnCond} of
+             {{ok,NValue}, {ok,undefined}} when NValue=/=void, not(NIsVarReturn) ->
+               io_lib:format(indent(I,"~s.assertReturnsValue(~p);"),[NVar,NValue]);
+             {_, {ok,NCond}} when NCond=/=true, NCond=/=undefined ->
+               shr_symb:printSeqExpr(NCond);
+             _ ->
+               ""
+           end,
+         if Acc =/= "" -> Acc++"\n"++String; true -> String end
+     end, "", Unblocked).
 
 find_return(JobId,[]) ->
   false;
@@ -335,7 +336,16 @@ make_calls(Calls,State) ->
     combine_terminate
       (lists:map
 	 (fun (Call) ->
-              Decl = "Call<?> "++symbVar(Call#job.pid),
+        Type =
+          case Call#job.call of
+            {_,Operation,_} ->
+              try (State#state.data_module):return_type(Operation)
+              catch _:_ -> "?"
+              end;
+            _ -> 
+              "?"
+          end,
+        Decl = "Call<"++Type++"> "++symbVar(Call#job.pid),
 	      CallRep = (State#state.callrep)(Call),
 	      io_lib:format
 		(indent(I+1,"~s = ~s"),
@@ -347,10 +357,13 @@ make_calls(Calls,State) ->
       (lists:map
 	 (fun (Call) -> symbVar(Call#job.pid) end, Calls),
        ","),
-  io_lib:format("~s~n"++indent(I)++"Execute.exec(~s);~n",
-                [CallsString,ExecString]).
+  Var = "e_"++integer_to_list(newVar()),
+  String =
+    io_lib:format("~s~n"++indent(I)++"Execute ~s = Execute.exec(~s);~n",
+                  [CallsString,Var,ExecString]),
+  {Var,String}.
 
-unblocks(Calls,Returns,State) ->
+unblocks(Calls) ->
   lists:foldl
     (fun (UnblockedCall,Acc) ->
          UnblocksComma = if Acc=="" -> ""; true -> "," end,
@@ -384,32 +397,73 @@ output_final(FinalState,State) ->
     nil ->
       "";
     {BranchingCalls,Transitions} ->
-      CallsString =
-	make_calls(BranchingCalls,State#state{indent=I+1}),
+      {Var,CallsString} =
+        make_calls(BranchingCalls,State#state{indent=I+1}),
       AlternativesString =
-	combine
-	  (lists:map
-	     (fun ({Transition,Continuation}) ->
-		  ?LOG("Alternative transition is~n~p~n",[Transition]),
-                  Returns = Transition#transition.returns,
-		  AltUnblocks = Transition#transition.unblocked,
-		  indent(I+1,"() -> { assertUnblocks(Arrays.asList(")++
-		    output_state_space(Continuation,State#state{indent=I+2})++
-		    indent(I+2,unblocks(AltUnblocks,Returns,State))++
-		    ")); }"
-	      end, Transitions),
-	   ","),
+        combine
+          (lists:map
+             (fun ({Transition,Continuation}) ->
+                  ?LOG("Alternative transition is~n~p~n",[Transition]),
+                  AltUnblocks = Transition#transition.unblocked,
+                  indent(I+1,"() -> { \n")++
+                    indent(I+2, "SeqAssertions.assertUnblocks("++Var++",List.of("++unblocks(AltUnblocks)++"));\n")++
+                    output_call_returns(I+2,Transition)++"\n"++
+                    output_state_space(Continuation,State#state{indent=I+2}) ++
+                    "; }"
+              end, Transitions),
+           ","),
       io_lib:format
-	(indent(I,"~s")
-         ++indent(I,"int winner = checkAlternatives")++
-	   indent(I,"(")++
-	   "~s"++
-	   indent(I,");"),
-	 [CallsString,AlternativesString])
+        (indent(I,"~s")
+         ++indent(I,"SeqAssertions.checkAlternatives")++
+           indent(I,"(")++
+           "~s"++
+           indent(I,");"),
+         [CallsString,AlternativesString])
   end.
+
+%% output_final(FinalState,State) ->
+%%   I = State#state.indent,
+%%   case FinalState of
+%%     nil ->
+%%       "";
+%%     {BranchingCalls,Transitions} ->
+%%       CallsString =
+%%         make_calls(BranchingCalls,State#state{indent=I+1}),
+%%       AlternativesString =
+%%         combine
+%%           (lists:map
+%%              (fun ({Transition,Continuation}) ->
+%%                   ?LOG("Alternative transition is~n~p~n",[Transition]),
+%%                   Returns = Transition#transition.returns,
+%%                   AltUnblocks = Transition#transition.unblocked,
+%%                   indent(I+1,"() -> { assertUnblocks(Arrays.asList(")++
+%%                     output_state_space(Continuation,State#state{indent=I+2})++
+%%                     indent(I+2,unblocks(AltUnblocks,Returns,State))++
+%%                     ")); }"
+%%               end, Transitions),
+%%            ","),
+%%       io_lib:format
+%%         (indent(I,"~s")
+%%          ++indent(I,"int winner = checkAlternatives")++
+%%            indent(I,"(")++
+%%            "~s"++
+%%            indent(I,");"),
+%%          [CallsString,AlternativesString])
+%%   end.
 
 symbVar(Id ) ->      
   io_lib:format("call_~p",[Id]).
+
+newVar() ->
+  {OldCounter,NewCounter} =
+    case erlang:get(var_counter) of
+      undefined ->
+        {0,1};
+      N ->
+        {N,N+1}
+    end,
+  erlang:put(var_counter,NewCounter),
+  OldCounter.
 
 copy_file(From,State) ->
   case file:open(From,[read]) of
