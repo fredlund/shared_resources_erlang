@@ -147,6 +147,8 @@ inform_about_exit(Pid,Reason,#state{reportTo=ReportTo}) ->
   if
     is_pid(ReportTo) ->
       ReportTo ! {'EXIT',Pid,Reason};
+    ReportTo == undefined ->
+      ok;
     is_atom(ReportTo) ->
       ReportTo ! {'EXIT',Pid,Reason};
     true ->
