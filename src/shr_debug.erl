@@ -97,7 +97,7 @@ check_finished_calls(ResourcePid,OngoingCalls) ->
     {Pid,{Operation,Args},Time,Result} ->
       io:format
 	("the call ~p(~s) at time ~p returned ~p~n",
-	 [Operation,print_args(Args),Time,Result]),
+	 [Operation,print_args(Args),Time,print_result(Result)]),
       RemainingCalls = lists:keydelete(Pid,1,OngoingCalls),
       check_finished_calls(ResourcePid,RemainingCalls);
     {'DOWN',_,_,ResourcePid,Info} ->
@@ -120,6 +120,11 @@ check_finished_calls(ResourcePid,OngoingCalls) ->
       check_finished_calls(ResourcePid,OngoingCalls)
   after 0 -> {ok,OngoingCalls}
 end.
+
+print_result(Obj={object,_,_,_,_}) ->
+  java:string_to_list(java:call(Obj,toString,[]));
+print_result(Other) ->
+  Other.
 
 print_args([]) ->
   "";
