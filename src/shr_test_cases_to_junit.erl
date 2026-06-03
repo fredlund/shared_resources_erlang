@@ -282,7 +282,7 @@ output_call_returns(I,Transition) ->
          String =
            case {NReturnedValue,NReturnCond} of
              {{ok,NValue}, {ok,undefined}} when NValue=/=void, not(NIsVarReturn) ->
-               io_lib:format(indent(I,"~s.assertReturnsValue(~p);"),[NVar,NValue]);
+               io_lib:format(indent(I,"assertEquals(~p,~s);"),[NValue,NVar]);
              {_, {ok,NCond}} when NCond=/=true, NCond=/=undefined ->
                shr_symb:printSeqExpr(NCond);
              _ ->
